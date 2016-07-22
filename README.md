@@ -4,9 +4,9 @@ This [iPython notebook](https://github.com/blab/baltic/blob/master/BALTIC_treePa
 
 ![](figures/mers.jpg)
 
-and an animation of Ebola virus spread in West Africa from an upcoming paper:
+and an [animation of Ebola virus spread in West Africa](https://vimeo.com/171961189) from an upcoming paper:
 
-<iframe class="stretch" src="http://player.vimeo.com/video/156668942?title=0" ></iframe>
+![](figures/ebola.jpg)
 
 In order to correct [an article](dx.doi.org/10.1126/science.aaa5646) that got it wrong, I've rewritten some of the code recently to make the tree parser able to deal with polytomies, as well as being able to collapse branches with low support or short branch lengths. I've also implemented the ability to traverse subtrees under the same trait, which allows for the decomposition of labelled phylogenies into subtree spectra.
 
