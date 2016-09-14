@@ -25,7 +25,7 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False,dateSplitter='-'):
 class node: ## node class
     def __init__(self):
         self.branchType='node'
-        self.length=0.0 ## branch length, recovered from string
+        self.length=None ## branch length, recovered from string
         self.height=None ## height, set by traversing the tree, which adds up branch lengths along the way
         self.absoluteTime=None ## branch end point in absolute time, once calibrations are done
         self.parent=None ## reference to parent node of the node
@@ -61,6 +61,8 @@ class tree: ## tree class
         self.cur_node.height=0.0 ## starting node height is 0
         self.root=self.cur_node ## root of the tree is current node
         self.Objects=[] ## tree objects have a flat list of all branches in them
+        self.nodes=[] ## nodes is a list of node objects in tree
+        self.leaves=[] ## leaves is a list of leaf objects in tree
         self.treeHeight=0 ## tree height is the distance between the root and the most recent tip
 
     def add_node(self,i):
@@ -71,6 +73,7 @@ class tree: ## tree class
         self.cur_node.children.append(new_node) ## new node is a child of current node
         self.cur_node=new_node ## current node is now new node
         self.Objects.append(self.cur_node) ## add new node to list of objects in the tree
+        self.nodes.append(self.cur_node)
         
     def add_leaf(self,i,name):
         """ attaches a new leaf (tip) to current node """
@@ -81,6 +84,7 @@ class tree: ## tree class
         self.cur_node.children.append(new_leaf) ## assign leaf to parent's children
         self.cur_node=new_leaf ## current node is now new leaf
         self.Objects.append(self.cur_node) ## add leaf to all objects in the tree
+        self.leaves.append(self.cur_node)
 
     def setAbsoluteTime(self,date):
         """ place all objects in absolute time by providing the date of the most recent tip """
@@ -96,10 +100,15 @@ class tree: ## tree class
         
         nodes=[x for x in obs if isinstance(x,node)] ## get all nodes
         strictlyBifurcating=False ## assume tree is not strictly bifurcating
-        maxChildren=max([len(x.children) for x in nodes]) ## get the largest number of descendant branches of any node
+        multiType=False
+        N_children=[len(x.children) for x in nodes]
+        minChildren,maxChildren=min(N_children),max(N_children) ## get the largest number of descendant branches of any node
         if maxChildren==2: ## if every node has at most two children branches
             strictlyBifurcating=True ## it's strictly bifurcating
+        if minChildren==1:
+            multiType=True
         print '\nTree is strictly bifurcating = %s'%(strictlyBifurcating) ## report
+        print '\nTree is multitype = %s'%(multiType) ## report
         
         hasTraits=False ## assume tree has no annotations
         maxAnnotations=max([len(x.traits) for x in obs]) ## check the largest number of annotations any branch has
@@ -121,6 +130,11 @@ class tree: ## tree class
         
         if verbose==True:
             print 'Verbose traversal initiated'
+        
+        for k in self.Objects: ## reset leaves and number of children for every node
+            if isinstance(k,node):
+                k.leaves=[]
+                k.numChildren=0
         
         seen=[] ## remember what's been visited
         collected=[] ## collect leaf objects along the way
@@ -357,6 +371,8 @@ class tree: ## tree class
                     nodes.remove(k)
 
                     zero_count-=1 ## one more zero node taken care of
+                    
+        newTree.sortBranches() ## sort the tree to traverse, draw and sort tree to adjust y coordinates
         return newTree ## return collapsed tree
     
     def toString(self):
@@ -423,7 +439,7 @@ class tree: ## tree class
                             tmrcaMatrix[tipB][tipA]=k.absoluteTime
         return tmrcaMatrix
 
-def make_tree(data,ll):
+def make_tree(data,ll,verbose=False):
     """
     data is a tree string, ll (LL) is an instance of a tree object
     """
@@ -435,23 +451,38 @@ def make_tree(data,ll):
         stored_i=i ## store i for later
         
         if data[i] == '(': ## look for new nodes
+            if verbose==True:
+                print '%d adding node'%(i)
             ll.add_node(i) ## add node to current node in tree ll
             i+=1 ## advance in tree string by one character
             
-        cerberus=re.match('([0-9]+)\[',data[i:i+100]) ## look for tips in BEAST format (integers).
+        cerberus=re.match('(\(|,)([0-9]+)\[',data[i-1:i+100]) ## look for tips in BEAST format (integers).
         if cerberus is not None:
-            ll.add_leaf(i,cerberus.group(1)) ## add tip
-            i+=len(cerberus.group(1)) ## advance in tree string by however many characters the tip is encoded
+            if verbose==True:
+                print '%d adding leaf (BEAST) %s'%(i,cerberus.group(2))
+            ll.add_leaf(i,cerberus.group(2)) ## add tip
+            i+=len(cerberus.group(2)) ## advance in tree string by however many characters the tip is encoded
             
-        cerberus=re.match('(\'|\")*([A-Za-z\_\-\|\.0-9\?\/]+)(\'|\"|)(\[)*',data[i:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
+        cerberus=re.match('(\(|,)(\'|\")*([A-Za-z\_\-\|\.0-9\?\/]+)(\'|\"|)(\[)*',data[i-1:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
         if cerberus is not None:
-            ll.add_leaf(i,cerberus.group(2))  ## add tip
-            i+=len(cerberus.group(2))+cerberus.group().count("'")+cerberus.group().count('"') ## advance in tree string by however many characters the tip is encoded
+            if verbose==True:
+                print '%d adding leaf (non-BEAST) %s'%(i,cerberus.group(3))
+            ll.add_leaf(i,cerberus.group(3).strip('"').strip("'"))  ## add tip
+            i+=len(cerberus.group(3))+cerberus.group().count("'")+cerberus.group().count('"') ## advance in tree string by however many characters the tip is encoded
+
+        cerberus=re.match('\)([0-9]+)\[',data[i-1:i+100]) ## look for multitype tree singletons.
+        if cerberus is not None:
+            if verbose==True:
+                print '%d adding multitype node %s'%(i,cerberus.group(1))
+            i+=len(cerberus.group(1))
 
         cerberus=re.match('(\:)*\[&[A-Za-z\_\-{}\,0-9\.\%=\"\+]+\]',data[i:])## look for MCC comments
+        #cerberus=re.match('\[&[A-Za-z\_\-{}\,0-9\.\%=\"\+]+\]',data[i:])## look for MCC comments
         if cerberus is not None:
+            if verbose==True:
+                print '%d comment: %s'%(i,cerberus.group())
             comment=cerberus.group()
-            numerics=re.findall('[A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
+            numerics=re.findall('[A-Za-z\_\.0-9\%]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
             strings=re.findall('[A-Za-z\_\.0-9]+="[A-Za-z\_0-9\.\+]+',comment) ## strings
             treelist=re.findall('[A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\.]+}',comment) ## complete history logged robust counting (MCMC trees)
             sets=re.findall('[A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_]+}',comment) ## sets and ranges
@@ -464,7 +495,7 @@ def make_tree(data,ll):
             for vals in strings:
                 tr,val=vals.split('=')
                 if '+' in val:
-                    val=val.split('+')[0] ## DO NOT ALLOW DOUBLE ANNOTATIONS - just get the first one
+                    val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
                 ll.cur_node.traits[tr]=val.strip('"')
 
             for val in treelist:
@@ -493,23 +524,21 @@ def make_tree(data,ll):
             
         microcerberus=re.match('(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
         if microcerberus is not None:
+            if verbose==True:
+                print 'adding branch length (%d) %.6f'%(i,float(microcerberus.group(2)))
             ll.cur_node.length=float(microcerberus.group(2)) ## set branch length of current node
             i+=len(microcerberus.group()) ## advance in tree string by however many characters it took to encode branch length
 
-        if data[i] == ',': ## look for bifurcations
+        if data[i] == ',' or data[i] == ')': ## look for bifurcations or clade ends
             i+=1 ## advance in tree string
-            ll.cur_node=ll.cur_node.parent ## next object will be a descendant of current node's parent - go to parent
-            
-        if data[i] == ')': ## look for clade ends
-            ll.cur_node=ll.cur_node.parent ## nothing to be done for current node - it's done, so head back to parent
-            i+=1 ## advance in tree string
+            ll.cur_node=ll.cur_node.parent
 
         if data[i] == ';': ## look for string end
             break ## end loop
 
 if __name__ == '__main__':
-	import sys
-	ll=tree()
-	make_tree(sys.argv[1],ll)
-	ll.traverse_tree()
-	sys.stdout.write('%s\n'%(ll.treeHeight))
+    import sys
+    ll=tree()
+    make_tree(sys.argv[1],ll)
+    ll.traverse_tree()
+    sys.stdout.write('%s\n'%(ll.treeHeight))
