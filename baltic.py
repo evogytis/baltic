@@ -25,7 +25,7 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False,dateSplitter='-'):
 class node: ## node class
     def __init__(self):
         self.branchType='node'
-        self.length=None ## branch length, recovered from string
+        self.length=0.0 ## branch length, recovered from string
         self.height=None ## height, set by traversing the tree, which adds up branch lengths along the way
         self.absoluteTime=None ## branch end point in absolute time, once calibrations are done
         self.parent=None ## reference to parent node of the node
@@ -63,6 +63,7 @@ class tree: ## tree class
         self.Objects=[] ## tree objects have a flat list of all branches in them
         self.nodes=[] ## nodes is a list of node objects in tree
         self.leaves=[] ## leaves is a list of leaf objects in tree
+        self.tipMap=None
         self.treeHeight=0 ## tree height is the distance between the root and the most recent tip
 
     def add_node(self,i):
@@ -98,7 +99,7 @@ class tree: ## tree class
         obs=self.Objects ## convenient list of all objects in the tree
         print '\nTree height: %.6f\nTree length: %.6f'%(self.treeHeight,sum([x.length for x in obs])) ## report the height and length of tree
         
-        nodes=[x for x in obs if isinstance(x,node)] ## get all nodes
+        nodes=self.nodes ## get all nodes
         strictlyBifurcating=False ## assume tree is not strictly bifurcating
         multiType=False
         N_children=[len(x.children) for x in nodes]
@@ -220,9 +221,8 @@ class tree: ## tree class
 
     def renameTips(self,d):
         """ give each tip its correct label using a dictionary """
-        for k in self.Objects: ## iterate through objects in tree
-            if isinstance(k,leaf): ## if it's leaf
-                k.name=d[k.numName] ## change its name
+        for k in self.leaves: ## iterate through leaf objects in tree
+            k.name=d[k.numName] ## change its name
     
     def sortBranches(self,descending=True):
         """ sort descendants of each node """
@@ -231,16 +231,15 @@ class tree: ## tree class
         elif descending==False:
             modifier=-1
 
-        for k in self.Objects: ## iterate over objects
-            if isinstance(k,node): ## only interested in nodes
-                ## split node's offspring into nodes and leaves, sort each list individually
-                nodes=sorted([x for x in k.children if isinstance(x,node)],key=lambda q:(-len(q.leaves)*modifier,q.length*modifier))
-                leaves=sorted([x for x in k.children if isinstance(x,leaf)],key=lambda q:q.length*modifier)
-                
-                if modifier==1: ## if sorting one way - nodes come first, leaves later
-                    k.children=nodes+leaves
-                elif modifier==-1: ## otherwise sort the other way
-                    k.children=leaves+nodes
+        for k in self.nodes: ## iterate over nodes
+            ## split node's offspring into nodes and leaves, sort each list individually
+            nodes=sorted([x for x in k.children if isinstance(x,node)],key=lambda q:(-len(q.leaves)*modifier,q.length*modifier))
+            leaves=sorted([x for x in k.children if isinstance(x,leaf)],key=lambda q:q.length*modifier)
+            
+            if modifier==1: ## if sorting one way - nodes come first, leaves later
+                k.children=nodes+leaves
+            elif modifier==-1: ## otherwise sort the other way
+                k.children=leaves+nodes
                     
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
         
@@ -347,7 +346,7 @@ class tree: ## tree class
     def collapseNodes(self,trait,cutoff):
         """ Collapse all nodes whose trait value is below the cutoff value """
         newTree=copy.deepcopy(self) ## work on a copy of the tree
-        nodes=[x for x in newTree.Objects if isinstance(x,node)] ## fetch a list of all nodes
+        nodes=newTree.nodes ## fetch a list of all nodes
         zero_count=sum([1 if q.traits[trait]<cutoff else 0 for q in nodes]) ## count how many branches fail the test
 
         assert zero_count<len(nodes),'Chosen cutoff would remove all branches'
@@ -447,6 +446,9 @@ def make_tree(data,ll,verbose=False):
     stored_i=None ## store the i at the end of the loop, to make sure we haven't gotten stuck somewhere in an infinite loop
     
     while i < len(data): ## while there's characters left in the tree string - loop away
+        if stored_i == i and verbose==True:
+            print '%d >%s<'%(i,data[i])
+        
         assert (stored_i != i),'\nTree string unparseable\nStopped at >>%s<<\nstring region looks like this: %s'%(data[i],data[i:i+5000]) ## make sure that you've actually parsed something last time, if not - there's something unexpected in the tree string
         stored_i=i ## store i for later
         
@@ -456,7 +458,7 @@ def make_tree(data,ll,verbose=False):
             ll.add_node(i) ## add node to current node in tree ll
             i+=1 ## advance in tree string by one character
             
-        cerberus=re.match('(\(|,)([0-9]+)\[',data[i-1:i+100]) ## look for tips in BEAST format (integers).
+        cerberus=re.match('(\(|,)([0-9]+)(\[|\:)',data[i-1:i+100]) ## look for tips in BEAST format (integers).
         if cerberus is not None:
             if verbose==True:
                 print '%d adding leaf (BEAST) %s'%(i,cerberus.group(2))
@@ -476,14 +478,14 @@ def make_tree(data,ll,verbose=False):
                 print '%d adding multitype node %s'%(i,cerberus.group(1))
             i+=len(cerberus.group(1))
 
-        cerberus=re.match('(\:)*\[&[A-Za-z\_\-{}\,0-9\.\%=\"\+]+\]',data[i:])## look for MCC comments
+        cerberus=re.match('(\:)*\[&([A-Za-z\_\-{}\,0-9\.\%=\"\+]+)\]',data[i:])## look for MCC comments
         #cerberus=re.match('\[&[A-Za-z\_\-{}\,0-9\.\%=\"\+]+\]',data[i:])## look for MCC comments
         if cerberus is not None:
             if verbose==True:
-                print '%d comment: %s'%(i,cerberus.group())
-            comment=cerberus.group()
-            numerics=re.findall('[A-Za-z\_\.0-9\%]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall('[A-Za-z\_\.0-9]+="[A-Za-z\_0-9\.\+]+',comment) ## strings
+                print '%d comment: %s'%(i,cerberus.group(2))
+            comment=cerberus.group(2)
+            numerics=re.findall('[A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
+            strings=re.findall('[A-Za-z\_\.0-9]+="[A-Za-z\_0-9\.\+]+"',comment) ## strings
             treelist=re.findall('[A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\.]+}',comment) ## complete history logged robust counting (MCMC trees)
             sets=re.findall('[A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_]+}',comment) ## sets and ranges
             ## ranges not included - who needs those anyway?
@@ -508,19 +510,19 @@ def make_tree(data,ll,verbose=False):
                     
             for vals in sets:
                 tr,val=vals.split('=')
-                ll.cur_node.traits[tr]=[]
-                if 'set.prob' in tr:
+                if 'set' in tr:
+                    ll.cur_node.traits[tr]=[]
                     for v in val[1:-1].split(','):
-                        ll.cur_node.traits[tr].append(float(v))
-                elif 'set' in tr:
-                    for v in val[1:-1].split(','):
-                        ll.cur_node.traits[tr].append(v.strip('"'))
+                        if 'set.prob' in tr:
+                            ll.cur_node.traits[tr].append(float(v))
+                        else:
+                            ll.cur_node.traits[tr].append(v.strip('"'))
                 elif 'range' in tr or 'HPD' in tr:
                     ll.cur_node.traits[tr]=map(float,val[1:-1].split(','))
                 else:
                     print 'some other trait: %s'%(vals)
             
-            i+=len(comment) ## advance in tree string by however many characters it took to encode labels
+            i+=len(cerberus.group()) ## advance in tree string by however many characters it took to encode labels
             
         microcerberus=re.match('(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
         if microcerberus is not None:
@@ -535,6 +537,57 @@ def make_tree(data,ll,verbose=False):
 
         if data[i] == ';': ## look for string end
             break ## end loop
+
+def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',absoluteTime=True):
+    tipFlag=False
+    tips={}
+    tipNum=0
+    for line in open(tree_path,'r'):
+        l=line.strip('\n')
+
+        cerberus=re.search('dimensions ntax=([0-9]+);',l.lower())
+        if cerberus is not None:
+            tipNum=int(cerberus.group(1))
+
+        cerberus=re.search('tree [A-Za-z\_]+([0-9]+) = \[&R\] ',l)
+        if cerberus is not None:
+            treeString_start=l.index('(')
+            ll=tree() ## new instance of tree
+            make_tree(l[treeString_start:],ll) ## send tree string to make_tree function
+
+        if tipFlag==True:
+            cerberus=re.search('([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
+            if cerberus is not None:
+                tips[cerberus.group(1)]=cerberus.group(2).strip('"').strip("'")
+            elif ';' not in l:
+                print 'tip not captured by regex:',l.replace('\t','')
+
+        if 'translate' in l.lower():
+            tipFlag=True
+        if ';' in l:
+            tipFlag=False
+
+    ll.treeStats() ## initial traversal, checks for stats
+    ll.sortBranches() ## traverses tree, sorts branches, draws tree
+    if len(tips)>0:
+        ll.renameTips(tips) ## renames tips from numbers to actual names
+        ll.tipMap=tips
+    if absoluteTime==True:
+        tipDates=[]
+        for k in ll.leaves:
+            if len(tips)>0:
+                n=k.name
+            else:
+                n=k.numName
+            
+            cerberus=re.search(tip_regex,n)
+            if cerberus is not None:
+                tipDates.append(decimalDate(cerberus.group(1)))
+    
+        highestTip=max(tipDates)
+        ll.setAbsoluteTime(highestTip)
+    
+    return ll
 
 if __name__ == '__main__':
     import sys
