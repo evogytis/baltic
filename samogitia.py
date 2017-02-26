@@ -24,14 +24,16 @@ def overlap(a,b):
 austechia = argparse.ArgumentParser(description="samogitia.py analyses trees drawn from the posterior distribution by BEAST.\n")
 
 austechia.add_argument('-b','--burnin', default=0, type=int, help="Number of states to remove as burnin (default 0).\n")
-austechia.add_argument('-c','--calibrate', default=True, type=bool, help="Set the tree to have absolute time information (default True). Should only be used if tip names contain information about *when* each sequence was collected.\n")
-austechia.add_argument('-t','--treefile', type=open, help="File with trees sampled from the posterior distribution (usually with suffix .trees).\n")
-austechia.add_argument('-a','--analyses', type=str, nargs='+', help="Analysis to be performed, can be a list separated by spaces.\n")
+austechia.add_argument('-nc','--nocalibration', default=True, action='store_false', help="Use flag to prevent calibration of trees into absolute time (default True). Should be used if tip names do not contain information about *when* each sequence was collected.\n")
+austechia.add_argument('-t','--treefile', type=open, required=True, help="File with trees sampled from the posterior distribution (usually with suffix .trees).\n")
+austechia.add_argument('-a','--analyses', type=str, required=True, nargs='+', help="Analysis to be performed, can be a list separated by spaces.\n")
 austechia.add_argument('-o','--output', type=argparse.FileType('w'), default='samogitia.out.txt', help="Output file name (default samogitia.out.txt).\n")
 austechia.add_argument('-s','--states', type=str, default='0-inf', help="Define range of states for analysis.\n")
+austechia.add_argument('-df','--date_format', type=str, default='%Y-%m-%d', help="Define date format encoded in tips (default \'%%Y-%%m-%%d\').\n")
+austechia.add_argument('-tf','--tip_format', type=str, default='\|([0-9]+)\-*([0-9]+)*\-*([0-9]+)*$', help="Define regex for capturing dates encoded in tips (default \'\|([0-9]+)\-*([0-9]+)*\-*([0-9]+)*$\'.\n")
 
 args = vars(austechia.parse_args())
-burnin, treefile, analyses, outfile, calibration, states = args['burnin'], args['treefile'], args['analyses'], args['output'], args['calibrate'], args['states']
+burnin, treefile, analyses, outfile, calibration, states, dformat, tformat = args['burnin'], args['treefile'], args['analyses'], args['output'], args['nocalibration'], args['states'], args['date_format'], args['tip_format']
 
 lower,upper=states.split('-')
 lower=int(lower)
@@ -153,10 +155,12 @@ for line in treefile: ## iterate through each line
                     if isinstance(k,leaf):
                         k.name=k.numName ## otherwise every tip gets a name that's the same as tree string names
             #### calibration
-            dateCerberus=re.compile('\|([0-9\-]+)$') ## search pattern + brackets on actual calendar date
+            dateCerberus=re.compile(tformat) ## search pattern + brackets on actual calendar date
             if calibration==True: ## Calibrate tree so everything has a known position in actual time
                 tipDatesRaw=[dateCerberus.search(x).group(1) for x in tips.values()]
-                tipDates=map(bt.decimalDate,tipDatesRaw)
+                tipDates=[]
+                for tip_date in tipDatesRaw:
+                    tipDates.append(bt.decimalDate(tip_date,fmt=dformat,variable=True))
                 maxDate=max(tipDates) ## identify most recent tip
                 ll.setAbsoluteTime(maxDate)
             outfile.write('%s'%cerberus.group(1)) ## write MCMC state number to output log file
