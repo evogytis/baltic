@@ -22,21 +22,23 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False,dateSplitter='-'):
     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
-class clade:
+class clade: ## clade class
     def __init__(self,givenName):
-        self.branchType='leaf'
-        self.subtree=None
+        self.branchType='leaf' ## clade class poses as a leaf
+        self.subtree=None ## subtree will contain all the branches that were collapsed
         self.length=0.0
         self.height=None
         self.absoluteTime=None
         self.parent=None
         self.traits={}
         self.index=None
-        self.name=givenName
+        self.name=givenName ## the pretend tip name for the clade
         self.numName=givenName
         self.leaves=[]
         self.x=None
         self.y=None
+        self.lastHeight=None ## refers to the height of the highest tip in the collapsed clade
+        self.lastAbsoluteTime=None ## refers to the absolute time of the highest tip in the collapsed clade
         self.width=1
 
 class node: ## node class
@@ -82,9 +84,10 @@ class tree: ## tree class
         self.leaves=[] ## leaves is a list of leaf objects in tree
         self.tipMap=None
         self.treeHeight=0 ## tree height is the distance between the root and the most recent tip
+        self.ySpan=0.0
 
     def add_node(self,i):
-        """ attaches a new node to current node """
+        """ Attaches a new node to current node. """
         new_node=node() ## new node instance
         new_node.index=i ## new node's index is the position along the tree string
         new_node.parent=self.cur_node ## new node's parent is current node
@@ -94,7 +97,7 @@ class tree: ## tree class
         self.nodes.append(self.cur_node)
         
     def add_leaf(self,i,name):
-        """ attaches a new leaf (tip) to current node """
+        """ Attach a new leaf (tip) to current node. """
         new_leaf=leaf() ## new instance of leaf object
         new_leaf.index=i ## index is position along tree string
         new_leaf.numName=name ## numName is the name tip has inside tree string, BEAST trees usually have numbers for tip names
@@ -103,7 +106,54 @@ class tree: ## tree class
         self.cur_node=new_leaf ## current node is now new leaf
         self.Objects.append(self.cur_node) ## add leaf to all objects in the tree
         self.leaves.append(self.cur_node)
-
+    
+    def subtree(self,k=None,subtree=[],traitName=None,converterDict=None):
+        """ Generate a subtree (as a baltic tree object) from a traversal.
+            If a trait name is provided the traversal occurs within the trait value of the starting node.
+            Note - trait-specific traversal can result in multitype trees. 
+            If this is undesired call singleType() on the resulting subtree afterwards. """
+        local_tree=tree() ## create a new tree object where the subtree will be
+        if len(subtree)==0:
+            if traitName:
+                subtree=copy.deepcopy(self.traverseWithinTrait(k,traitName,converterDict))
+            else:
+                subtree=copy.deepcopy(self.traverse_tree(k,include_all=True))
+        else:
+            subtree=copy.deepcopy(subtree)
+        
+        local_tree.Objects=subtree ## assign branches to new tree object
+        local_tree.root.children.append(subtree[0]) ## connect tree object's root with subtree
+        subtree[0].parent=local_tree.root ## subtree's root's parent is tree object's root
+        local_tree.root.absoluteTime=subtree[0].absoluteTime-subtree[0].length ## root's absolute time is subtree's root time
+        
+        if traitName:
+            for k in local_tree.Objects:
+                if k.branchType=='node':
+                    k.children=[ch for ch in k.children if ch in subtree]
+        
+        local_tree.sortBranches() ## sort branches, draw small tree
+        return local_tree
+        
+    def singleType(self):
+        """ Removes any branches with a single child (multitype nodes). """
+        multiTypeNodes=[k for k in self.Objects if k.branchType=='node' and len(k.children)==1]
+        while len(multiTypeNodes)>0:
+            multiTypeNodes=[k for k in self.Objects if k.branchType=='node' and len(k.children)==1]
+            for k in sorted(multiTypeNodes,key=lambda x:-x.height):
+                child=k.children[0] ## fetch child
+                grandparent=k.parent ## fetch grandparent
+                
+                child.parent=grandparent ## child's parent is now grandparent
+                
+                grandparent.children.append(child) ## add child to grandparent's children
+                grandparent.children.remove(k) ## remove old parent from grandparent's children
+                
+                child.length+=k.length ## adjust child length
+                
+                multiTypeNodes.remove(k) ## remove old parent from multitype nodes
+                self.Objects.remove(k) ## remove old parent from all objects
+        self.sortBranches()
+        
     def setAbsoluteTime(self,date):
         """ place all objects in absolute time by providing the date of the most recent tip """
         
@@ -140,10 +190,18 @@ class tree: ## tree class
         """ Traverses tree from root. If a starting node is not defined begin traversal from root. By default returns a list of leaf objects that have been visited, optionally returns a list of all objects in the tree. """
         if startNode==None: ## if no starting point defined - start from root
             cur_node=self.root
+            start=None ## remember that traversal was started from scratch
             startNode=cur_node
+            self.nodes=[] ## reset the tree's node and leaf lists if traversing from root
+            self.leaves=[]
         elif startNode.branchType=='leaf':
-            return [startNode.numName]
+            start=startNode
+            if include_all==True:
+                return [startNode]
+            else:
+                return [startNode.numName]
         else:
+            start=startNode
             cur_node=startNode ## otherwise start from starting node
         
         if verbose==True:
@@ -157,7 +215,11 @@ class tree: ## tree class
         seen=[] ## remember what's been visited
         collected=[] ## collect leaf objects along the way
         maxHeight=0 ## check what the maximum distance between the root and the most recent tip is
-        height=0.0 ## begin at height 0.0
+        if startNode!=None and startNode.height!=None:
+            height=startNode.height
+        else:
+            height=0.0 ## begin at height 0.0
+            
         root=False ## root becomes true once you're unable to go back any further
 
         while root==False: ## cycle indefinitely as long as there's more of the tree to explore
@@ -172,6 +234,8 @@ class tree: ## tree class
                     print 'encountered node %s'%(cur_node.index)
                 if include_all==True: ## if node hasn't been collected and we want to collect all objects - add it for reporting later
                     collected.append(cur_node)
+                if start==None and cur_node not in self.nodes:
+                    self.nodes.append(cur_node)
                 ## check whether all children of the node have been seen or whether we're not currently at the root
                 ## as long as all children have been seen will descend downwards
                 while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children) and cur_node!=startNode:
@@ -218,6 +282,8 @@ class tree: ## tree class
             elif cur_node.branchType=='leaf': ## node dealing with node, are we dealing with a leaf (tip)?
                 if verbose==True:
                     print 'encountered leaf %s (%s or %s)'%(cur_node.index,cur_node.numName,cur_node.name)
+                if start==None and cur_node not in self.leaves:
+                    self.leaves.append(cur_node)
                 cur_node.parent.numChildren+=1 ## parent has one more new child (congratulations!)
                 cur_node.parent.leaves.append(cur_node.numName) ## add the name of leaf to its parent's list of children names
                 cur_node.parent.leaves=sorted(cur_node.parent.leaves) ## sort parent's children list
@@ -237,16 +303,18 @@ class tree: ## tree class
         return unique(collected) ## return a list of collected leaf objects
 
     def renameTips(self,d):
-        """ give each tip its correct label using a dictionary """
+        """ Give each tip its correct label using a dictionary. """
+        if self.tipMap!=None:
+            d=self.tipMap
         for k in self.leaves: ## iterate through leaf objects in tree
             k.name=d[k.numName] ## change its name
     
     def sortBranches(self,descending=True,verbose=False):
-        """ sort descendants of each node """
+        """ Sort descendants of each node. """
         if descending==True:
-            modifier=1 ## define the modifier for sorting function later
+            modifier=-1 ## define the modifier for sorting function later
         elif descending==False:
-            modifier=-1
+            modifier=1
         
         if verbose==True:
             print 'Initiated branch sort with descending order: %s%'(descending)
@@ -265,8 +333,10 @@ class tree: ## tree class
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
         
     def drawTree(self):
-        """ find x and y coordinates of each branch """
-        order=[x.numName for x in self.traverse_tree() if x.branchType=='leaf'] ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
+        """ Find x and y coordinates of each branch. """
+        order=[x for x in self.traverse_tree() if x.branchType=='leaf'] ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
+        name_order=[x.numName for x in order]
+        skips=[1 if isinstance(x,leaf) else x.width for x in order]
         
         for k in self.Objects: ## reset coordinates for all objects
             k.x=None
@@ -278,7 +348,10 @@ class tree: ## tree class
             for k in [x for x in self.Objects if x.index not in drawn]: ## iterate through objects that have not been drawn
                 if k.branchType=='leaf': ## if leaf - get position of leaf, draw branch connecting tip to parent node
                     x=k.height ## x position is height
-                    y=order.index(k.numName) ## y position of leaf is given by the order in which tips were visited during the traversal
+                    y_idx=name_order.index(k.numName) ## y position of leaf is given by the order in which tips were visited during the traversal
+                    y=sum(skips[y_idx:]) ## sum across skips to find y position
+                    if isinstance(k,clade): ## if dealing with collapsed clade - adjust y position to be in the middle of the skip
+                        y-=skips[y_idx]/2.0
                     k.x=x ## set x and y coordinates
                     k.y=y
                     drawn.append(k.index) ## remember that this objects has been drawn
@@ -294,9 +367,12 @@ class tree: ## tree class
                         
             assert len(drawn)>storePlotted,'Got stuck trying to find y positions of objects'
             storePlotted=len(drawn)
+            self.ySpan=sum(skips)
 
     def traverseWithinTrait(self,startNode,traitName,converterDict=None):
-        """ Traverse the tree staying within a particular trait value """
+        """ Traverse the tree staying within the trait value of the node provided.
+            Can also use a converterDict if the trait value needs to be converted.
+            Returns list of branches encountered in the traversal. """
         cur_node=startNode
         seen=[]
         collected=[]
@@ -308,7 +384,7 @@ class tree: ## tree class
  
         root=False
         
-        if isinstance(startNode,leaf): ## quite immediatelly if starting from a leaf - nowhere to go
+        if isinstance(startNode,leaf): ## quit immediately if starting from a leaf - nowhere to go
             collected.append(startNode)
             return collected
 
@@ -368,18 +444,19 @@ class tree: ## tree class
         types=[desc.__class__ for desc in descendants]
         assert len(set(types))==1,'More than one type of data detected in descendants list'
         if numName==False:
-            assert sum([1 if k in [w.name for w in self.leaves] else 0 for k in descendants])==len(descendants),'Not all specified descendants are in tree'
+            assert sum([1 if k in [w.name for w in self.Objects if w.branchType=='leaf'] else 0 for k in descendants])==len(descendants),'Not all specified descendants are in tree: %s'%(descendants)
         else:
-            assert sum([1 if k in [w.numName for w in self.leaves] else 0 for k in descendants])==len(descendants),'Not all specified descendants are in tree'
+            assert sum([1 if k in [w.numName for w in self.Objects if w.branchType=='leaf'] else 0 for k in descendants])==len(descendants),'Not all specified descendants are in tree: %s'%(descendants)
         dtype=list(set(types))[0]
-        allAncestors=sorted([k for k in self.nodes if len(k.leaves)>=len(descendants)],key=lambda x:x.height)
+        allAncestors=sorted([k for k in self.Objects if k.branchType=='node' and len(k.leaves)>=len(descendants)],key=lambda x:x.height)
         if numName==False:
             ancestor=[k for k in allAncestors if sum([[self.tipMap[w] for w in k.leaves].count(l) for l in descendants])==len(descendants)][-1]
         else:
             ancestor=[k for k in allAncestors if sum([[w for w in k.leaves].count(l) for l in descendants])==len(descendants)][-1]
         return ancestor
         
-    def collapse(self,cl,givenName,verbose=False):
+    def collapseSubtree(self,cl,givenName,verbose=False,widthFunction=lambda x:x):
+        """ Collapse an entire subtree into a clade object. """
         assert cl.branchType=='node','Cannot collapse non-node class'
         collapsedClade=clade(givenName)
         collapsedClade.index=cl.index
@@ -388,16 +465,19 @@ class tree: ## tree class
         collapsedClade.parent=cl.parent
         collapsedClade.absoluteTime=cl.absoluteTime
         collapsedClade.traits=cl.traits
+        collapsedClade.width=widthFunction(len(cl.leaves))
         
         if verbose==True:
             print 'Replacing node %s (parent %s) with a clade class'%(cl.index,cl.parent.index)
         parent=cl.parent
-        collapsedClade.subtree=cl
+        #collapsedClade.subtree=cl
         
-        remove_from_tree=[]
-        for k in self.traverse_tree(cl,include_all=True):
-            remove_from_tree.append(k)
-
+        remove_from_tree=self.traverse_tree(cl,include_all=True)
+        collapsedClade.subtree=remove_from_tree
+        assert len(remove_from_tree)<len(self.Objects),'Attempted collapse of entire tree'
+        collapsedClade.lastHeight=max([x.height for x in remove_from_tree])
+        collapsedClade.lastAbsoluteTime=max([x.absoluteTime for x in remove_from_tree])
+        
         for k in remove_from_tree:
             self.Objects.remove(k)
             
@@ -408,8 +488,29 @@ class tree: ## tree class
         if self.tipMap!=None:
             self.tipMap[givenName]=givenName
         
-    def collapseNodes(self,trait='posterior',f=lambda x:x<=0.5,designated_nodes=[],verbose=False):
-        """ Collapse all nodes according to whether an attribute or trait value (default is "posterior" trait) satisfies an anonymous function f (default is return true if value is <=0.5). Alternatively, a list of nodes can be supplied to the script."""
+        self.traverse_tree()
+        self.sortBranches()
+        
+    def uncollapseSubtree(self):
+        """ Uncollapse all collapsed subtrees. """
+        while len([k for k in self.Objects if isinstance(k,clade)])>0:
+            clades=[k for k in self.Objects if isinstance(k,clade)]
+            for cl in clades:
+                parent=cl.parent
+                subtree=cl.subtree
+                parent.children.remove(cl)
+                parent.children.append(subtree[0])
+                self.Objects+=subtree
+                self.Objects.remove(cl)
+                if self.tipMap!=None:
+                    self.tipMap.pop(cl.name,None)
+        self.traverse_tree()
+        
+    def collapseBranches(self,trait='posterior',f=lambda x:x<=0.5,designated_nodes=[],verbose=False):
+        """ Collapse all branches according to whether an attribute or trait value (default is "posterior" trait) satisfies an anonymous function f (default is return true if value is <=0.5). 
+            Alternatively, a list of nodes can be supplied to the script.
+            Returns a deep copied version of the tree. 
+        """
         newTree=copy.deepcopy(self) ## work on a copy of the tree
         if len(designated_nodes)==0: ## no nodes were designated for deletion - relying on anonymous function to collapse nodes
             if sum([1 if hasattr(q,trait) else 0 for q in newTree.nodes])==len(newTree.nodes): ## every node has attribute
@@ -422,7 +523,7 @@ class tree: ## tree class
                     return ob.traits[tr]
                 if verbose==True:
                     print 'Collapsing based on trait'
-            nodes_to_delete=[n for n in newTree.nodes if n.parent.index!='Root' and f(get_value(n,trait))==True] ## fetch a list of all nodes who are not the root and who satisfy the condition
+            nodes_to_delete=[n for n in newTree.nodes if n.traits.has_key(trait) and f(get_value(n,trait))==True] ## fetch a list of all nodes who are not the root and who satisfy the condition
         else:
             assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
             assert len([w for w in designated_nodes if w.parent.index=='Root'])==0,'Root node was designated for deletion'
@@ -577,7 +678,7 @@ class tree: ## tree class
 
     def allTMRCAs(self):
         tip_names=[k.numName for k in self.Objects if isinstance(k,leaf)]
-        tmrcaMatrix={x:{y:0.0 for y in tip_names} for x in tip_names}
+        tmrcaMatrix={x:{y:None for y in tip_names} for x in tip_names}
         #print tmrcaMatrix
         #print tip_names
         for k in self.Objects:
@@ -588,7 +689,7 @@ class tree: ## tree class
                     for y in range(x+1,len(all_children)):
                         tipA=all_children[x]
                         tipB=all_children[y]
-                        if tmrcaMatrix[tipA][tipB]<=k.absoluteTime:
+                        if tmrcaMatrix[tipA][tipB]==None or tmrcaMatrix[tipA][tipB]<=k.absoluteTime:
                             tmrcaMatrix[tipA][tipB]=k.absoluteTime
                             tmrcaMatrix[tipB][tipA]=k.absoluteTime
         return tmrcaMatrix
@@ -682,6 +783,14 @@ def make_tree(data,ll,verbose=False):
             
             i+=len(cerberus.group()) ## advance in tree string by however many characters it took to encode labels
             
+        cerberus=re.match('([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
+        if cerberus is not None:
+            if verbose==True:
+                print 'old school comment found: %s'%(cerberus.group(1))
+            ll.cur_node.traits['label']=cerberus.group(1)
+            
+            i+=len(cerberus.group(1))
+            
         microcerberus=re.match('(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
         if microcerberus is not None:
             if verbose==True:
@@ -696,7 +805,7 @@ def make_tree(data,ll,verbose=False):
         if data[i] == ';': ## look for string end
             break ## end loop
 
-def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',absoluteTime=True,verbose=False):
+def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False):
     tipFlag=False
     tips={}
     tipNum=0
@@ -748,7 +857,7 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
             
             cerberus=re.search(tip_regex,n)
             if cerberus is not None:
-                tipDates.append(decimalDate(cerberus.group(1),fmt=date_fmt))
+                tipDates.append(decimalDate(cerberus.group(1),fmt=date_fmt,variable=variableDate))
     
         highestTip=max(tipDates)
         ll.setAbsoluteTime(highestTip)
