@@ -112,7 +112,6 @@ class tree: ## tree class
             If a trait name is provided the traversal occurs within the trait value of the starting node.
             Note - trait-specific traversal can result in multitype trees. 
             If this is undesired call singleType() on the resulting subtree afterwards. """
-        local_tree=tree() ## create a new tree object where the subtree will be
         if len(subtree)==0:
             if traitName:
                 subtree=copy.deepcopy(self.traverseWithinTrait(k,traitName,converterDict))
@@ -121,18 +120,29 @@ class tree: ## tree class
         else:
             subtree=copy.deepcopy(subtree)
         
-        local_tree.Objects=subtree ## assign branches to new tree object
-        local_tree.root.children.append(subtree[0]) ## connect tree object's root with subtree
-        subtree[0].parent=local_tree.root ## subtree's root's parent is tree object's root
-        local_tree.root.absoluteTime=subtree[0].absoluteTime-subtree[0].length ## root's absolute time is subtree's root time
-        
-        if traitName:
-            for k in local_tree.Objects:
-                if k.branchType=='node':
-                    k.children=[ch for ch in k.children if ch in subtree]
-        
-        local_tree.sortBranches() ## sort branches, draw small tree
-        return local_tree
+        if subtree is None or [w.branchType=='leaf' for w in subtree].count(True)==0:
+            return None
+        else:
+            local_tree=tree() ## create a new tree object where the subtree will be
+            local_tree.Objects=subtree ## assign branches to new tree object
+            local_tree.root.children.append(subtree[0]) ## connect tree object's root with subtree
+            subtree[0].parent=local_tree.root ## subtree's root's parent is tree object's root
+            local_tree.root.absoluteTime=subtree[0].absoluteTime-subtree[0].length ## root's absolute time is subtree's root time
+            
+            if traitName: ## relying on within-trait traversal
+                for nd in local_tree.Objects:
+                    if nd.branchType=='node':
+                        nd.children=[ch for ch in nd.children if ch in subtree] ## prune each node's children down to branches that were present in the traversal
+                hangingNodes=[h for h in local_tree.Objects if h.branchType=='node' and len(h.children)==0] ## check for nodes without any children (hanging nodes)
+                while len(hangingNodes)>0:
+                    for h in sorted(hangingNodes,key=lambda x:-x.height):
+                        h.parent.children.remove(h) ## remove old parent from grandparent's children
+                        hangingNodes.remove(h) ## remove old parent from multitype nodes
+                        local_tree.Objects.remove(h) ## remove old parent from all objects
+                    hangingNodes=[h for h in local_tree.Objects if h.branchType=='node' and len(h.children)==0]
+            
+            local_tree.sortBranches() ## sort branches, draw small tree
+            return local_tree
         
     def singleType(self):
         """ Removes any branches with a single child (multitype nodes). """
@@ -169,20 +179,32 @@ class tree: ## tree class
         nodes=self.nodes ## get all nodes
         strictlyBifurcating=False ## assume tree is not strictly bifurcating
         multiType=False
+        singleton=False
+        
         N_children=[len(x.children) for x in nodes]
-        minChildren,maxChildren=min(N_children),max(N_children) ## get the largest number of descendant branches of any node
-        if maxChildren==2: ## if every node has at most two children branches
-            strictlyBifurcating=True ## it's strictly bifurcating
-        if minChildren==1:
-            multiType=True
-        print '\nTree is strictly bifurcating = %s'%(strictlyBifurcating) ## report
-        print '\nTree is multitype = %s'%(multiType) ## report
+        if len(N_children)==0:
+            singleton=True
+        else:
+            minChildren,maxChildren=min(N_children),max(N_children) ## get the largest number of descendant branches of any node
+            if maxChildren==2 and minChildren==2: ## if every node has at most two children branches
+                strictlyBifurcating=True ## it's strictly bifurcating
+            if minChildren==1:
+                multiType=True
         
         hasTraits=False ## assume tree has no annotations
         maxAnnotations=max([len(x.traits) for x in obs]) ## check the largest number of annotations any branch has
         if maxAnnotations>0: ## if it's more than 0
             hasTraits=True ## there are annotations
-        print '\nTree has annotations = %s'%(hasTraits) ## report
+        
+        if strictlyBifurcating:
+            print 'strictly bifurcating tree' ## report
+        if multiType:
+            print 'multitype tree' ## report
+        if singleton:
+            print 'singleton tree'
+        if hasTraits:
+            print 'annotations present' ## report
+        
         
         print '\nNumbers of objects in tree: %d (%d nodes and %d leaves)\n'%(len(obs),len(nodes),len(obs)-len(nodes)) ## report numbers of different objects in the tree
             
@@ -192,8 +214,6 @@ class tree: ## tree class
             cur_node=self.root
             start=None ## remember that traversal was started from scratch
             startNode=cur_node
-            self.nodes=[] ## reset the tree's node and leaf lists if traversing from root
-            self.leaves=[]
         elif startNode.branchType=='leaf':
             start=startNode
             if include_all==True:
@@ -203,6 +223,9 @@ class tree: ## tree class
         else:
             start=startNode
             cur_node=startNode ## otherwise start from starting node
+        
+        self.leaves=[k for k in self.Objects if isinstance(k,leaf)]
+        self.nodes=[k for k in self.Objects if isinstance(k,node)]
         
         if verbose==True:
             print 'Verbose traversal initiated'
@@ -228,17 +251,15 @@ class tree: ## tree class
                     print 'node %s seen too many times, breaking'%(cur_node.index)
                 root=True
                 break
-                
+            
             if cur_node.branchType=='node': ## if currently dealing with a node
                 if verbose==True:
                     print 'encountered node %s'%(cur_node.index)
                 if include_all==True: ## if node hasn't been collected and we want to collect all objects - add it for reporting later
                     collected.append(cur_node)
-                if start==None and cur_node not in self.nodes:
-                    self.nodes.append(cur_node)
                 ## check whether all children of the node have been seen or whether we're not currently at the root
                 ## as long as all children have been seen will descend downwards
-                while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children) and cur_node!=startNode:
+                while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children) and cur_node!=startNode.parent:
                     if verbose==True:
                         print 'seen all children of node %s'%(cur_node.index)
                     ## check wheteher current node's most recent child is higher than the known highest point in the tree
@@ -249,7 +270,7 @@ class tree: ## tree class
                     
                     if cur_node.index==startNode.index: ## if currently at root - set the root flag to True and break the while loop
                         if verbose==True:
-                            print 'reached starting point %s (parent %s)'%(cur_node.index,cur_node.parent.index)
+                            print 'reached starting point %s'%(cur_node.index)
                         cur_node.height=height
                         root=True
                         break
@@ -282,8 +303,6 @@ class tree: ## tree class
             elif cur_node.branchType=='leaf': ## node dealing with node, are we dealing with a leaf (tip)?
                 if verbose==True:
                     print 'encountered leaf %s (%s or %s)'%(cur_node.index,cur_node.numName,cur_node.name)
-                if start==None and cur_node not in self.leaves:
-                    self.leaves.append(cur_node)
                 cur_node.parent.numChildren+=1 ## parent has one more new child (congratulations!)
                 cur_node.parent.leaves.append(cur_node.numName) ## add the name of leaf to its parent's list of children names
                 cur_node.parent.leaves=sorted(cur_node.parent.leaves) ## sort parent's children list
@@ -309,16 +328,13 @@ class tree: ## tree class
         for k in self.leaves: ## iterate through leaf objects in tree
             k.name=d[k.numName] ## change its name
     
-    def sortBranches(self,descending=True,verbose=False):
+    def sortBranches(self,descending=True):
         """ Sort descendants of each node. """
         if descending==True:
             modifier=-1 ## define the modifier for sorting function later
         elif descending==False:
             modifier=1
         
-        if verbose==True:
-            print 'Initiated branch sort with descending order: %s%'(descending)
-            
         for k in self.Objects: ## iterate over nodes
             if k.branchType=='node':
                 ## split node's offspring into nodes and leaves, sort each list individually
@@ -336,7 +352,8 @@ class tree: ## tree class
         """ Find x and y coordinates of each branch. """
         order=[x for x in self.traverse_tree() if x.branchType=='leaf'] ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
         name_order=[x.numName for x in order]
-        skips=[1 if isinstance(x,leaf) else x.width for x in order]
+        
+        skips=[1 if isinstance(x,leaf) else x.width+1 for x in order]
         
         for k in self.Objects: ## reset coordinates for all objects
             k.x=None
@@ -387,27 +404,36 @@ class tree: ## tree class
         if isinstance(startNode,leaf): ## quit immediately if starting from a leaf - nowhere to go
             collected.append(startNode)
             return collected
-
+        
+        else:
+            valid=0
+            for child in startNode.children: ## iterate over children of the starting node
+                if converterDict==None: ## no dictionary to convert trait values, trying to stay inside trait value of starting node
+                    chTrait=child.traits[traitName]
+                else: ## there's a dictionary, trying to stay within same dictionary value
+                    chTrait=converterDict[child.traits[traitName]]
+                
+                if chTrait==stayWithin: ## if child is under the same trait value as parent
+                    valid+=1 ## add one valid child
+            if valid==0: ## need at least one valid child, otherwise return None
+                return None
+        
         while root==False:
             if isinstance(cur_node,node):
                 ## if all children have been seen and not at root
                 while sum([1 if child.index in seen else 0 for child in cur_node.children])==len(cur_node.children) and cur_node.parent!=self.root:
+                    
                     if converterDict==None: ## if about to traverse into different trait state - break while loop
                         curTrait=cur_node.traits[traitName]
                     else:
                         curTrait=converterDict[cur_node.traits[traitName]]
                     
-                    if curTrait!=stayWithin:
+                    if curTrait!=stayWithin or cur_node.index==startNode.parent.index or cur_node.index==startNode.index or cur_node.parent.index=='Root':
                         root=True
                         return collected
-
-                    if cur_node.index==startNode.index or cur_node.parent.index=='Root': ## if back at starting node or the root - break while loop
-                        root=True
-                        return collected
-                        
                     else: ## otherwise keep heading backwards
                         cur_node=cur_node.parent
-                
+                        
                 seen.append(cur_node.index) ## current node seen
                 
                 if cur_node not in collected: ## add current node to collection
@@ -423,7 +449,6 @@ class tree: ## tree class
                         seen.append(child.index)
 
                 last_seen=[1 if child.index in seen else 0 for child in cur_node.children] ## 1 if child was seen, otherwise 0
-                
                 if 0 in last_seen: ## if some of the children unseen - go to them
                     idx_to_visit=last_seen.index(0)
                     cur_node=cur_node.children[idx_to_visit]
@@ -434,11 +459,7 @@ class tree: ## tree class
                 seen.append(cur_node.index)
                 if cur_node not in collected:
                     collected.append(cur_node)
-                if cur_node.index==startNode.index or cur_node.parent.index=='Root': ## if back at starting node or the root - break while loop
-                    root=True
-                    return collected
-                else:
-                    cur_node=cur_node.parent
+                cur_node=cur_node.parent
             
     def commonAncestor(self,descendants,numName=False):
         types=[desc.__class__ for desc in descendants]
