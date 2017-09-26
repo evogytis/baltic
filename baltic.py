@@ -2,6 +2,7 @@ import re
 import copy
 import math
 import datetime as dt
+import json
 
 def unique(o, idfun=repr):
     """Reduce a list down to its unique elements."""
@@ -22,6 +23,10 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False,dateSplitter='-'):
     boy = dt.datetime(year, 1, 1) ## get beginning of the year
     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
+
+def convertDate(x,start,end):
+    """ Converts calendar dates between given formats """
+    return dt.datetime.strftime(dt.datetime.strptime(x,start),end)
 
 class clade: ## clade class
     def __init__(self,givenName):
@@ -158,7 +163,7 @@ class tree: ## tree class
 
                 grandparent.children.append(child) ## add child to grandparent's children
                 grandparent.children.remove(k) ## remove old parent from grandparent's children
-
+                grandparent.children=list(set(grandparent.children))
                 child.length+=k.length ## adjust child length
 
                 multiTypeNodes.remove(k) ## remove old parent from multitype nodes
@@ -177,7 +182,7 @@ class tree: ## tree class
         obs=self.Objects ## convenient list of all objects in the tree
         print '\nTree height: %.6f\nTree length: %.6f'%(self.treeHeight,sum([x.length for x in obs])) ## report the height and length of tree
 
-        nodes=self.nodes ## get all nodes
+        nodes=[k for k in obs if k.branchType=='node'] ## get all nodes
         strictlyBifurcating=False ## assume tree is not strictly bifurcating
         multiType=False
         singleton=False
@@ -247,11 +252,11 @@ class tree: ## tree class
         root=False ## root becomes true once you're unable to go back any further
 
         while root==False: ## cycle indefinitely as long as there's more of the tree to explore
-            if seen.count(cur_node.index)>3:
-                if verbose==True:
-                    print 'node %s seen too many times, breaking'%(cur_node.index)
-                root=True
-                break
+            # if seen.count(cur_node.index)>3:
+            #     if verbose==True:
+            #         print 'node %s seen too many times, breaking'%(cur_node.index)
+            #     root=True
+            #     break
 
             if cur_node.branchType=='node': ## if currently dealing with a node
                 if verbose==True:
@@ -349,10 +354,15 @@ class tree: ## tree class
         self.nodes=[k for k in self.Objects if k.branchType=='node']
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
 
-    def drawTree(self,order=None):
+    def drawTree(self,order=None,verbose=False):
         """ Find x and y coordinates of each branch. """
         if order==None:
             order=[x for x in self.traverse_tree() if x.branchType=='leaf'] ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
+            if verbose==True:
+                print 'Drawing tree in pre-order'
+        else:
+            if verbose==True:
+                print 'Drawing tree with provided order'
 
         name_order=[x.numName for x in order]
         skips=[1 if isinstance(x,leaf) else x.width+1 for x in order]
@@ -364,8 +374,12 @@ class tree: ## tree class
         storePlotted=0
         drawn=[] ## drawn keeps track of what's been drawn
         while len(drawn)!=len(self.Objects): # keep drawing the tree until everything is drawn
+            if verbose==True:
+                print 'Drawing iteration %d'%(len(drawn))
             for k in [x for x in self.Objects if x.index not in drawn]: ## iterate through objects that have not been drawn
                 if k.branchType=='leaf': ## if leaf - get position of leaf, draw branch connecting tip to parent node
+                    if verbose==True:
+                        print 'Setting leaf %s coordinates'%(k.index)
                     x=k.height ## x position is height
                     y_idx=name_order.index(k.numName) ## y position of leaf is given by the order in which tips were visited during the traversal
                     y=sum(skips[y_idx:]) ## sum across skips to find y position
@@ -377,6 +391,8 @@ class tree: ## tree class
 
                 if k.branchType=='node': ## if parent is non-root node and y positions of all its children are known
                     if len([q.y for q in k.children if q.y!=None])==len(k.children):
+                        if verbose==True:
+                            print 'Setting node %s coordinates'%(k.index)
                         x=k.height ## x position is height
                         children_y_coords=[q.y for q in k.children if q.y!=None] ## get all existing y coordinates of the node
                         y=sum(children_y_coords)/float(len(children_y_coords)) ## internal branch is in the middle of the vertical bar
@@ -500,7 +516,7 @@ class tree: ## tree class
                     collected.append(cur_node)
                 cur_node=cur_node.parent
 
-    def commonAncestor(self,descendants,numName=False):
+    def commonAncestor(self,descendants,numName=False,strict=False):
         types=[desc.__class__ for desc in descendants]
         assert len(set(types))==1,'More than one type of data detected in descendants list'
         if numName==False:
@@ -513,7 +529,13 @@ class tree: ## tree class
             ancestor=[k for k in allAncestors if sum([[self.tipMap[w] for w in k.leaves].count(l) for l in descendants])==len(descendants)][-1]
         else:
             ancestor=[k for k in allAncestors if sum([[w for w in k.leaves].count(l) for l in descendants])==len(descendants)][-1]
-        return ancestor
+
+        if strict==False:
+            return ancestor
+        elif strict==True and len(ancestor.leaves)==len(descendants):
+            return ancestor
+        elif strict==True and len(ancestor.leaves)>len(descendants):
+            return None
 
     def collapseSubtree(self,cl,givenName,verbose=False,widthFunction=lambda x:x):
         """ Collapse an entire subtree into a clade object. """
@@ -583,7 +605,7 @@ class tree: ## tree class
                     return ob.traits[tr]
                 if verbose==True:
                     print 'Collapsing based on trait'
-            nodes_to_delete=[n for n in newTree.nodes if n.traits.has_key(trait) and f(get_value(n,trait))==True] ## fetch a list of all nodes who are not the root and who satisfy the condition
+            nodes_to_delete=[n for n in newTree.nodes if f(get_value(n,trait))==True if n!=newTree.root] ## fetch a list of all nodes who are not the root and who satisfy the condition
         else:
             assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
             assert len([w for w in designated_nodes if w.parent.index=='Root'])==0,'Root node was designated for deletion'
@@ -599,6 +621,8 @@ class tree: ## tree class
                 k.parent.children+=zero_node ## add them to the zero node's parent
                 old_parent=k ## node to be deleted is the old parent
                 new_parent=k.parent ## once node is deleted, the parent to all their children will be the parent of the deleted node
+                if new_parent==None:
+                    new_parent=self.root
                 if verbose==True:
                     print 'Removing node %s, attaching children %s to node %s'%(old_parent.index,[w.index for w in k.children],new_parent.index)
                 for w in newTree.Objects: ## assign the parent of deleted node as the parent to any children of deleted node
@@ -624,12 +648,17 @@ class tree: ## tree class
         root=False
 
         while root==False:
+            if verbose==True:
+                print 'Branch this iteration: %s'%(cur_node.index)
             if cur_node.branchType=='node':
                 if verbose==True:
                     print 'Encountered node %s'%(cur_node.index)
                 ## if all children have been seen and not at root
-                while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children) and cur_node.index!='Root':
-                    if cur_node.parent.index=='Root':
+                while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children):
+                    if verbose==True:
+                        print 'Recursing downwards, currently at %s'%(cur_node.index)
+                        print '%s %s'%(len(set(seen)),len(cur_node.leaves))
+                    if cur_node.index=='Root':
                         root=True
                         break
                     else:
@@ -727,12 +756,15 @@ class tree: ## tree class
             elif cur_node.branchType=='leaf':
                 if verbose==True:
                     print 'Encountered leaf %s'%(cur_node.index)
+
                 seen.append(cur_node.index)
                 if cur_node.parent.index=='Root':
                     root=True
                     break
                 else:
                     cur_node=cur_node.parent
+        if ''.join(tree_string).count(')')-1==''.join(tree_string).count('('):
+            tree_string.insert(0,'(')
 
         if nexus==True:
             return '#NEXUS\nBegin trees;\ntree TREE1 = [&R] %s;\nEnd;'%(''.join(tree_string))
@@ -826,30 +858,33 @@ def make_tree(data,ll,verbose=False):
                 print '%d adding multitype node %s'%(i,cerberus.group(1))
             i+=len(cerberus.group(1))
 
-        cerberus=re.match('(\:)*\[&([A-Za-z\_\-{}\,0-9\.\%=\"\+!#]+)\]',data[i:])## look for MCC comments
+        cerberus=re.match('(\:)*\[(&[A-Za-z\_\-{}\,0-9\.\%=\"\'\+!#]+)\]',data[i:])## look for MCC comments
         #cerberus=re.match('\[&[A-Za-z\_\-{}\,0-9\.\%=\"\+]+\]',data[i:])## look for MCC comments
         if cerberus is not None:
             if verbose==True:
                 print '%d comment: %s'%(i,cerberus.group(2))
             comment=cerberus.group(2)
-            numerics=re.findall('[A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall('[A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+]+["|\']*',comment) ## strings
-            treelist=re.findall('[A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\.]+}',comment) ## complete history logged robust counting (MCMC trees)
-            sets=re.findall('[A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_]+}',comment) ## sets and ranges
+            numerics=re.findall('[,&][A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
+            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+]+["|\']*',comment) ## strings
+            treelist=re.findall('[,&][A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\.]+}',comment) ## complete history logged robust counting (MCMC trees)
+            sets=re.findall('[,&][A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_]+}',comment) ## sets and ranges
             figtree=re.findall('\![A-Za-z]+=[A-Za-z0-9#]+',comment)
 
             for vals in strings:
                 tr,val=vals.split('=')
+                tr=tr[1:]
                 if '+' in val:
                     val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
                 ll.cur_node.traits[tr]=val.strip('"')
 
             for vals in numerics: ## assign all parsed annotations to traits of current branch
                 tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
+                tr=tr[1:]
                 ll.cur_node.traits[tr]=float(val)
 
             for val in treelist:
                 tr,val=val.split('=')
+                tr=tr[1:]
                 microcerberus=re.findall('{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
                 ll.cur_node.traits[tr]=[]
                 for val in microcerberus:
@@ -858,6 +893,7 @@ def make_tree(data,ll,verbose=False):
 
             for vals in sets:
                 tr,val=vals.split('=')
+                tr=tr[1:]
                 if 'set' in tr:
                     ll.cur_node.traits[tr]=[]
                     for v in val[1:-1].split(','):
@@ -865,10 +901,11 @@ def make_tree(data,ll,verbose=False):
                             ll.cur_node.traits[tr].append(float(v))
                         else:
                             ll.cur_node.traits[tr].append(v.strip('"'))
-                elif 'range' in tr or 'HPD' in tr:
-                    ll.cur_node.traits[tr]=map(float,val[1:-1].split(','))
                 else:
-                    print 'some other trait: %s'%(vals)
+                    try:
+                        ll.cur_node.traits[tr]=map(float,val[1:-1].split(','))
+                    except:
+                        print 'some other trait: %s'%(vals)
 
             if len(figtree)>0:
                 print 'FigTree comment found, ignoring'
@@ -897,12 +934,46 @@ def make_tree(data,ll,verbose=False):
         if data[i] == ';': ## look for string end
             break ## end loop
 
+def make_treeJSON(tree,parent,JSONnode,json_translation):
+    if 'attr' in JSONnode:
+        attr = JSONnode.pop('attr')
+        JSONnode.update(attr)
+
+    if JSONnode.has_key('children'): ## only nodes have children
+        new_node=node()
+    else:
+        new_node=leaf()
+        new_node.numName=JSONnode[json_translation['name']] ## set leaf numName
+
+    new_node.parent=tree.cur_node ## set parent-child relationships
+    tree.cur_node.children.append(new_node)
+    new_node.index=JSONnode[json_translation['name']] ## indexing is based on name
+    new_node.traits={n:JSONnode[n] for n in JSONnode.keys() if n!='children'} ## set traits to non-children attributes
+    tree.Objects.append(new_node)
+    tree.cur_node=new_node
+
+    if isinstance(new_node, node):
+        tree.nodes.append(new_node)
+    else:
+        tree.leaves.append(new_node)
+
+    if JSONnode.has_key('children'):
+        for child in JSONnode['children']:
+            make_treeJSON(tree,JSONnode,child,json_translation)
+            tree.cur_node=tree.cur_node.parent
+
+
 def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False):
     tipFlag=False
     tips={}
     tipNum=0
     ll=None
-    for line in open(tree_path,'r'):
+    if isinstance(tree_path,str):
+        handle=open(tree_path,'r')
+    else:
+        handle=tree_path
+
+    for line in handle:
         l=line.strip('\n')
 
         cerberus=re.search('dimensions ntax=([0-9]+);',l.lower())
@@ -953,6 +1024,49 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
 
         highestTip=max(tipDates)
         ll.setAbsoluteTime(highestTip)
+
+    return ll
+
+
+def loadJSON(tree_path,json_translation,json_meta=None,verbose=False,sort=True,stats=True):
+    assert json_translation.has_key('name') and json_translation.has_key('height'),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height'] if json_translation.has_key(entry)==False]))
+    ll=tree()
+    if verbose==True:
+        print 'Reading JSON'
+    with open(tree_path) as json_data:
+        d = json.load(json_data)
+        make_treeJSON(ll,'root',d,json_translation)
+
+    if json_translation.has_key('absoluteTime'):
+        if verbose==True:
+            print 'Setting absolute time'
+        for k in ll.Objects:
+            setattr(k,'absoluteTime',k.traits[json_translation['absoluteTime']])
+
+    if verbose==True:
+        print 'Setting heights'
+    for k in ll.Objects:
+        setattr(k,'height',k.traits[json_translation['height']])
+
+    if verbose==True:
+        print 'Setting lengths'
+    for k in ll.Objects:
+        k.length=k.height-k.parent.height
+
+    if verbose==True:
+        print 'Traversing and drawing tree'
+
+    ll.traverse_tree()
+    ll.drawTree()
+    if stats==True:
+        ll.treeStats() ## initial traversal, checks for stats
+    if sort==True:
+        ll.sortBranches() ## traverses tree, sorts branches, draws tree
+
+    if json_meta:
+        metadata=json.load(open(json_meta['file'],'r'))
+        cmap=dict(metadata['color_options'][json_meta['traitName']]['color_map'])
+        setattr(ll,'cmap',cmap)
 
     return ll
 
