@@ -80,7 +80,7 @@ for k in myTree.Objects:
 --------------------
 
 ## galindia
-![](figures/coa_galindia.png)
+![](figures/coa_galindia.jpg)
 
 [`galindia.ipynb`](galindia.ipynb) is a work in progress that uses baltic to plot JSONs from [nextstrain.org](nextstrain.org) in order to allow customisable, static, publication-ready figures for phylogenies coming from nextstrain's augur pipeline.
 
