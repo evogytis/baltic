@@ -85,7 +85,7 @@ for k in myTree.Objects:
 
 <img src="figures/coa_galindia.jpg" width=200px>
 
-[`galindia.ipynb`](galindia.ipynb) is a work in progress that uses baltic to plot JSONs from [nextstrain.org](nextstrain.org) in order to allow customisable, static, publication-ready figures for phylogenies coming from nextstrain's augur pipeline.
+[`galindia.ipynb`](galindia.ipynb) is a notebook that uses baltic to plot JSONs from [nextstrain.org](nextstrain.org) in order to allow customisable, static, publication-ready figures for phylogenies coming from nextstrain's augur pipeline.
 
 --------------------
 
