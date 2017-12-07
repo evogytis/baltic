@@ -92,6 +92,7 @@ for k in myTree.Objects:
 ## curonia
 
 <img src="figures/coa_curonia.jpg" width=200px>
+
 [`curonia.ipynb`](curonia.ipynb) generalises the [notebook](https://github.com/ebov/space-time/blob/master/Scripts/notebooks/EBOV_phylogeography_animation.ipynb) used to animate the [spread of Ebola virus in West Africa](https://www.youtube.com/watch?v=j4Ut4krp8GQ). This notebook should require minimal manual editing to produce similarly styled animation of other study systems.
 
 --------------------
