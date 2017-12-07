@@ -379,12 +379,16 @@ class tree: ## tree class
             for k in [x for x in self.Objects if x.index not in drawn]: ## iterate through objects that have not been drawn
                 if k.branchType=='leaf': ## if leaf - get position of leaf, draw branch connecting tip to parent node
                     if verbose==True:
-                        print 'Setting leaf %s coordinates'%(k.index)
+                        print 'Setting leaf %s y coordinate to'%(k.index),
                     x=k.height ## x position is height
                     y_idx=name_order.index(k.numName) ## y position of leaf is given by the order in which tips were visited during the traversal
                     y=sum(skips[y_idx:]) ## sum across skips to find y position
-                    if isinstance(k,clade): ## if dealing with collapsed clade - adjust y position to be in the middle of the skip
+                    if verbose==True:
+                        print '%s'%(y)
+                    if isinstance(k,clade) and skips[y_idx]>1: ## if dealing with collapsed clade - adjust y position to be in the middle of the skip
                         y-=skips[y_idx]/2.0
+                        if verbose==True:
+                            print 'adjusting clade y position to %s'%(y)
                     k.x=x ## set x and y coordinates
                     k.y=y
                     drawn.append(k.index) ## remember that this objects has been drawn
@@ -547,7 +551,7 @@ class tree: ## tree class
         collapsedClade.parent=cl.parent
         collapsedClade.absoluteTime=cl.absoluteTime
         collapsedClade.traits=cl.traits
-        collapsedClade.width=widthFunction(len(cl.leaves))
+        collapsedClade.width=widthFunction(widthFunction(cl.leaves))
 
         if verbose==True:
             print 'Replacing node %s (parent %s) with a clade class'%(cl.index,cl.parent.index)
@@ -818,6 +822,9 @@ class tree: ## tree class
 
         return reduced_tree ## return new tree
 
+    def countLineages(self,t,condition=lambda x:True):
+        return len([k for k in self.Objects if k.parent.absoluteTime<t<=k.absoluteTime and condition(k)])
+    
 def make_tree(data,ll,verbose=False):
     """
     data is a tree string, ll (LL) is an instance of a tree object
@@ -1028,7 +1035,7 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
     return ll
 
 
-def loadJSON(tree_path,json_translation,json_meta=None,verbose=False,sort=True,stats=True):
+def loadJSON(tree_path,json_translation={'name':'strain','height':'tvalue'},json_meta=None,verbose=False,sort=True,stats=True):
     assert json_translation.has_key('name') and json_translation.has_key('height'),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height'] if json_translation.has_key(entry)==False]))
     ll=tree()
     if verbose==True:
