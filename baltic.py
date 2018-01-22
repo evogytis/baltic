@@ -592,32 +592,23 @@ class tree: ## tree class
                     self.tipMap.pop(cl.name,None)
         self.traverse_tree()
 
-    def collapseBranches(self,trait='posterior',f=lambda x:x<=0.5,designated_nodes=[],verbose=False):
-        """ Collapse all branches according to whether an attribute or trait value (default is "posterior" trait) satisfies an anonymous function f (default is return true if value is <=0.5).
+    def collapseBranches(self,collapseIf=lambda x:x.traits['posterior']<=0.5,designated_nodes=[],verbose=False):
+        """ Collapse all branches that satisfy a function collapseIf (default is an anonymous function that returns true if posterior probability is <=0.5).
             Alternatively, a list of nodes can be supplied to the script.
             Returns a deep copied version of the tree.
         """
         newTree=copy.deepcopy(self) ## work on a copy of the tree
         if len(designated_nodes)==0: ## no nodes were designated for deletion - relying on anonymous function to collapse nodes
-            if sum([1 if hasattr(q,trait) else 0 for q in newTree.nodes])==len(newTree.nodes): ## every node has attribute
-                def get_value(ob,tr):
-                    return getattr(ob,tr)
-                if verbose==True:
-                    print 'Collapsing based on attribute'
-            else: ## not every node has attribute - assume dealing with trait
-                def get_value(ob,tr):
-                    return ob.traits[tr]
-                if verbose==True:
-                    print 'Collapsing based on trait'
-            nodes_to_delete=[n for n in newTree.nodes if f(get_value(n,trait))==True if n!=newTree.root] ## fetch a list of all nodes who are not the root and who satisfy the condition
+            nodes_to_delete=[n for n in newTree.Objects if n.branchType=='node' and collapseIf(n)==True and n.parent!=newTree.root] ## fetch a list of all nodes who are not the root and who satisfy the condition
         else:
             assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
             assert len([w for w in designated_nodes if w.parent.index=='Root'])==0,'Root node was designated for deletion'
             nodes_to_delete=[w for w in newTree.Objects if w.index in [q.index for q in designated_nodes]] ## need to look up nodes designated for deletion by their indices, since the tree has been copied and nodes will have new memory addresses
         if verbose==True:
             print '%s nodes set for collapsing: %s'%(len(nodes_to_delete),[w.index for w in nodes_to_delete])
-        assert len(nodes_to_delete)<len(newTree.nodes)-1,'Chosen cutoff would remove all branches'
+        #assert len(nodes_to_delete)<len(newTree.nodes)-1,'Chosen cutoff would remove all branches'
         while len(nodes_to_delete)>0: ## as long as there are branches to be collapsed - keep reducing the tree
+
             if verbose==True:
                 print 'Continuing collapse cycle, %s nodes left'%(len(nodes_to_delete))
             for k in sorted(nodes_to_delete,key=lambda x:-x.height): ## start with branches near the tips
@@ -638,18 +629,34 @@ class tree: ## tree class
                 k.parent.children.remove(k) ## remove traces of deleted node - it doesn't exist as a child, doesn't exist in the tree and doesn't exist in the nodes list
                 newTree.Objects.remove(k)
                 newTree.nodes.remove(k)
+
                 nodes_to_delete.remove(k) ## in fact, the node never existed
+
+                if len(designated_nodes)==0:
+                    nodes_to_delete=[n for n in newTree.Objects if n.branchType=='node' and collapseIf(n)==True and n.parent!=newTree.root]
+                else:
+                    assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
+                    assert len([w for w in designated_nodes if w.parent.index=='Root'])==0,'Root node was designated for deletion'
+                    nodes_to_delete=[w for w in newTree.Objects if w.index in [q.index for q in designated_nodes]]
+
+
                 if verbose==True:
                     print 'Removing references to node %s'%(k.index)
+
+
+
         newTree.sortBranches() ## sort the tree to traverse, draw and sort tree to adjust y coordinates
         return newTree ## return collapsed tree
 
     def toString(self,traits=[],numName=False,verbose=False,nexus=False):
         """ Output the topology of the tree with branch lengths to string """
-        cur_node=self.root
+        cur_node=self.root.children[-1]
         seen=[]
         tree_string=[]
         root=False
+
+        if cur_node.branchType=='node':
+            tree_string.append('(')
 
         while root==False:
             if verbose==True:
@@ -657,12 +664,12 @@ class tree: ## tree class
             if cur_node.branchType=='node':
                 if verbose==True:
                     print 'Encountered node %s'%(cur_node.index)
-                ## if all children have been seen and not at root
-                while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children):
+
+                while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children): ## if all children have been seen and not at root
                     if verbose==True:
                         print 'Recursing downwards, currently at %s'%(cur_node.index)
                         print '%s %s'%(len(set(seen)),len(cur_node.leaves))
-                    if cur_node.index=='Root':
+                    if cur_node.parent.index=='Root':
                         root=True
                         break
                     else:
@@ -767,8 +774,8 @@ class tree: ## tree class
                     break
                 else:
                     cur_node=cur_node.parent
-        if ''.join(tree_string).count(')')-1==''.join(tree_string).count('('):
-            tree_string.insert(0,'(')
+        # if ''.join(tree_string).count(')')-1==''.join(tree_string).count('('):
+        #     tree_string.insert(0,'(')
 
         if nexus==True:
             return '#NEXUS\nBegin trees;\ntree TREE1 = [&R] %s;\nEnd;'%(''.join(tree_string))
@@ -951,6 +958,7 @@ def make_treeJSON(tree,parent,JSONnode,json_translation):
     else:
         new_node=leaf()
         new_node.numName=JSONnode[json_translation['name']] ## set leaf numName
+        new_node.name=JSONnode[json_translation['name']] ## set leaf name to be the same
 
     new_node.parent=tree.cur_node ## set parent-child relationships
     tree.cur_node.children.append(new_node)
