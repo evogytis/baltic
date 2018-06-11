@@ -97,6 +97,9 @@ for k in myTree.Objects:
 
 --------------------
 ## baltic was used in the following publications:
+
+- Chu DKW, Hui Kenrie PY, Perera RAPM, Miguel E, Niemeyer D, Zhao J, Channappanavar R, Dudas G, Oladipo JO, Traoré A, Fassi-Fihri O, Ali A, Demissie GF, Muth D, Chan MCW, Nicholls JM, Meyerholz DK, Kuranga SA, Mamo G, Zhou Z, So RTY, Hemida MG, Webby RJ, Roger F, Rambaut A, Poon LLM, Perlman S, Drosten C, Chevalier V, Peiris M, 2018. _MERS coronaviruses from camels in Africa exhibit region-dependent genetic diversity_. __PNAS__ 115(12): 3144-3149.
+- Whitmer SLM, Ladner JT, Wiley MR, Patel K, Dudas G, Rambaut A, Sahr F, Prieto K, Shepard SS, Carmody E, Knust B, Naidoo D, Deen G, Formenty P, Nichol ST, Palacios G, Ströher U, 2018. _Active Ebola Virus Replication and Heterogeneous Evolutionary Rates in EVD Survivors_. __Cell Reports__ 22(5): 1159-1168.
 - Dudas G, Carvalho L, Rambaut A, Bedford T. _MERS-CoV spillover at the camel-human interface_, 2017. __eLife__ 7: e31257.
 - Langat P, Raghwani J, Dudas G, ..., Russell C, Pybus OG, McCauley J, Kellam P, Watson SJ. _Genome-wide evolutionary dynamics of influenza B viruses on a global scale_, 2017. __PLOS Pathogens__ 13(12): e1006749.
 - Grubaugh ND, Ladner JT, Kraemer MUG, Dudas G, Tan AL, Gangavarapu K, Wiley MR, White S, Thézé J, ..., Bedford T, Pybus OG, Isern S, Palacios G, Andersen KG. _Multiple introductions of Zika virus into the United States revealed through genomic epidemiology_, 2017. __Nature__ 546: 401–405.

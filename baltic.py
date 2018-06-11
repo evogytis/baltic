@@ -327,9 +327,9 @@ class tree: ## tree class
         self.treeHeight=float(maxHeight) ## tree height of this tree is the height of the highest tip
         return unique(collected) ## return a list of collected leaf objects
 
-    def renameTips(self,d):
+    def renameTips(self,d=None):
         """ Give each tip its correct label using a dictionary. """
-        if self.tipMap!=None:
+        if d==None and self.tipMap!=None:
             d=self.tipMap
         for k in self.leaves: ## iterate through leaf objects in tree
             k.name=d[k.numName] ## change its name
@@ -379,7 +379,7 @@ class tree: ## tree class
             for k in [x for x in self.Objects if x.index not in drawn]: ## iterate through objects that have not been drawn
                 if k.branchType=='leaf': ## if leaf - get position of leaf, draw branch connecting tip to parent node
                     if verbose==True:
-                        print('Setting leaf %s y coordinate to'%(k.index), end=' ')
+                        print('Setting leaf %s y coordinate to'%(k.index))
                     x=k.height ## x position is height
                     y_idx=name_order.index(k.numName) ## y position of leaf is given by the order in which tips were visited during the traversal
                     y=sum(skips[y_idx:]) ## sum across skips to find y position
@@ -528,7 +528,7 @@ class tree: ## tree class
         else:
             assert sum([1 if k in [w.numName for w in self.Objects if w.branchType=='leaf'] else 0 for k in descendants])==len(descendants),'Not all specified descendants are in tree: %s'%(descendants)
         dtype=list(set(types))[0]
-        allAncestors=sorted([k for k in self.Objects if k.branchType=='node' and len(k.leaves)>=len(descendants)],key=lambda x:x.height)
+        allAncestors=sorted([k for k in self.Objects if (k.branchType=='node' or isinstance(k,clade)) and len(k.leaves)>=len(descendants)],key=lambda x:x.height)
         if numName==False:
             ancestor=[k for k in allAncestors if sum([[self.tipMap[w] for w in k.leaves].count(l) for l in descendants])==len(descendants)][-1]
         else:
@@ -729,12 +729,13 @@ class tree: ## tree class
                         elif numName==True: ## if number names wanted
                             treeName=cur_node.numName ## designated numName
 
-                        if len(comment)>0:
-                            comment=','.join(comment) ## join up traits with commas
-                            comment='[&'+comment+']' ## add starting and end bracket
-                            tree_string.append('\'%s\'%s:%8f'%(treeName,comment,cur_node.length)) ## dealing with tip, write out name, add branch length with annotation
-                        else:
-                            tree_string.append('\'%s\':%8f'%(treeName,cur_node.length)) ## dealing with tip, write out name, add branch length
+                        if cur_node!=self.root:
+                            if len(comment)>0:
+                                comment=','.join(comment) ## join up traits with commas
+                                comment='[&'+comment+']' ## add starting and end bracket
+                                tree_string.append('\'%s\'%s:%8f'%(treeName,comment,cur_node.length)) ## dealing with tip, write out name, add branch length with annotation
+                            else:
+                                tree_string.append('\'%s\':%8f'%(treeName,cur_node.length)) ## dealing with tip, write out name, add branch length
 
                 else: ## all children seen, clade's end
                     comment=[]
@@ -753,12 +754,14 @@ class tree: ## tree class
                                             elif isinstance(val,float):
                                                 rangeComment.append('%s'%(val))
                                         comment.append('%s={%s}'%(tr,','.join(rangeComment)))
-                    if len(comment)>0:
-                        comment=','.join(comment)
-                        comment='[&'+comment+']'
-                        tree_string.append(')%s:%8f'%(comment,cur_node.length))
-                    else:
-                        tree_string.append('):%8f'%(cur_node.length))
+
+                    if cur_node!=self.root:
+                        if len(comment)>0:
+                            comment=','.join(comment)
+                            comment='[&'+comment+']'
+                            tree_string.append(')%s:%8f'%(comment,cur_node.length))
+                        else:
+                            tree_string.append('):%8f'%(cur_node.length))
                     cur_node=cur_node.parent
 
             elif cur_node.branchType=='leaf':
@@ -945,7 +948,7 @@ def make_tree(data,ll,verbose=False):
         if data[i] == ';': ## look for string end
             break ## end loop
 
-def make_treeJSON(tree,parent,JSONnode,json_translation):
+def make_treeJSON(tree,parent,JSONnode,json_translation,verbose=False):
     if 'attr' in JSONnode:
         attr = JSONnode.pop('attr')
         JSONnode.update(attr)
@@ -1047,7 +1050,7 @@ def loadJSON(tree_path,json_translation={'name':'strain','height':'tvalue'},json
         print('Reading JSON')
     with open(tree_path) as json_data:
         d = json.load(json_data)
-        make_treeJSON(ll,'root',d,json_translation)
+        make_treeJSON(ll,'root',d,json_translation,verbose=verbose)
 
     if 'absoluteTime' in json_translation:
         if verbose==True:
@@ -1068,7 +1071,7 @@ def loadJSON(tree_path,json_translation={'name':'strain','height':'tvalue'},json
     if verbose==True:
         print('Traversing and drawing tree')
 
-    ll.traverse_tree()
+    ll.traverse_tree(verbose=verbose)
     ll.drawTree()
     if stats==True:
         ll.treeStats() ## initial traversal, checks for stats
