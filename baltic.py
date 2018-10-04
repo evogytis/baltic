@@ -4,11 +4,6 @@ import math
 import datetime as dt
 import json
 
-def unique(o, idfun=repr):
-    """Reduce a list down to its unique elements."""
-    seen = {}
-    return [seen.setdefault(idfun(e),e) for e in o if idfun(e) not in seen]
-
 def decimalDate(date,fmt="%Y-%m-%d",variable=False,dateSplitter='-'):
     """ Converts calendar dates in specified format to decimal date. """
     if variable==True: ## if date is variable - extract what is available
@@ -243,7 +238,6 @@ class tree: ## tree class
 
         seen=[] ## remember what's been visited
         collected=[] ## collect leaf objects along the way
-        maxHeight=0 ## check what the maximum distance between the root and the most recent tip is
         if startNode!=None and startNode.height!=None:
             height=startNode.height
         else:
@@ -268,11 +262,9 @@ class tree: ## tree class
                 while sum([1 if x.index in seen else 0 for x in cur_node.children])==len(cur_node.children) and cur_node!=startNode.parent:
                     if verbose==True:
                         print('seen all children of node %s'%(cur_node.index))
-                    ## check wheteher current node's most recent child is higher than the known highest point in the tree
-                    if cur_node.childHeight <= highestTip:
-                        cur_node.childHeight = highestTip
-                    elif cur_node.childHeight > highestTip:
-                        highestTip = cur_node.childHeight
+                    ## check wheteher current node's most recent child is higher than the parent's
+                    if cur_node.parent and cur_node.childHeight > cur_node.parent.childHeight:
+                        cur_node.parent.childHeight=cur_node.childHeight
 
                     if cur_node.index==startNode.index: ## if currently at root - set the root flag to True and break the while loop
                         if verbose==True:
@@ -285,7 +277,7 @@ class tree: ## tree class
                             print('heading to parent of %s'%(cur_node.index))
                         cur_node.parent.numChildren+=cur_node.numChildren ## add the number of current node's children to its parent
                         cur_node.parent.leaves+=cur_node.leaves ## add the list of tip names descended from current node to its parent
-                        cur_node.parent.leaves=unique(cur_node.parent.leaves) ## reduce to only unique names
+                        cur_node.parent.leaves=list(set(cur_node.parent.leaves)) ## reduce to only unique names
                         cur_node.parent.leaves=sorted(cur_node.parent.leaves) ## sort children
                         cur_node.height=height ## set height
                         height-=float(cur_node.length) ## prepare height value for the eventual descent downwards in the tree
@@ -318,14 +310,15 @@ class tree: ## tree class
 
                 #if cur_node not in collected: ## if leaf hasn't been collected - add it for reporting later
                 collected.append(cur_node)
-                if maxHeight<=float(cur_node.height): ## is this the highest point we've seen in the tree so far?
-                    maxHeight=float(cur_node.height)
+
+                if cur_node.height>cur_node.parent.childHeight:
+                    cur_node.parent.childHeight=cur_node.height
 
                 height-=float(cur_node.length) ## prepare for heading back
                 cur_node=cur_node.parent ## current node is now leaf's parent
 
-        self.treeHeight=float(maxHeight) ## tree height of this tree is the height of the highest tip
-        return unique(collected) ## return a list of collected leaf objects
+        self.treeHeight=max([k.childHeight for k in self.Objects if k.branchType=='node']) ## tree height of this tree is the height of the highest tip
+        return [k for k in collected if k in set(collected)] ## return a list of collected leaf objects
 
     def renameTips(self,d=None):
         """ Give each tip its correct label using a dictionary. """

@@ -98,6 +98,10 @@ for k in myTree.Objects:
 --------------------
 ## baltic was used in the following publications:
 
+- Bell SM, Katzelnick L, Bedford T, 2018. _Dengue antigenic relationships predict evolutionary dynamics_, __bioRxiv__ 432054; [doi](https://doi.org/10.1101/432054).
+- Lee JM, Huddleston J, Doud MB, Hooper KA, Wu NC, Bedford T, Bloom JD, 2018. _Deep mutational scanning of hemagglutinin helps predict evolutionary fates of human H3N2 influenza variants_, __PNAS__ 115(35): 8276-8285.
+- Dokubo EK, Wendland A, Mate SE, Ladner JT, ..., Palacios G, Fallah MP, 2018. _Persistence of Ebola virus after the end of widespread transmission in Liberia: an outbreak report_, __Lancet Infect Dis__ 18: 1015–1024.
+- Venkatesh D, Poen MJ, Bestebroer TM, ..., Brown IH, Fouchier RAM, Lewis NS, 2018. _Avian influenza viruses in wild birds: virus evolution in a multi-host ecosystem_, __J Virol__ 92:e00433-18.
 - Chu DKW, Hui Kenrie PY, Perera RAPM, Miguel E, Niemeyer D, Zhao J, Channappanavar R, Dudas G, Oladipo JO, Traoré A, Fassi-Fihri O, Ali A, Demissie GF, Muth D, Chan MCW, Nicholls JM, Meyerholz DK, Kuranga SA, Mamo G, Zhou Z, So RTY, Hemida MG, Webby RJ, Roger F, Rambaut A, Poon LLM, Perlman S, Drosten C, Chevalier V, Peiris M, 2018. _MERS coronaviruses from camels in Africa exhibit region-dependent genetic diversity_. __PNAS__ 115(12): 3144-3149.
 - Whitmer SLM, Ladner JT, Wiley MR, Patel K, Dudas G, Rambaut A, Sahr F, Prieto K, Shepard SS, Carmody E, Knust B, Naidoo D, Deen G, Formenty P, Nichol ST, Palacios G, Ströher U, 2018. _Active Ebola Virus Replication and Heterogeneous Evolutionary Rates in EVD Survivors_. __Cell Reports__ 22(5): 1159-1168.
 - Dudas G, Carvalho L, Rambaut A, Bedford T. _MERS-CoV spillover at the camel-human interface_, 2017. __eLife__ 7: e31257.
