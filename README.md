@@ -1,5 +1,3 @@
-The development of baltic is currently happening over at the [__Bedford lab repo__](https://github.com/blab/baltic).
-
 ## baltic: the Backronymed Adaptable Lightweight Tree Import Code
 
 baltic was initially developed to extract various statistics from molecular phylogenies derived from [BEAST](https://github.com/beast-dev/beast-mcmc) in a customised way. My [influenza B virus reassortment paper](https://dx.doi.org/10.1093/molbev/msu287) used early versions of baltic’s code to look at how the human influenza B virus segment diversity is structured according to genomic background. I’ve since split up the various bits of code into three parts:
