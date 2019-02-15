@@ -66,34 +66,61 @@ for k in myTree.Objects:
 --------------------
 
 ## samogitia
-![](figures/coa_samogitia.jpg)
+
+<img src="figures/coa_samogitia.jpg" width=200px>
 
 [`samogitia.py`](samogitia.py) is the heavy-lifting, tree file-wrangling script in the collection. It’s main role is to parse BEAST tree files, use baltic to create tree data structures, which samogitia then manipulates to create BEAST-like log files that can usually be imported into [Tracer](http://tree.bio.ed.ac.uk/software/tracer/) or used in another program.
 
 --------------------
 
 ## austechia
-![](figures/coa_austechia.png)
+
+<img src="figures/coa_austechia.png" width=200px>
 
 [`austechia.ipynb`](austechia.ipynb) is the fancy Jupyter notebook that takes tree files, usually MCC trees from BEAST, and plots them. It is meant to be part teaching tool to get people to think about how trees are plotted, to allow for highly customisable representations of trees (e.g. Fig 6 in my [MERS-CoV paper](http://dx.doi.org/10.1093/ve/vev023)) and to improve the aesthetics situation in phylogenetics.
 
 --------------------
 
+## galindia
+
+<img src="figures/coa_galindia.jpg" width=200px>
+
+[`galindia.ipynb`](galindia.ipynb) is a notebook that uses baltic to plot JSONs from [nextstrain.org](nextstrain.org) in order to allow customisable, static, publication-ready figures for phylogenies coming from nextstrain's augur pipeline.
+
+--------------------
+
+## curonia
+
+<img src="figures/coa_curonia.jpg" width=200px>
+
+[`curonia.ipynb`](curonia.ipynb) generalises the [notebook](https://github.com/ebov/space-time/blob/master/Scripts/notebooks/EBOV_phylogeography_animation.ipynb) used to animate the [spread of Ebola virus in West Africa](https://www.youtube.com/watch?v=j4Ut4krp8GQ). This notebook should require minimal manual editing to produce similarly styled animation of other study systems.
+
+--------------------
 ## baltic was used in the following publications:
-- Grubaugh ND, Ladner JT, Kraemer MUG, Dudas G, Tan AL, Gangavarapu K, Wiley MR, White S, Thézé J, ..., Bedford T, Pybus OG, Isern S, Palacios G, Andersen KG. _Multiple introductions of Zika virus into the United States revealed through genomic epidemiology_, 2017. __Nature__ 546:401–405.
+
+- van Vuren JP, Ladner JT, Grobbelaar AA, Wiley MR, Lovett S, Allam M, Ismail A, le Roux C, Weyer J, Moolla N, Storm N, Kgaladi J, Sanchez-Lockhart M, Conteh O, Palacios G, Paweska JT, 2019. _Phylodynamic Analysis of Ebola Virus Disease Transmission in Sierra Leone_. __Viruses__, 11(1), 71; [doi](https://doi.org/10.3390/v11010071).
+- Bell SM, Katzelnick L, Bedford T, 2018. _Dengue antigenic relationships predict evolutionary dynamics_, __bioRxiv__ 432054; [doi](https://doi.org/10.1101/432054).
+- Lee JM, Huddleston J, Doud MB, Hooper KA, Wu NC, Bedford T, Bloom JD, 2018. _Deep mutational scanning of hemagglutinin helps predict evolutionary fates of human H3N2 influenza variants_, __PNAS__ 115(35): 8276-8285.
+- Dokubo EK, Wendland A, Mate SE, Ladner JT, ..., Palacios G, Fallah MP, 2018. _Persistence of Ebola virus after the end of widespread transmission in Liberia: an outbreak report_, __Lancet Infect Dis__ 18: 1015–1024.
+- Venkatesh D, Poen MJ, Bestebroer TM, ..., Brown IH, Fouchier RAM, Lewis NS, 2018. _Avian influenza viruses in wild birds: virus evolution in a multi-host ecosystem_, __J Virol__ 92:e00433-18.
+- Chu DKW, Hui Kenrie PY, Perera RAPM, Miguel E, Niemeyer D, Zhao J, Channappanavar R, Dudas G, Oladipo JO, Traoré A, Fassi-Fihri O, Ali A, Demissie GF, Muth D, Chan MCW, Nicholls JM, Meyerholz DK, Kuranga SA, Mamo G, Zhou Z, So RTY, Hemida MG, Webby RJ, Roger F, Rambaut A, Poon LLM, Perlman S, Drosten C, Chevalier V, Peiris M, 2018. _MERS coronaviruses from camels in Africa exhibit region-dependent genetic diversity_. __PNAS__ 115(12): 3144-3149.
+- Whitmer SLM, Ladner JT, Wiley MR, Patel K, Dudas G, Rambaut A, Sahr F, Prieto K, Shepard SS, Carmody E, Knust B, Naidoo D, Deen G, Formenty P, Nichol ST, Palacios G, Ströher U, 2018. _Active Ebola Virus Replication and Heterogeneous Evolutionary Rates in EVD Survivors_. __Cell Reports__ 22(5): 1159-1168.
+- Dudas G, Carvalho L, Rambaut A, Bedford T. _MERS-CoV spillover at the camel-human interface_, 2017. __eLife__ 7: e31257.
+- Langat P, Raghwani J, Dudas G, ..., Russell C, Pybus OG, McCauley J, Kellam P, Watson SJ. _Genome-wide evolutionary dynamics of influenza B viruses on a global scale_, 2017. __PLOS Pathogens__ 13(12): e1006749.
+- Grubaugh ND, Ladner JT, Kraemer MUG, Dudas G, Tan AL, Gangavarapu K, Wiley MR, White S, Thézé J, ..., Bedford T, Pybus OG, Isern S, Palacios G, Andersen KG. _Multiple introductions of Zika virus into the United States revealed through genomic epidemiology_, 2017. __Nature__ 546: 401–405.
 - Dudas G, Carvalho LM, Bedford T, Tatem AJ, ..., Suchard M, Lemey P, Rambaut A. _Virus genomes reveal the factors that spread and sustained the West African Ebola epidemic_, 2017. __Nature__ 544(7650): 309-315.
-- Bell SM, Bedford T. _Modern-Day SIV viral diversity generated by extensive recombination and cross-species transmission_, 2017. __bioRxiv__ 101725; doi: https://doi.org/10.1101/101725
+- Bell SM, Bedford T. _Modern-Day SIV viral diversity generated by extensive recombination and cross-species transmission_, 2017. __PLoS Pathog__ 13(7): e1006466.
 - Holmes EC, Dudas G, Rambaut A, Andersen KG. _The Evolution of Ebola virus: Insights from the 2013-2016 Epidemic_, 2016. __Nature__ 538(7624): 193-200.
 - Whitmer SLM, Albariño C, Shepard SS, Dudas G, ..., Nichol ST, Ströher U. _Preliminary Evaluation of the Effect of Investigational Ebola Virus Disease Treatments on Viral Genome Sequences_, 2016. __Journal of Infectious Diseases__:jiw177.
 - Rambaut A, Dudas G, Carvalho LM, Park DJ, Yozwiak NL, Holmes EC, Andersen KG. _Comment on “Mutation rate and genotype variation of Ebola virus from Mali case sequences”_, 2016. __Science__ 353(6300):658-658.
 - Lewis NS, Russell CA, Langat P, ..., Dudas G, ..., Watson SJ, Brown IH, Vincent AL. _The global antigenic diversity of swine influenza A viruses_, 2016. __eLife__ 5: e12217.
 - Quick J, Loman NJ, Duraffour S, Simpson JT, Severi E, Cowley L ..., Dudas G, ..., Günther S, Carroll MW. _Real-time, portable genome sequencing for Ebola surveillance_, 2016. __Nature__ 530(7589): 228-232.
 - Dudas G, Rambaut A, _MERS-CoV recombination: implications about the reservoir and potential for adaptation_, 2016. __Virus Evolution__ 2(1):vev023.
-- Ladner JT, Wiley MR, Mate S, Dudas G, ... Palacios G. _Evolution and Spread of Ebola Virus in Liberia, 2014-2015_, 2015. __Cell Host & Microbe__ 18(6):659-669.
-- Park DJ, Dudas G, Wohl S, Goba A, Whitmer SLM, ..., Sabeti PC. _Ebola Virus Epidemiology, Transmission, and Evolution during Seven Months in Sierra Leone_, 2015. __Cell__ 161(7):1516-1526.
-- Carroll MW, Matthews DA, Hiscox JA, ... Dudas G, ... Günther S. _Temporal and spatial analysis of the 2014-2015 Ebola virus outbreak in West Africa_, 2015. __Nature__ 524(7563):97-101.
-- Dudas G, Bedford T, Lycett S, Rambaut A. _Reassortment between Influenza B Lineages and the Emergence of a Coadapted PB1–PB2–HA Gene Complex_, 2015. __Molecular Biology and Evolution__ 32(1):162-172.
-- Gire SK, Goba A, Andersen KG, ... Dudas G, ... Sabeti PC. _Genomic surveillance elucidates Ebola virus origin and transmission during the 2014 outbreak_, 2014. __Science__ 345(6202):1369-1372.
+- Ladner JT, Wiley MR, Mate S, Dudas G, ... Palacios G. _Evolution and Spread of Ebola Virus in Liberia, 2014-2015_, 2015. __Cell Host & Microbe__ 18(6): 659-669.
+- Park DJ, Dudas G, Wohl S, Goba A, Whitmer SLM, ..., Sabeti PC. _Ebola Virus Epidemiology, Transmission, and Evolution during Seven Months in Sierra Leone_, 2015. __Cell__ 161(7): 1516-1526.
+- Carroll MW, Matthews DA, Hiscox JA, ... Dudas G, ... Günther S. _Temporal and spatial analysis of the 2014-2015 Ebola virus outbreak in West Africa_, 2015. __Nature__ 524(7563): 97-101.
+- Dudas G, Bedford T, Lycett S, Rambaut A. _Reassortment between Influenza B Lineages and the Emergence of a Coadapted PB1–PB2–HA Gene Complex_, 2015. __Molecular Biology and Evolution__ 32(1): 162-172.
+- Gire SK, Goba A, Andersen KG, ... Dudas G, ... Sabeti PC. _Genomic surveillance elucidates Ebola virus origin and transmission during the 2014 outbreak_, 2014. __Science__ 345(6202): 1369-1372.
 
 --------------------
 
