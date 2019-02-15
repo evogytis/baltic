@@ -98,6 +98,7 @@ for k in myTree.Objects:
 --------------------
 ## baltic was used in the following publications:
 
+- van Vuren JP, Ladner JT, Grobbelaar AA, Wiley MR, Lovett S, Allam M, Ismail A, le Roux C, Weyer J, Moolla N, Storm N, Kgaladi J, Sanchez-Lockhart M, Conteh O, Palacios G, Paweska JT, 2019. _Phylodynamic Analysis of Ebola Virus Disease Transmission in Sierra Leone_. __Viruses__, 11(1), 71; [doi](https://doi.org/10.3390/v11010071).
 - Bell SM, Katzelnick L, Bedford T, 2018. _Dengue antigenic relationships predict evolutionary dynamics_, __bioRxiv__ 432054; [doi](https://doi.org/10.1101/432054).
 - Lee JM, Huddleston J, Doud MB, Hooper KA, Wu NC, Bedford T, Bloom JD, 2018. _Deep mutational scanning of hemagglutinin helps predict evolutionary fates of human H3N2 influenza variants_, __PNAS__ 115(35): 8276-8285.
 - Dokubo EK, Wendland A, Mate SE, Ladner JT, ..., Palacios G, Fallah MP, 2018. _Persistence of Ebola virus after the end of widespread transmission in Liberia: an outbreak report_, __Lancet Infect Dis__ 18: 1015–1024.
