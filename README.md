@@ -16,25 +16,21 @@ By convention baltic is imported as bt:
 
 `import baltic as bt`
 
-For every tree that we want to import we need an empty tree object:
-
-`myTree = bt.tree()`
-
-Then call the `make_tree()` function with the tree string and the empty container:
+When called with a tree string the `make_tree()` function return a baltic tree object:
 ```python
 treeString='((A:1.0,B:2.0):1.0,C:3.0);'
 
-bt.make_tree(treeString, myTree)
+myTree = bt.make_tree(treeString)
 ```
-Note it means that you'll have to write some code to parse out the tree string if you're not dealing with a newick file. baltic will warn the user if it can't parse something. If this happens you should check if your tip names or annotations contain characters that should **never** be found outside of functional tree string bits, such as commas or parentheses. Alternatively, it may be that the regexes that are used to parse out tip names or annotations don't cover some special character you use to define your taxa and will require some editing of baltic.py to alleviate the problem. Feel free to raise an issue if this happens.
+Note that if you're not using newick, nexus or nextstrain JSON trees (`loadNewick`, `loadNexus`, and `loadJSON` functions respectively) you'll have to write some code to parse out the tree string. baltic will warn the user if it can't parse something. If this happens you should check if your tip names or annotations contain characters that should **never** be found outside of functional tree string bits, such as commas, parentheses or semicolons. Alternatively, it may be that the regexes that are used to parse out tip names or annotations don't cover some special character you use to define your taxa and will require some editing of baltic.py to alleviate the problem. Feel free to raise an issue if this happens.
 
-`make_tree()` is a function that parses the tree string and interacts with the tree class to build the data structure that is the phylogenetic tree. It works in the following way:
+`make_tree()` is a function that parses the tree string and builds the data structure that is the phylogenetic tree. It works exactly like all other tree parsers:
 
 - Every time an opening parenthesis (`(`) is encountered in the tree string a new instance of `node` class is created. The new class' `.index` attribute is set to the index along the tree string where it was encountered, giving that particular class a unique identifier within the tree string. The `.parent` attribute is set to whatever the previous object encountered was, similarly, since the last encountered object could only be another node, the current node is added to its parents list of children. Finally we set our new node as the 'current' node of the tree and append the node to the list of objects (`.Objects`, which are branches) contained in the tree.
 
 - Every time a string is encountered which may or may not be surrounded by quotation marks (`'` or `"`) or have the beginning of an annotation block (`[`) we create a new `leaf` class. It also receives an `.index` identifier, like the `node` class. Unlike the `node` class, however, the `.numName` attribute is also set as the string that defined the tip. In BEAST trees it will be the number that identifies the tip, but it could also be a regular string.
 
-- Next baltic looks for annotations, which are the blocks in the format `[&parameter1=1.0,parameter2=0.0]`. These are transformed into the `.traits` dictionary for the branch. In this example the branch being parsed would receive a dictionary with two keys: `cur_branch.traits['parameter1']=1.0` and `cur_branch.traits['parameter2']=0.0`.
+- Next baltic looks for annotations, which are the blocks in the format `[&parameter1=1.0,parameter2=0.0]`. These are transformed into the `.traits` dictionary for the branch. In this example the branch being parsed would receive a dictionary with two keys: `cur_branch.traits = {'parameter1' : 1.0, 'parameter2' : 0.0}`.
 
 - Annotations should be followed by branch lengths preceded by a colon (`:`). The branch length is assigned to the current branch's `.length` attribute.
 
