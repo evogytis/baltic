@@ -118,7 +118,7 @@ class tree: ## tree class
             If this is undesired call singleType() on the resulting subtree afterwards. """
         subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition))
 
-        if subtree is None or len(subtree.getExternal())==0:
+        if subtree is None or len([k for k in subtree if k.branchType=='leaf'])==0:
             return None
         else:
             local_tree=tree() ## create a new tree object where the subtree will be
@@ -960,8 +960,13 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
 
     return ll
 
-def loadJSON(tree_path,json_translation={'name':'strain','height':'xvalue','absoluteTime':'tvalue','length':'branch_length'},json_meta=None,verbose=False,sort=True,stats=True):
-    assert 'name' in json_translation and ('absoluteTime' in json_translation or 'height' in json_translation or 'length' in json_translation),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height','absoluteTime','length'] if (entry in json_translation)==False]))
+def loadJSON(tree_path,json_translation={'name':'strain','absoluteTime':'num_date'},json_meta=None,verbose=False,sort=True,stats=True):
+    """
+    Load a nextstrain JSON by providing either the path to JSON or a file handle.
+    json_translation is a dictionary that translates JSON attributes to baltic branch attributes (e.g. 'absoluteTime' is called 'num_date' in nextstrain JSONs).
+    Note that to avoid conflicts in setting node heights you can either define the absolute time of each node or branch lengths (e.g. if you want a substitution tree).
+    """
+    assert 'name' in json_translation and ('absoluteTime' in json_translation or 'length' in json_translation),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height','absoluteTime','length'] if (entry in json_translation)==False]))
     if verbose==True:
         print('Reading JSON')
 
@@ -972,20 +977,18 @@ def loadJSON(tree_path,json_translation={'name':'strain','height':'xvalue','abso
     else:
         ll=make_treeJSON(json.load(tree_path),json_translation,verbose=verbose)
 
-    for attr in ['length','height','absoluteTime']:
-        if attr in json_translation:
-            if verbose==True:
-                print('Setting %s'%(attr))
-            for k in ll.Objects:
-                if json_translation[attr] in k.traits:
-                    setattr(k,attr,k.traits[json_translation[attr]])
+    assert ('absoluteTime' in json_translation and 'length' not in json_translation) or ('absoluteTime' not in json_translation and 'length' in json_translation),'Cannot use both absolute time and branch length, include only one in json_translation dictionary.'
 
-        if attr in ['height','absoluteTime']:
-            if verbose==True:
-                print('Setting branch lengths')
-            for k in ll.Objects:
-                if 'length' not in k.traits and getattr(k,attr) is not None:
-                    setattr(k,'length',getattr(k,attr)-getattr(k.parent,attr))
+    for attr in json_translation: ## iterate through attributes in json_translation
+        for k in ll.Objects: ## for every branch
+            setattr(k,attr,k.traits[json_translation[attr]]) ## set attribute value for branch
+
+    if 'absoluteTime' in json_translation: ## if using absoluteTime need to set branch lengths for traversals
+        for k in ll.Objects:
+            if json_translation['absoluteTime'] in k.parent.traits:
+                k.length=k.traits[json_translation['absoluteTime']]-k.parent.traits[json_translation['absoluteTime']]
+            else:
+                k.length=0.0
 
     if verbose==True:
         print('Traversing and drawing tree')
@@ -1004,7 +1007,6 @@ def loadJSON(tree_path,json_translation={'name':'strain','height':'xvalue','abso
             metadata=json.load(json_meta['file'])
         cmap=dict(metadata['color_options'][json_meta['traitName']]['color_map'])
         setattr(ll,'cmap',cmap)
-
     return ll
 
 if __name__ == '__main__':
