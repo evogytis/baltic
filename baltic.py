@@ -128,7 +128,7 @@ class tree: ## tree class
             subtree_set=set(subtree) ## turn branches into set for quicker look up later
             if traverse_condition is not None: ## didn't use default traverse condition, might need to deal with hanging nodes and prune children
                 for nd in local_tree.getInternal(): ## iterate over nodes
-                    nd.children=filter(lambda k:k in subtree_set,nd.children) ## only keep children seen in traversal
+                    nd.children=list(filter(lambda k:k in subtree_set,nd.children)) ## only keep children seen in traversal
 
                 local_tree.fixHangingNodes()
 
@@ -402,7 +402,8 @@ class tree: ## tree class
         collapsedClade.subtree=remove_from_tree
         assert len(remove_from_tree)<len(self.Objects),'Attempted collapse of entire tree'
         collapsedClade.lastHeight=max([x.height for x in remove_from_tree])
-        collapsedClade.lastAbsoluteTime=max([x.absoluteTime for x in remove_from_tree])
+        if [x.absoluteTime for x in remove_from_tree].count(None)!=len(remove_from_tree):
+            collapsedClade.lastAbsoluteTime=max([x.absoluteTime for x in remove_from_tree])
 
         for k in remove_from_tree:
             self.Objects.remove(k)
@@ -439,12 +440,12 @@ class tree: ## tree class
         """
         newTree=copy.deepcopy(self) ## work on a copy of the tree
         if len(designated_nodes)==0: ## no nodes were designated for deletion - relying on anonymous function to collapse nodes
-            nodes_to_delete=filter(lambda n: n.branchType=='node' and collapseIf(n)==True and n!=newTree.root, newTree.Objects) ## fetch a list of all nodes who are not the root and who satisfy the condition
+            nodes_to_delete=list(filter(lambda n: n.branchType=='node' and collapseIf(n)==True and n!=newTree.root, newTree.Objects)) ## fetch a list of all nodes who are not the root and who satisfy the condition
         else:
             assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
             assert len([w for w in designated_nodes if w!=newTree.root])==0,'Root node was designated for deletion'
 
-            nodes_to_delete=filter(lambda w: w.index in [q.index for q in designated_nodes], newTree.Objects) ## need to look up nodes designated for deletion by their indices, since the tree has been copied and nodes will have new memory addresses
+            nodes_to_delete=list(filter(lambda w: w.index in [q.index for q in designated_nodes], newTree.Objects)) ## need to look up nodes designated for deletion by their indices, since the tree has been copied and nodes will have new memory addresses
         if verbose==True:
             print('%s nodes set for collapsing: %s'%(len(nodes_to_delete),[w.index for w in nodes_to_delete]))
         # assert len(nodes_to_delete)<len(newTree.getInternal())-1,'Chosen cutoff would remove all branches'
@@ -473,7 +474,7 @@ class tree: ## tree class
                 nodes_to_delete.remove(k) ## in fact, the node never existed
 
                 if len(designated_nodes)==0:
-                    nodes_to_delete==filter(lambda n: n.branchType=='node' and collapseIf(n)==True and n!=newTree.root, newTree.Objects)
+                    nodes_to_delete==list(filter(lambda n: n.branchType=='node' and collapseIf(n)==True and n!=newTree.root, newTree.Objects))
                 else:
                     assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
                     assert len([w for w in designated_nodes if w!=newTree.root])==0,'Root node was designated for deletion'
@@ -496,7 +497,7 @@ class tree: ## tree class
         if cur_node==None:
             cur_node=self.root#.children[-1]
         if traits==None: ## if None
-            traits=set(sum([k.traits.keys() for k in self.Objects],[])) ## fetch all trait keys
+            traits=set(sum([list(k.traits.keys()) for k in self.Objects],[])) ## fetch all trait keys
         if string_fragment==None:
             string_fragment=[]
             if nexus==True:
@@ -538,7 +539,7 @@ class tree: ## tree class
             if verbose==True:
                 print('node: %s'%(cur_node.index))
             string_fragment.append('(')
-            traverseChildren=filter(traverse_condition,cur_node.children)
+            traverseChildren=list(filter(traverse_condition,cur_node.children))
             assert len(traverseChildren)>0,'Node %s does not have traversable children'%(cur_node.index)
             for c,child in enumerate(traverseChildren): ## iterate through children of node if they satisfy traverse condition
                 if verbose==True:
@@ -648,13 +649,13 @@ class tree: ## tree class
         return len([k for k in self.Objects if k.parent.absoluteTime<t<=k.absoluteTime and condition(k)])
 
     def getExternal(self):
-        return filter(lambda k:k.branchType=='leaf',self.Objects)
+        return list(filter(lambda k:k.branchType=='leaf',self.Objects))
 
     def getInternal(self):
-        return filter(lambda k:k.branchType=='node',self.Objects)
+        return list(filter(lambda k:k.branchType=='node',self.Objects))
 
     def getBranches(self,attrs=lambda x:True):
-        select=filter(attrs,self.Objects)
+        select=list(filter(attrs,self.Objects))
 
         if len(select)==0:
             raise Exception('No branches satisfying function were found amongst branches')
@@ -668,13 +669,13 @@ class tree: ## tree class
         Remove internal nodes without any children.
         """
         hangingCondition=lambda k:k.branchType=='node' and len(k.children)==0
-        hangingNodes=filter(hangingCondition,self.Objects) ## check for nodes without any children (hanging nodes)
+        hangingNodes=list(filter(hangingCondition,self.Objects)) ## check for nodes without any children (hanging nodes)
         while len(hangingNodes)>0:
             for h in sorted(hangingNodes,key=lambda x:-x.height):
                 h.parent.children.remove(h) ## remove old parent from grandparent's children
                 hangingNodes.remove(h) ## remove old parent from multitype nodes
                 self.Objects.remove(h) ## remove old parent from all objects
-            hangingNodes=filter(hangingCondition,self.Objects) ## regenerate list
+            hangingNodes=list(filter(hangingCondition,self.Objects)) ## regenerate list
 
     def addText(self,ax,target=lambda k:k.branchType=='leaf',position=lambda k:(k.x*1.01,k.y),text=lambda k:k.numName,zorder_function=lambda k: 101,**kwargs):
         for k in filter(target,self.Objects):
