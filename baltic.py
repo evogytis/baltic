@@ -379,7 +379,7 @@ class tree: ## tree class
             storePlotted=len(drawn)
             self.ySpan=sum(skips)
 
-        self.root.x=min([q.x for q in self.root.children if q.x!=None]) ## set root x and y coordinates
+        self.root.x=min([q.x-q.length for q in self.root.children if q.x!=None]) ## set root x and y coordinates
         children_y_coords=[q.y for q in self.root.children if q.y!=None]
         self.root.y=sum(children_y_coords)/float(len(children_y_coords))
 
