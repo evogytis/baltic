@@ -61,7 +61,7 @@ for k in myTree.Objects:
 
 ## samogitia
 
-<img src="figures/coa_samogitia.jpg" width=200px>
+<img src="docs/figures/coa_samogitia.jpg" width=200px>
 
 [`samogitia.py`](samogitia.py) is the heavy-lifting, tree file-wrangling script in the collection. It’s main role is to parse BEAST tree files, use baltic to create tree data structures, which samogitia then manipulates to create BEAST-like log files that can usually be imported into [Tracer](http://tree.bio.ed.ac.uk/software/tracer/) or used in another program.
 
@@ -69,7 +69,7 @@ for k in myTree.Objects:
 
 ## austechia
 
-<img src="figures/coa_austechia.png" width=200px>
+<img src="docs/figures/coa_austechia.png" width=200px>
 
 [`austechia.ipynb`](austechia.ipynb) is the fancy Jupyter notebook that takes tree files, usually MCC trees from BEAST, and plots them. It is meant to be part teaching tool to get people to think about how trees are plotted, to allow for highly customisable representations of trees (e.g. Fig 6 in my [MERS-CoV paper](http://dx.doi.org/10.1093/ve/vev023)) and to improve the aesthetics situation in phylogenetics.
 
@@ -77,7 +77,7 @@ for k in myTree.Objects:
 
 ## galindia
 
-<img src="figures/coa_galindia.jpg" width=200px>
+<img src="docs/figures/coa_galindia.jpg" width=200px>
 
 [`galindia.ipynb`](galindia.ipynb) is a notebook that uses baltic to plot JSONs from [nextstrain.org](nextstrain.org) in order to allow customisable, static, publication-ready figures for phylogenies coming from nextstrain's augur pipeline.
 
@@ -85,7 +85,7 @@ for k in myTree.Objects:
 
 ## curonia
 
-<img src="figures/coa_curonia.jpg" width=200px>
+<img src="docs/figures/coa_curonia.jpg" width=200px>
 
 [`curonia.ipynb`](curonia.ipynb) generalises the [notebook](https://github.com/ebov/space-time/blob/master/Scripts/notebooks/EBOV_phylogeography_animation.ipynb) used to animate the [spread of Ebola virus in West Africa](https://www.youtube.com/watch?v=j4Ut4krp8GQ). This notebook should require minimal manual editing to produce similarly styled animation of other study systems.
 
