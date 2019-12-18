@@ -2,6 +2,10 @@ import re,copy,math,json,sys
 import datetime as dt
 from functools import reduce
 
+__all__ = ['decimalDate', 'convertDate', 'reticulation', # make from baltic import * safe
+           'clade', 'node', 'tree',
+           'make_tree', 'make_treeJSON', 'loadJSON', 'loadNexus', 'loadNewick']
+
 sys.setrecursionlimit(9001)
 
 def decimalDate(date,fmt="%Y-%m-%d",variable=False):

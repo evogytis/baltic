@@ -118,7 +118,7 @@ for line in treefile: ## iterate through each line
                             elif k.name in Conakry_tips:
                                 tmrcas['B'].append(k.numName)
                             tmrcas['C'].append(k.numName)
-                            
+
                     outfile.write('\t%s'%('\t'.join(sorted(tmrcas.keys()))))
                 ###########################################
                 if 'transitions' in analyses:
@@ -198,7 +198,7 @@ for line in treefile: ## iterate through each line
                         if len(targetLeft)==0 and len(queryLeft)<=score[required]: ## all of query tips must be descended from common ancestor, every extra descendant of common ancestor not in query contributes to a score
                             nodes[required]=k ## if score improved - assign new common ancestor
                             score[required]=len(queryLeft) ## score is extra descendants not in the list of known tips
-                        
+
                 outTMRCA=['%.6f'%(nodes[n].absoluteTime) for n in sorted(nodes.keys())] ## fetch absoluteTime of each identified common ancestor
                 outfile.write('\t%s'%('\t'.join(outTMRCA)))
             ###################################################
@@ -216,7 +216,7 @@ for line in treefile: ## iterate through each line
                             t=min(map(bt.decimalDate,[dateCerberus.search(x).group(1) for x in all_leaves]))-k.absoluteTime+halfBranch
                         else:
                             t=halfBranch
-                    
+
                         outSharp.append('(%d,%d,%.4f)'%(N,S,t))
                 outfile.write('\t%s'%('\t'.join(outSharp)))
             ###################################################
@@ -247,18 +247,18 @@ for line in treefile: ## iterate through each line
                             if [ch.traits[traitName] for ch in k.children].count(kloc)>0:
                                 proceed=True
                         #print k.index,k.parent.index,k.traits,k.parent.traits,k.traits[traitName]
-                    
+
                         if proceed==True: ## if at least one valid tip and no hanging nodes
                             subtree=copy.deepcopy(ll.traverseWithinTrait(k,traitName))
                             subtree_leaves=[x.name for x in subtree if isinstance(x,bt.leaf)]
-                        
+
                             if len(subtree_leaves)>0:
                                 mostRecentTip=max([bt.decimalDate(x.strip("'").split('|')[-1]) for x in subtree_leaves])
                                 while sum([len(nd.children)-sum([1 if ch in subtree else 0 for ch in nd.children]) for nd in subtree if isinstance(nd,bt.node) and nd.index!='Root'])>0: ## keep removing nodes as long as there are nodes with children that are not entirely within subtree
                                     for nd in sorted([q for q in subtree if isinstance(q,bt.node)],key=lambda x:(sum([1 if ch in subtree else 0 for ch in x.children]),x.height)): ## iterate over nodes in subtree, starting with ones that have fewest valid children and are more recent
-            
+
                                         child_status=[1 if ch in subtree else 0 for ch in nd.children] ## check how many children of current node are under the right trait value
-            
+
                                         if sum(child_status)<2 and nd.index!='Root': ## if less than 2 children in subtree (i.e. not all children are under the same trait state)
                                             #print 'removing: %d, children in: %s'%(nd.index,[location_to_country[ch.traits[traitName]] for ch in nd.children])
                                             grand_parent=nd.parent ## fetch grandparent of node to be removed
@@ -298,14 +298,14 @@ for line in treefile: ## iterate through each line
             ###################################################
             outfile.write('\n') ## newline for post-burnin tree
         treecount+=1 ## increment tree counter
-        ################################################################################            
+        ################################################################################
         if treecount==threshold: ## tree passed progress bar threshold
             timeTakenSoFar=dt.datetime.now()-begin ## time elapsed
             timeElapsed=float(divmod(timeTakenSoFar.total_seconds(),60)[0]+(divmod(timeTakenSoFar.total_seconds(),60)[1])/float(60))
             timeRate=float(divmod(timeTakenSoFar.total_seconds(),60)[0]*60+divmod(timeTakenSoFar.total_seconds(),60)[1])/float(treecount+1) ## rate at which trees have been processed
             processingRate.append(timeRate) ## remember rate
             ETA=(sum(processingRate)/float(len(processingRate))*(Ntrees-treecount))/float(60)/float(60) ## estimate how long it'll take, given mean processing rate
-    
+
             excessiveTrees=treecount
             if treecount>=10000:
                 excessiveTrees=10000
@@ -315,7 +315,7 @@ for line in treefile: ## iterate through each line
             else:
                 reportElapsed=timeElapsed ## keep minutes
                 reportUnit='m'
-        
+
             sys.stderr.write('\r') ## output progress bar
             sys.stderr.write("[%-30s] %4d%%  trees: %5d  elapsed: %5.2f%1s  ETA: %5.2fh (%6.1e s/tree)" % ('='*(excessiveTrees/progress_update),treecount/float(Ntrees)*100.0,treecount,reportElapsed,reportUnit,ETA,processingRate[-1]))
             sys.stderr.flush()
