@@ -43,7 +43,7 @@ else:
     upper=int(upper)
 
 try:
-    for line in open('banner_samogitia.txt','r'):
+    for line in open('../docs/banner_samogitia.txt','r'):
         sys.stderr.write('%s'%(line))
 except:
     pass
