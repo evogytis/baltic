@@ -1,6 +1,7 @@
 import re,copy,math,json,sys
 import datetime as dt
 from functools import reduce
+from matplotlib.collections import LineCollection
 
 __all__ = ['decimalDate', 'convertDate', 'reticulation', # make from baltic import * safe
            'clade', 'node', 'tree',
@@ -785,6 +786,7 @@ class tree: ## tree class
 
     def plotTree(self,ax,type='rectangular',target=lambda k: True,x_attr=lambda k:k.x,y_attr=lambda k:k.y,branchWidth=lambda k:2,colour_function=lambda f:'k',zorder_function=lambda k: 98,**kwargs):
         assert type in ['rectangular','unrooted'],'Unrecognised drawing type "%s"'%(type)
+        lineSegments = []
         for k in filter(target,self.Objects):#+[self.root]): ## iterate over branches in the tree
             y=y_attr(k) ## get y coordinates
             x=x_attr(k) ## x coordinate
@@ -799,12 +801,13 @@ class tree: ## tree class
                 if k.branchType=='node': ## if node...
                     yl=y_attr(k.children[0]) ## get y coordinates of first and last child
                     yr=y_attr(k.children[-1])
-                    ax.plot([x,x],[yl,yr],color=c,lw=b,zorder=z,**kwargs) ## plot vertical bar connecting node to both its offspring
-
-                ax.plot([x,xp],[y,y],color=c,lw=b,zorder=z,**kwargs) ## plot horizontal branch to parent
+                    lineSegments.append([[x,yl], [x,yr]])
+                lineSegments.append([[x,y], [xp,y]])
             elif type=='unrooted':
                 yp=y_attr(k.parent)
-                ax.plot([x,xp],[y,yp],color=c,lw=b,zorder=z,**kwargs)
+                lineSegments.append([[x,y], [xp,yp]])
+        lc = LineCollection(lineSegments,color=c,zorder=z,capstyle='round',**kwargs)
+        ax.add_collection(lc)
         return ax
 
 def make_tree(data,ll=None,verbose=False):
