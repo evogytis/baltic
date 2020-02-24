@@ -787,6 +787,9 @@ class tree: ## tree class
     def plotTree(self,ax,type='rectangular',target=lambda k: True,x_attr=lambda k:k.x,y_attr=lambda k:k.y,branchWidth=lambda k:2,colour_function=lambda f:'k',zorder_function=lambda k: 98,**kwargs):
         assert type in ['rectangular','unrooted'],'Unrecognised drawing type "%s"'%(type)
         lineSegments = []
+        colours = []
+        lineWidths = []
+        zorders = []
         for k in filter(target,self.Objects):#+[self.root]): ## iterate over branches in the tree
             y=y_attr(k) ## get y coordinates
             x=x_attr(k) ## x coordinate
@@ -802,11 +805,17 @@ class tree: ## tree class
                     yl=y_attr(k.children[0]) ## get y coordinates of first and last child
                     yr=y_attr(k.children[-1])
                     lineSegments.append([[x,yl], [x,yr]])
+                    colours.append(c)
+                    lineWidths.append(b)
                 lineSegments.append([[x,y], [xp,y]])
+                colours.append(c)
+                lineWidths.append(b)
             elif type=='unrooted':
                 yp=y_attr(k.parent)
                 lineSegments.append([[x,y], [xp,yp]])
-        lc = LineCollection(lineSegments,color=c,zorder=z,capstyle='round',**kwargs)
+                colours.append(c)
+                lineWidths.append(b)
+        lc = LineCollection(lineSegments,linewidths=lineWidths,color=colours,capstyle='round',joinstyle='miter',**kwargs)
         ax.add_collection(lc)
         return ax
 
