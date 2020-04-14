@@ -11,6 +11,8 @@ sys.setrecursionlimit(9001)
 
 def decimalDate(date,fmt="%Y-%m-%d",variable=False):
     """ Converts calendar dates in specified format to decimal date. """
+    if fmt == "":
+        return date
     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
     delimit=None
     if delimiter is not None:
@@ -823,6 +825,10 @@ def make_tree(data,ll=None,verbose=False):
     """
     data is a tree string, ll (LL) is an instance of a tree object
     """
+    patterns = {
+        'beast_tip': r'(\(|,)([0-9]+)(\[|\:)',
+        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[]+)(\'|\"|)(\[)*'
+    }
     if isinstance(data,str)==False: ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
 
@@ -844,14 +850,14 @@ def make_tree(data,ll=None,verbose=False):
             ll.add_node(i) ## add node to current node in tree ll
             i+=1 ## advance in tree string by one character
 
-        cerberus=re.match('(\(|,)([0-9]+)(\[|\:)',data[i-1:i+100]) ## look for tips in BEAST format (integers).
+        cerberus=re.match(patterns['beast_tip'],data[i-1:i+100]) ## look for tips in BEAST format (integers).
         if cerberus is not None:
             if verbose==True:
                 print('%d adding leaf (BEAST) %s'%(i,cerberus.group(2)))
             ll.add_leaf(i,cerberus.group(2)) ## add tip
             i+=len(cerberus.group(2)) ## advance in tree string by however many characters the tip is encoded
 
-        cerberus=re.match('(\(|,)(\'|\")*([A-Za-z\_\-\|\.0-9\?\/ ]+)(\'|\"|)(\[)*',data[i-1:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
+        cerberus=re.match(patterns['non_beast_tip'],data[i-1:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
         if cerberus is not None:
             if verbose==True:
                 print('%d adding leaf (non-BEAST) %s'%(i,cerberus.group(3)))
@@ -916,7 +922,7 @@ def make_tree(data,ll=None,verbose=False):
                 print('%d comment: %s'%(i,cerberus.group(2)))
             comment=cerberus.group(2)
             numerics=re.findall('[,&][A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+["|\']*',comment) ## strings
+            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-,]+[\"|\']*',comment) ## strings
             treelist=re.findall('[,&][A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
             sets=re.findall('[,&][A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
             figtree=re.findall('\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
@@ -1046,6 +1052,8 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
         assert len(tipDates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tipNames[0],tip_regex,date_fmt)
         highestTip=max(tipDates)
         ll.setAbsoluteTime(highestTip)
+    if isinstance(tree_path,str):
+        handle.close()
     return ll
 
 def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False):
@@ -1067,7 +1075,7 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
             if verbose==True:
                 print('File should contain %d taxa'%(tipNum))
 
-        cerberus=re.search(treestring_regex,l)
+        cerberus=re.search(treestring_regex,l.lower())
         if cerberus is not None:
             treeString_start=l.index('(')
             ll=make_tree(l[treeString_start:]) ## send tree string to make_tree function
@@ -1111,6 +1119,8 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
         highestTip=max(tipDates)
         ll.setAbsoluteTime(highestTip)
 
+    if isinstance(tree_path,str):
+        handle.close()
     return ll
 
 def loadJSON(tree,json_translation={'name':'strain','absoluteTime':'num_date'},json_meta=None,verbose=False,sort=True,stats=True):
@@ -1127,6 +1137,7 @@ def loadJSON(tree,json_translation={'name':'strain','absoluteTime':'num_date'},j
         with open(tree) as json_data:
             d = json.load(json_data)
             ll=make_treeJSON(d,json_translation,verbose=verbose)
+            json_data.close()
     else:
         ll=make_treeJSON(tree,json_translation,verbose=verbose)
 
