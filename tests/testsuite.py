@@ -14,7 +14,7 @@ class test_parsers(unittest.TestCase):
 
     def test_nexus(self):
         bt = imp.load_source('baltic', '../baltic/baltic.py')
-        tree = bt.loadNewick('./data/2020-04-13_treetime/divergence_tree.nexus')
+        tree = bt.loadNexus('./data/2020-04-13_treetime/divergence_tree.nexus')
         tree.treeStats()
         pass
 
