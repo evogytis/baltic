@@ -1241,7 +1241,6 @@ def loadJSON(json_object,json_translation={'name':'name','absoluteTime':'num_dat
     json_translation is a dictionary that translates JSON attributes to baltic branch attributes (e.g. 'absoluteTime' is called 'num_date' in nextstrain JSONs).
     Note that to avoid conflicts in setting node heights you can either define the absolute time of each node or branch lengths (e.g. if you want a substitution tree).
     """
-<<<<<<< HEAD
     assert 'name' in json_translation and ('absoluteTime' in json_translation or 'length' in json_translation or 'height' in json_translation),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height','absoluteTime','length'] if (entry in json_translation)==False]))
     if verbose==True: print('Reading JSON')
 
@@ -1275,21 +1274,6 @@ def loadJSON(json_object,json_translation={'name':'name','absoluteTime':'num_dat
                     k.traits['%s_confidence'%(key)]=k.traits['node_attrs'][key]['confidence']
             elif key=='div':
                 k.traits['divergence']=k.traits['node_attrs'][key]
-=======
-    assert 'name' in json_translation and ('absoluteTime' in json_translation or 'length' in json_translation),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height','absoluteTime','length'] if (entry in json_translation)==False]))
-    if verbose==True:
-        print('Reading JSON')
-
-    if isinstance(tree,str):
-        with open(tree) as json_data:
-            d = json.load(json_data)
-            ll=make_treeJSON(d,json_translation,verbose=verbose)
-            json_data.close()
-    else:
-        ll=make_treeJSON(tree,json_translation,verbose=verbose)
-
-    assert ('absoluteTime' in json_translation and 'length' not in json_translation) or ('absoluteTime' not in json_translation and 'length' in json_translation),'Cannot use both absolute time and branch length, include only one in json_translation dictionary.'
->>>>>>> master
 
     for attr in json_translation: ## iterate through attributes in json_translation
         for k in ll.Objects: ## for every branch
