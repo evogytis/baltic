@@ -1136,6 +1136,9 @@ def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
     return ll
 
 def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',variableDate=True,absoluteTime=False,verbose=False):
+    """
+    Load newick file
+    """
     ll=None
     if isinstance(tree_path,str):
         handle=open(tree_path,'r')
@@ -1172,6 +1175,9 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
     return ll
 
 def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False):
+    """
+    Load nexus file
+    """
     tipFlag=False
     tips={}
     tipNum=0
