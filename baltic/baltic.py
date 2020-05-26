@@ -50,7 +50,6 @@ class reticulation: ## reticulation class (recombination, conversion, reassortme
         self.traits={}
         self.index=None
         self.name=name
-        # self.numName=name
         self.x=None
         self.y=None
         self.width=0.5
@@ -68,7 +67,6 @@ class clade: ## clade class
         self.traits={}
         self.index=None
         self.name=givenName ## the pretend tip name for the clade
-        # self.numName=givenName
         self.x=None
         self.y=None
         self.lastHeight=None ## refers to the height of the highest tip in the collapsed clade
@@ -95,7 +93,6 @@ class leaf: ## leaf class
     def __init__(self):
         self.branchType='leaf'
         self.name=None ## name of tip after translation, since BEAST trees will generally have numbers for taxa but will provide a map at the beginning of the file
-        # self.numName=None ## the original name of the taxon, would be an integer if coming from BEAST, otherwise can be actual name
         self.index=None ## index of the character that defines this object, will be a unique ID for each object in the tree
         self.length=None ## branch length
         self.absoluteTime=None ## position of tip in absolute time
@@ -148,7 +145,6 @@ class tree: ## tree class
 
         new_leaf.parent=self.cur_node ## leaf's parent is current node
         self.cur_node.children.append(new_leaf) ## assign leaf to parent's children
-        # new_leaf.numName=name ## numName is the name tip has inside tree string, BEAST trees usually have numbers for tip names
         new_leaf.name=name
         self.cur_node=new_leaf ## current node is now new leaf
         self.Objects.append(self.cur_node) ## add leaf to all objects in the tree
@@ -185,7 +181,6 @@ class tree: ## tree class
                 local_tree.fixHangingNodes()
 
             if self.tipMap: ## if original tree has a tipMap dictionary
-                # local_tree.tipMap={tipNum: self.tipMap[tipNum] for tipNum in filter(lambda w: w in {r.numName:None for r in local_tree.getExternal()},self.tipMap)} ## copy over the relevant tip translations
                 local_tree.tipMap={tipNum: self.tipMap[tipNum] for tipNum in self.tipMap if self.tipMap[tipNum] in [w.name for w in local_tree.getExternal()]} ## copy over the relevant tip translations
 
             return local_tree
@@ -196,27 +191,21 @@ class tree: ## tree class
         while len(multiTypeNodes)>0:
             multiTypeNodes=[k for k in self.Objects if k.branchType=='node' and len(k.children)==1]
 
-            if self.root in multiTypeNodes:
-                multiTypeNodes.remove(self.root)
-                new_root=self.root.children[0]
-                new_root.parent=None
-                self.root=new_root
-
             for k in sorted(multiTypeNodes,key=lambda x:-x.height):
                 child=k.children[0] ## fetch child
-                grandparent=k.parent ## fetch grandparent
+                grandparent=k.parent if k.parent.index else self.root ## fetch grandparent
 
                 child.parent=grandparent ## child's parent is now grandparent
-
                 grandparent.children.append(child) ## add child to grandparent's children
                 grandparent.children.remove(k) ## remove old parent from grandparent's children
                 grandparent.children=list(set(grandparent.children))
+
                 child.length+=k.length ## adjust child length
 
                 multiTypeNodes.remove(k) ## remove old parent from multitype nodes
                 self.Objects.remove(k) ## remove old parent from all objects
         self.sortBranches()
-
+    
     def setAbsoluteTime(self,date):
         """ place all objects in absolute time by providing the date of the most recent tip """
         for i in self.Objects: ## iterate over all objects
@@ -265,7 +254,7 @@ class tree: ## tree class
                 k.height=None
 
             if verbose==True: print('Initiated traversal from root')
-            cur_node=self.root#.children[-1]
+            cur_node=self.root
 
         if collect==None: ## initiate collect list if not initiated
             collect=[]
@@ -281,7 +270,6 @@ class tree: ## tree class
             collect.append(cur_node) ## add to collect list for reporting later
 
         if cur_node.branchType=='leaf' and self.root!=cur_node: ## cur_node is a tip (and tree is not single tip)
-            # cur_node.parent.leaves.add(cur_node.numName) ## add to parent's list of tips
             cur_node.parent.leaves.add(cur_node.name) ## add to parent's list of tips
 
         elif cur_node.branchType=='node': ## cur_node is node
@@ -290,7 +278,6 @@ class tree: ## tree class
                 self.traverse_tree(cur_node=child,include_condition=include_condition,traverse_condition=traverse_condition,verbose=verbose,collect=collect) ## recurse through children
                 if verbose==True: print('child %s done'%(child.index))
             assert len(cur_node.children)>0, 'Tried traversing through hanging node without children. Index: %s'%(cur_node.index)
-            if verbose==True: print(cur_node.index,[child.height for child in cur_node.children])
             cur_node.childHeight=max([child.childHeight if child.branchType=='node' else child.height for child in cur_node.children])
 
             if cur_node.parent:
@@ -332,8 +319,8 @@ class tree: ## tree class
         else:
             if verbose==True: print('Drawing tree with provided order')
 
-        # name_order={x.numName: i for i,x in enumerate(order)}
         name_order={x.name: i for i,x in enumerate(order)}
+        assert len(name_order)==len(order), 'Non-unique names present in tree'
         if width_function==None:
             if verbose==True:
                 print('Drawing tree with default widths (1 unit for leaf objects, width+1 for clades)')
@@ -354,7 +341,6 @@ class tree: ## tree class
                 if k.branchType=='leaf': ## if leaf - get position of leaf, draw branch connecting tip to parent node
                     if verbose==True: print('Setting leaf %s y coordinate to'%(k.index)),
                     x=k.height ## x position is height
-                    # y_idx=name_order[k.numName] ## y position of leaf is given by the order in which tips were visited during the traversal
                     y_idx=name_order[k.name]
                     y=sum(skips[y_idx:])-skips[y_idx]/2.0 ## sum across skips to find y position
                     k.x=x ## set x and y coordinates
@@ -505,7 +491,7 @@ class tree: ## tree class
 
             nodes_to_delete=list(filter(lambda w: w.index in [q.index for q in designated_nodes], newTree.Objects)) ## need to look up nodes designated for deletion by their indices, since the tree has been copied and nodes will have new memory addresses
         if verbose==True: print('%s nodes set for collapsing: %s'%(len(nodes_to_delete),[w.index for w in nodes_to_delete]))
-        # assert len(nodes_to_delete)<len(newTree.getInternal())-1,'Chosen cutoff would remove all branches'
+        assert len(nodes_to_delete)<len(newTree.getInternal())-1,'Chosen cutoff would remove all branches'
         while len(nodes_to_delete)>0: ## as long as there are branches to be collapsed - keep reducing the tree
 
             if verbose==True: print('Continuing collapse cycle, %s nodes left'%(len(nodes_to_delete)))
@@ -592,11 +578,6 @@ class tree: ## tree class
             string_fragment.append(')') ## last child, node terminates
 
         elif cur_node.branchType=='leaf':
-            # if numName==False: ## if real names wanted
-            #     assert cur_node.name!=None,'Tip does not have converted name' ## assert they have been converted
-            #     treeName=cur_node.name ## designate real name
-            # elif numName==True: ## if number names wanted
-                # treeName=cur_node.numName ## designated numName
             if rename==None:
                 treeName=cur_node.name ## designated numName
             else:
@@ -623,25 +604,15 @@ class tree: ## tree class
             if verbose==True: print('finished')
             return ''.join(string_fragment)
 
-    def allTMRCAs(self,numName=True):
-        if numName==False:
-            assert len(self.tipMap)>0,'Tree does not have a translation dict for tip names'
-            # tip_names=[self.tipMap[k.numName] for k in self.Objects if isinstance(k,leaf)]
-            tip_names=[k.name for k in self.Objects if isinstance(k,leaf)]
-        else:
-            # tip_names=[k.numName for k in self.Objects if isinstance(k,leaf)]
-            tip_names=[k.name for k in self.Objects if isinstance(k,leaf)]
+    def allTMRCAs(self):
+        tip_names=[k.name for k in self.getExternal()]
         tmrcaMatrix={x:{y:None if x!=y else 0.0 for y in tip_names} for x in tip_names} ## pairwise matrix of tips
 
-        for k in self.getInternal():
-            if numName==True:
-                all_children=list(k.leaves) ## fetch all descendant tips of node
-            else:
-                all_children=[self.tipMap[lv] for lv in k.leaves]
-            for x in range(0,len(all_children)-1): ## for all pairwise comparisons of tips
-                for y in range(x+1,len(all_children)):
-                    tipA=all_children[x]
-                    tipB=all_children[y]
+        for k in self.getInternal(): ## iterate over nodes
+            all_children=list(k.leaves) ## fetch all descendant tips of node
+
+            for a,tipA in enumerate(all_children):
+                for tipB in all_children[a+1:]:
                     if tmrcaMatrix[tipA][tipB]==None or tmrcaMatrix[tipA][tipB]<=k.absoluteTime: ## if node's time is more recent than previous entry - set new TMRCA value for pair of tips
                         tmrcaMatrix[tipA][tipB]=k.absoluteTime
                         tmrcaMatrix[tipB][tipA]=k.absoluteTime
@@ -685,28 +656,24 @@ class tree: ## tree class
 
         return reduced_tree ## return new tree
 
-    def countLineages(self,t,condition=lambda x:True):
-        return len([k for k in self.Objects if k.parent.absoluteTime<t<=k.absoluteTime and condition(k)])
+    def countLineages(self,t,attr='absoluteTime',condition=lambda x:True):
+        return len([k for k in self.Objects if getattr(k.parent,attr)!=None and getattr(k.parent,attr)<t<=getattr(k,attr) and condition(k)])
 
     def getExternal(self,secondFilter=None):
         """
         Get all branches whose branchType is "leaf".
         A function can be provided to filter internal nodes according to an additional property.
         """
-        externals=list(self.Objects)
-        # if self.root.branchType=='leaf':
-        #     externals.append(self.root)
-        return list(filter(secondFilter,filter(lambda k:k.branchType=='leaf',externals)))
+        externals=list(filter(secondFilter,filter(lambda k:k.branchType=='leaf',self.Objects)))
+        return externals
 
     def getInternal(self,secondFilter=None):
         """
         Get all branches whose branchType is "node".
         A function can be provided to filter internal nodes according to an additional property.
         """
-        internals=list(self.Objects)
-        # if self.root.branchType=='node':
-        #     internals.append(self.root)
-        return list(filter(secondFilter,filter(lambda k:k.branchType=='node',internals)))
+        internals=list(filter(secondFilter,filter(lambda k:k.branchType=='node',self.Objects)))
+        return internals
 
     def getBranches(self,attrs=lambda x:True,warn=True):
         select=list(filter(attrs,self.Objects))
@@ -720,15 +687,15 @@ class tree: ## tree class
         else:
             return select
 
-    def getParameter(self,statistic,use_trait=True,which_branches=None):
+    def getParameter(self,statistic,use_trait=False,which=None):
         """
         Return either branch trait or attribute (default: trait, to switch to attribute set use_trait parameter to False) statistic across branches determined by the which_branches function (default: all objects in the tree).
         Note - branches which do not have the trait or attribute are skipped.
         """
-        if which_branches==None:
-            branches=self.Objects#+[self.root]
+        if which==None:
+            branches=self.Objects
         else:
-            branches=filter(which_branches,self.Objects)#+[self.root])
+            branches=filter(which,self.Objects)
 
         if use_trait==False:
             params=[getattr(k,statistic) for k in branches if hasattr(k,statistic)]
@@ -749,25 +716,30 @@ class tree: ## tree class
                 self.Objects.remove(h) ## remove old parent from all objects
             hangingNodes=list(filter(hangingCondition,self.Objects)) ## regenerate list
 
-    def addText(self,ax,target=lambda k:k.branchType=='leaf',position=lambda k:(k.x*1.01,k.y),text=lambda k:k.name,zorder_function=lambda k: 101,**kwargs):
+    def addText(self,ax,target=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
+        if target==None: target=lambda k: k.branchType=='leaf'
+        if x_attr==None: x_attr=lambda k: k.x
+        if y_attr==None: y_attr=lambda k: k.y
+        if text==None: text=lambda k: k.name
+        if zorder==None: zorder=4
         for k in filter(target,self.Objects):
-            x,y=position(k)
-            z=zorder_function(k)
+            x,y=x_attr(k),y_attr(k)
+            z=zorder
             ax.text(x,y,text(k),zorder=z,**kwargs)
         return ax
 
-    def plotPoints(self,ax,x_attr=None,y_attr=None,target=None,size_function=None,colour_function=None,
+    def plotPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
         if target==None: target=lambda k: k.branchType=='leaf'
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
-        if size_function==None: size_function=lambda k:40
-        if colour_function==None: colour_function=lambda f:'k'
+        if size==None: size=40
+        if colour==None: colour=lambda f:'k'
         if zorder==None: zorder=3
 
         if outline==None: outline=True
-        if outline_size==None: outline_size=lambda k: size_function(k)*2
-        if outline_colour==None: outline_colour=lambda k: 'k'
+        if outline_size==None: outline_size=lambda k: size(k)*2 if callable(size) else size*2
+        if outline_colour==None: outline_colour='k'
 
         xs=[]
         ys=[]
@@ -781,14 +753,14 @@ class tree: ## tree class
         for k in filter(target,self.Objects):
             xs.append(x_attr(k))
             ys.append(y_attr(k))
-            colours.append(colour_function(k))
-            sizes.append(size_function(k))
+            colours.append(colour(k)) if callable(colour) else colours.append(colour)
+            sizes.append(size(k)) if callable(size) else sizes.append(size)
 
             if outline:
                 outline_xs.append(xs[-1])
                 outline_ys.append(ys[-1])
-                outline_colours.append(outline_colour(k))
-                outline_sizes.append(outline_size(k))
+                outline_colours.append(outline_colour(k)) if callable(outline_colour) else outline_colours.append(outline_colour)
+                outline_sizes.append(outline_size(k)) if callable(outline_size) else outline_sizes.append(outline_size)
 
         ax.scatter(xs,ys,s=sizes,facecolor=colours,edgecolor='none',zorder=zorder,**kwargs) ## put a circle at each tip
         if outline:
@@ -796,11 +768,16 @@ class tree: ## tree class
 
         return ax
 
-    def plotTree(self,ax,tree_type='rectangular',target=lambda k: True,
-             x_attr=lambda k:k.x,y_attr=lambda k:k.y,branchWidth=lambda k:2,
-             colour_function=lambda f:'k',**kwargs):
-
-        assert tree_type in ['rectangular','unrooted','non-baltic'],'Unrecognised drawing type "%s"'%(tree_type)
+    def plotTree(self,ax,connection_type=None,target=None,
+             x_attr=None,y_attr=None,width=None,
+             colour=None,**kwargs):
+        if target==None: target=lambda k: True
+        if x_attr==None: x_attr=lambda k: k.x
+        if y_attr==None: y_attr=lambda k: k.y
+        if width==None: width=2
+        if colour==None: colour='k'
+        if connection_type==None: connection_type='baltic'
+        assert connection_type in ['baltic','direct','elbow'],'Unrecognised drawing type "%s"'%(tree_type)
 
         branches=[]
         colours=[]
@@ -811,22 +788,22 @@ class tree: ## tree class
             y=y_attr(k) ## get y position
 
             try:
-                colours.append(colour_function(k))
+                colours.append(colour(k)) if callable(colour) else colours.append(colour)
             except KeyError:
                 colours.append((0.7,0.7,0.7))
-            linewidths.append(branchWidth(k))
+            linewidths.append(width(k)) if callable(width) else linewidths.append(width)
 
-            if tree_type=='rectangular':
+            if connection_type=='baltic':
                 branches.append(((xp,y),(x,y)))
-                if k.branchType=='node' and tree_type=='rectangular':
+                if k.branchType=='node':
                     yl,yr=y_attr(k.children[0]),y_attr(k.children[-1])
                     branches.append(((x,yl),(x,yr)))
                     linewidths.append(linewidths[-1])
                     colours.append(colours[-1])
-            elif tree_type=='non-baltic':
+            elif connection_type=='elbow':
                 yp=y_attr(k.parent) if k.parent else y ## get parent x position
                 branches.append(((xp,yp),(xp,y),(x,y)))
-            elif tree_type=='unrooted':
+            elif connection_type=='direct':
                 yp=y_attr(k.parent) ## get y position
                 branches.append(((xp,yp),(x,y)))
             else:
@@ -836,14 +813,14 @@ class tree: ## tree class
         ax.add_collection(line_segments)
         return ax
 
-    def plotCircularTree(self,ax,target=None,x_attr=None,y_attr=None,branchWidth=None,colour_function=None,
+    def plotCircularTree(self,ax,target=None,x_attr=None,y_attr=None,width=None,colour=None,
                          circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,precision=15,**kwargs):
 
         if target==None: target=lambda k: True
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
-        if colour_function==None: colour_function=lambda f:'k'
-        if branchWidth==None: branchWidth=lambda k:2
+        if colour==None: colour='k'
+        if width==None: width=2
 
         if inwardSpace<0: inwardSpace-=self.treeHeight
 
@@ -864,10 +841,10 @@ class tree: ## tree class
             y=y_attr(k) ## get y position
 
             try:
-                colours.append(colour_function(k))
+                colours.append(colour(k)) if callable(colour) else colours.append(colour)
             except KeyError:
                 colours.append((0.7,0.7,0.7))
-            linewidths.append(branchWidth(k))
+            linewidths.append(width(k)) if callable (width) else linewidths.append(width)
 
             y=circ_s+circ*y/self.ySpan
             X=math.sin(y)
@@ -893,17 +870,17 @@ class tree: ## tree class
 
         return ax
 
-    def plotCircularPoints(self,ax,x_attr=None,y_attr=None,target=None,size_function=None,colour_function=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,
+    def plotCircularPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
         if target==None: target=lambda k: k.branchType=='leaf'
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
-        if size_function==None: size_function=lambda k:40
-        if colour_function==None: colour_function=lambda f:'k'
+        if size==None: size=40
+        if colour==None: colour='k'
         if zorder==None: zorder=3
 
         if outline==None: outline=True
-        if outline_size==None: outline_size=lambda k: size_function(k)*2
+        if outline_size==None: outline_size=lambda k: size(k)*2 if callable(size) else size*2
         if outline_colour==None: outline_colour=lambda k: 'k'
 
         if inwardSpace<0: inwardSpace-=self.treeHeight
@@ -933,14 +910,14 @@ class tree: ## tree class
 
             xs.append(X)
             ys.append(Y)
-            colours.append(colour_function(k))
-            sizes.append(size_function(k))
+            colours.append(colour(k)) if callable(colour) else colours.append(colour)
+            sizes.append(size(k)) if callable(size) else sizes.append(size)
 
             if outline:
                 outline_xs.append(xs[-1])
                 outline_ys.append(ys[-1])
-                outline_colours.append(outline_colour(k))
-                outline_sizes.append(outline_size(k))
+                outline_colours.append(outline_colour(k)) if callable(outline_colour) else outline_colours.append(outline_colour)
+                outline_sizes.append(outline_size(k)) if callable(outline_size) else outline_sizes.append(outline_size)
 
         ax.scatter(xs,ys,s=sizes,facecolor=colours,edgecolor='none',zorder=zorder,**kwargs) ## put a circle at each tip
         if outline:
@@ -948,6 +925,47 @@ class tree: ## tree class
 
         return ax
 
+def untangle(trees,cost_function=None,iterations=None,verbose=True):
+    """
+    Minimise y-axis discrepancies between tips of trees in a list.
+    Only the tangling of adjacent trees in the list is minimised, so the order of trees matters.
+    Trees do not need to have the same number of tips but tip names should match.
+    """
+    from itertools import permutations
+
+    if iterations==None: iterations=3
+    if cost_function==None: cost_function=lambda pair: math.pow(abs(pair[0]-pair[1]),2)
+
+    y_positions={T: {k.name: k.y for k in T.getExternal()} for T in trees} ## get y positions of all the tips in every tree
+
+    for iteration in range(iterations):
+        if verbose: print('Untangling iteration %d'%(iteration+1))
+        first_trees=list(range(len(trees)-1))+[-1] ## trees up to next-to-last + last
+        next_trees=list(range(1,len(trees)))+[0] ## trees from second + first
+        for cur,nex in zip(first_trees,next_trees): ## adjacent pairs
+            tree1=trees[cur] ## fetch current tree
+            tree2=trees[nex] ## fetch next tree
+            if verbose: print('%d vs %d'%(cur,nex))
+            for k in sorted(tree2.getInternal(),key=lambda branch: branch.height): ## iterate through nodes of next tree by height (start from root)
+                clade_y_positions=sorted([y_positions[tree2][tip] for tip in k.leaves]) ## sorted list of available y coordinates for node
+                costs={} ## will store cost of all children permutations
+                if len(k.children)>=10: raise RuntimeWarning('Node is too polytomic and untangling will take an astronomically long time')
+                if verbose==True: print(len(k.children))
+                for permutation in permutations(k.children): ## iterate over permutations of node's children
+                    clade_order=sum([[child.name] if child.branchType=='leaf' else list(child.leaves) for child in permutation],[]) ## flat list of tip names as they would appear in permutation order
+                    new_y_positions={clade_order[i]: clade_y_positions[i] for i in range(len(clade_y_positions))} ## assign available y positions in order
+
+                    tip_costs=list(map(cost_function,[(y_positions[tree1][tip],new_y_positions[tip]) for tip in clade_order if tip in y_positions[tree1]]))
+                    costs[permutation]=sum(tip_costs)/len(tip_costs) ## compute cost of this permutation in relation to next tree
+
+                best=sorted(costs.keys(),key=lambda w: -costs[w])[0] ## get tree with smallest cost
+                k.children=list(best) ## reorder children according to minimised cost
+
+            tree2.drawTree() ## compute new y coordinates for nodes
+            for k in tree2.getExternal(): ## iterate over tips
+                y_positions[tree2][k.name]=k.y ## remember new coordinates
+
+    return trees
 
 def make_tree(data,ll=None,verbose=False):
     """
@@ -1112,7 +1130,6 @@ def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
         new_node=node()
     else:
         new_node=leaf()
-        # new_node.numName=JSONnode[json_translation['name']] ## set leaf numName
         new_node.name=JSONnode[json_translation['name']] ## set leaf name to be the same
 
     if ll is None:
@@ -1160,9 +1177,7 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
         tipDates=[]
         tipNames=[]
         for k in ll.getExternal():
-            # n=k.numName
             n=k.name
-            # k.name=k.numName
             tipNames.append(n)
             cerberus=re.search(tip_regex,n)
             if cerberus is not None:
@@ -1224,10 +1239,6 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
         tipDates=[]
         tipNames=[]
         for k in ll.getExternal():
-            # if len(tips)>0:
-            #     n=k.name
-            # else:
-            #     n=k.numName
             tipNames.append(k.name)
             cerberus=re.search(tip_regex,k.name)
             if cerberus is not None:
