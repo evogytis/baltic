@@ -91,6 +91,8 @@ for k in myTree.Objects:
 
 --------------------
 ## baltic was used in the following publications:
+- Ladner JT, Larsen BB, Bowers JR, Hepp CM, ..., Worobey M, Keim P, 2020. _Defining the Pandemic at the State Level: Sequence-Based Epidemiology of the SARS-CoV-2 virus by the Arizona COVID-19 Genomics Union (ACGU)_, __medRxiv__: 2020.05.08.20095935; [doi](https://doi.org/10.1101/2020.05.08.20095935).
+- Sikkema RS, Pas S, Nieuwenhuijse DF, O'Toole A, ..., Munnink BBO, Kluytmans M, Koopmans MPG, 2020. _COVID-19 in healthcare workers in three hospitals in the South of the Netherlands, March 2020_, __medRxiv__: 2020.04.26.20079418; [doi](https://doi.org/10.1101/2020.04.26.20079418).
 - Munnink BBO, Nieuwenhuijse DF, Stein M, O'Toole A, Haverkarte M, ..., Meijer A, Rambaut A, van Dissel J, Sikkema R, Timen A, Koopmans M, 2020. _Rapid SARS-CoV-2 whole genome sequencing for informed public health decision making in the Netherlands_, __bioRxiv__: 2020.04.21.050633; [doi](https://doi.org/10.1101/2020.04.21.050633).
 - Venkatesh D, Brouwer A, Ellis R, Goujgoulova G, Seekings J, Brown IH, Lewis NS, 2020. _Regional transmission and reassortment of 2.3.4.4b highly pathogenic avian influenza (HPAI) viruses in Bulgarian poultry 2017/18_, __bioRxiv__: 2020.04.14.040592; [doi](https://doi.org/10.1101/2020.04.14.040592).
 - Suárez-Esquivel M, Hernández-Mora G, Ruiz-Villalobos N, ..., Thomson NR, Moreno E, Guzmán-Verri C, 2020. _Persistence of Brucella abortus lineages revealed by genomic characterization and phylodynamic analysis_, __PLOS Neglected Tropical Diseases__ 14(4): e0008235; [doi](https://doi.org/10.1371/journal.pntd.0008235).
