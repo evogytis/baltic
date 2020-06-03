@@ -205,7 +205,7 @@ class tree: ## tree class
                 multiTypeNodes.remove(k) ## remove old parent from multitype nodes
                 self.Objects.remove(k) ## remove old parent from all objects
         self.sortBranches()
-    
+
     def setAbsoluteTime(self,date):
         """ place all objects in absolute time by providing the date of the most recent tip """
         for i in self.Objects: ## iterate over all objects
@@ -831,13 +831,13 @@ class tree: ## tree class
         circ_s=circStart*math.pi*2
         circ=circFrac*math.pi*2
 
-        if normaliseHeight==None: normaliseHeight=lambda value,values: (value-min(values))/(max(values)-min(values))
+        allXs=list(map(x_attr,self.Objects))
+        if normaliseHeight==None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
         linspace=lambda start,stop,n: list(start+((stop-start)/(n-1))*i for i in range(n)) if n>1 else stop
 
-        value_range=list(map(x_attr,self.Objects))
         for k in filter(target,self.Objects): ## iterate over branches
-            x=normaliseHeight(x_attr(k)+inwardSpace,value_range) ## get branch x position
-            xp=normaliseHeight(x_attr(k.parent)+inwardSpace,value_range) if k.parent.parent else x ## get parent x position
+            x=normaliseHeight(x_attr(k)+inwardSpace) ## get branch x position
+            xp=normaliseHeight(x_attr(k.parent)+inwardSpace) if k.parent.parent else x ## get parent x position
             y=y_attr(k) ## get y position
 
             try:
@@ -888,10 +888,9 @@ class tree: ## tree class
         circ_s=circStart*math.pi*2
         circ=circFrac*math.pi*2
 
-        if normaliseHeight==None: normaliseHeight=lambda value,values: (value-min(values))/(max(values)-min(values))
+        allXs=list(map(x_attr,self.Objects))
+        if normaliseHeight==None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
         linspace=lambda start,stop,n: list(start+((stop-start)/(n-1))*i for i in range(n)) if n>1 else stop
-
-        value_range=list(map(x_attr,self.Objects))
 
         xs=[]
         ys=[]
@@ -903,7 +902,7 @@ class tree: ## tree class
         outline_colours=[]
         outline_sizes=[]
         for k in filter(target,self.Objects):
-            x=normaliseHeight(x_attr(k)+inwardSpace,value_range) ## find normalised x position along circle's radius
+            x=normaliseHeight(x_attr(k)+inwardSpace) ## find normalised x position along circle's radius
             y=circ_s+circ*y_attr(k)/self.ySpan ## get y position along circle's perimeter
             X=math.sin(y)*x ## transform
             Y=math.cos(y)*x ## transform
@@ -925,7 +924,7 @@ class tree: ## tree class
 
         return ax
 
-def untangle(trees,cost_function=None,iterations=None,verbose=True):
+def untangle(trees,cost_function=None,iterations=None,verbose=False):
     """
     Minimise y-axis discrepancies between tips of trees in a list.
     Only the tangling of adjacent trees in the list is minimised, so the order of trees matters.
@@ -1295,16 +1294,25 @@ def loadJSON(json_object,json_translation={'name':'name','absoluteTime':'num_dat
     for attr in json_translation: ## iterate through attributes in json_translation
         for k in ll.Objects: ## for every branch
             if isinstance(json_translation[attr],str):
-                setattr(k,attr,k.traits[json_translation[attr]]) ## set attribute value for branch
-            else:
+                if json_translation[attr] in k.traits:
+                    setattr(k,attr,k.traits[json_translation[attr]]) ## set attribute value for branch
+                elif 'node_attrs' in k.traits and json_translation[attr] in k.traits['node_attrs']:
+                    setattr(k,attr,k.traits['node_attrs'][json_translation[attr]])
+                elif 'branch_attrs' in k.traits and json_translation[attr] in k.traits['branch_attrs']:
+                    setattr(k,attr,k.traits['branch_attrs'][json_translation[attr]])
+                else:
+                    raise KeyError('String attribute %s not found in JSON'%(json_translation[attr]))
+            elif callable(json_translation[attr]):
                 setattr(k,attr,json_translation[attr](k)) ## set attribute value with a function for branch
-
-    if 'absoluteTime' in json_translation: ## if using absoluteTime need to set branch lengths for traversals
-        for k in ll.Objects:
-            if k.absoluteTime and k.parent.absoluteTime:
-                k.length=k.absoluteTime-k.parent.absoluteTime
             else:
-                k.length=0.0
+                raise AttributeError('Attribute %s neither string nor callable'%(json_translation[attr]))
+
+    for branch_unit in ['height','absoluteTime']: ## iterate between divergence and absolute time
+        if branch_unit in json_translation: ## it's available in tree
+            for k in ll.Objects: ## iterate over all branches
+                cur_branch=getattr(k,branch_unit) ## get parameter for this branch
+                par_branch=getattr(k.parent,branch_unit) ## get parameter for parental branch
+                k.length=cur_branch-par_branch if cur_branch and par_branch else 0.0 ## difference between current and parent is branch length (or, if parent unavailabel it's 0)
 
     if verbose==True: print('Traversing and drawing tree')
 
