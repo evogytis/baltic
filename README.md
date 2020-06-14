@@ -91,6 +91,7 @@ for k in myTree.Objects:
 
 --------------------
 ## baltic was used in the following publications:
+- Miller D, Martin MA, Harel N, Kustin T, Tirosh O, Meir M, Sorek N, ..., Kopelman N, Huppert A, Koelle K, Stern A, 2020. _Full genome viral sequences inform patterns of SARS-CoV-2 spread into and within Israel_, __medRxiv__: 2020.05.21.20104521; [doi](https://doi.org/10.1101/2020.05.21.20104521).
 - Ladner JT, Larsen BB, Bowers JR, Hepp CM, ..., Worobey M, Keim P, 2020. _Defining the Pandemic at the State Level: Sequence-Based Epidemiology of the SARS-CoV-2 virus by the Arizona COVID-19 Genomics Union (ACGU)_, __medRxiv__: 2020.05.08.20095935; [doi](https://doi.org/10.1101/2020.05.08.20095935).
 - Sikkema RS, Pas S, Nieuwenhuijse DF, O'Toole A, ..., Munnink BBO, Kluytmans M, Koopmans MPG, 2020. _COVID-19 in healthcare workers in three hospitals in the South of the Netherlands, March 2020_, __medRxiv__: 2020.04.26.20079418; [doi](https://doi.org/10.1101/2020.04.26.20079418).
 - Munnink BBO, Nieuwenhuijse DF, Stein M, O'Toole A, Haverkarte M, ..., Meijer A, Rambaut A, van Dissel J, Sikkema R, Timen A, Koopmans M, 2020. _Rapid SARS-CoV-2 whole genome sequencing for informed public health decision making in the Netherlands_, __bioRxiv__: 2020.04.21.050633; [doi](https://doi.org/10.1101/2020.04.21.050633).

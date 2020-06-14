@@ -36,6 +36,16 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False):
     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
+def calendarDate(timepoint,fmt='%Y-%m-%d'):
+    """ Converts decimal dates to a specified calendar date format. """
+    year = int(timepoint)
+    rem = timepoint - year
+
+    base = dt.datetime(year, 1, 1)
+    result = base + dt.timedelta(seconds=(base.replace(year=base.year + 1) - base).total_seconds() * rem)
+
+    return dt.datetime.strftime(result,fmt)
+
 def convertDate(x,start,end):
     """ Converts calendar dates between given formats """
     return dt.datetime.strftime(dt.datetime.strptime(x,start),end)
@@ -809,7 +819,7 @@ class tree: ## tree class
             else:
                 pass ## for now
 
-        line_segments = LineCollection(branches,lw=linewidths,ls='-',color=colours,capstyle='projecting')
+        line_segments = LineCollection(branches,lw=linewidths,color=colours,capstyle='projecting',**kwargs)
         ax.add_collection(line_segments)
         return ax
 
