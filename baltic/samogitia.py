@@ -4,7 +4,6 @@ import datetime as dt
 import baltic as bt
 import sys
 import collections
-import numpy as np
 
 def overlap(a,b):
     """
@@ -38,7 +37,7 @@ burnin, treefile, analyses, outfile, calibration, states, dformat, tformat = arg
 lower,upper=states.split('-')
 lower=int(lower)
 if upper=='inf':
-    upper=np.inf
+    upper=float('inf')
 else:
     upper=int(upper)
 
@@ -99,7 +98,7 @@ for line in treefile: ## iterate through each line
             start=len(cerberus.group()) ## index of where tree string starts in the line
             treestring=str(line[start:]) ## grab tree string
             bt.make_tree(treestring,ll) ## read tree string
-            if lower==0 and upper==np.inf: ## only add a header if not doing a chunk
+            if lower==0 and upper==float('inf'): ## only add a header if not doing a chunk
                 outfile.write('state') ## begin the output log file
                 ########################################### add header to output log file
                 if 'treeLength' in analyses:

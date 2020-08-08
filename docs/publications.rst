@@ -1,0 +1,43 @@
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+
+Publications using baltic
+==============================
+
+
+baltic was used in the following publications:
+
+- Moncla LH, Bedford T, Dussart P, ..., Guan Y, Friedrich TC, Horwood PF, 2019. _Quantifying within-host evolution of H5N1 influenza in humans and poultry in Cambodia, `bioRxiv`: 683151; `doi <https://doi.org/10.1101/683151>`__.
+- Müller NF, Stolz U, Dudas G, Stadler T, Vaughan TG, 2019. _Bayesian inference of reassortment networks reveals fitness benefits of reassortment in human influenza viruses, `bioRxiv`: 726042; `doi <https://doi.org/10.1101/726042>`__.
+- Wiley R, Fakoli L, Letizia AG, Welch SR, Ladner JT, Albariño CG, Fallah M, Palacios G, 2019. _Lassa virus circulating in Liberia: a retrospective genomic characterisation, `Lancet Infect Dis`
+- Theys K, Lemey P, Vandamme AM, Baele G, 2019. _Advances in Visualization Tools for Phylogenomic and Phylodynamic Studies of Viral Diseases, `Front. Public Health`, 7: 208; `doi <https://doi.org/10.3389/fpubh.2019.00208>`__.
+- Müller NF, Dudas G, Stadler T, 2019. _Inferring time-dependent migration and coalescence patterns from genetic sequence and predictor data in structured populations, `Virus Evolution`, 5(2): vez030; `doi <https://doi.org/10.1093/ve/vez030>`__.
+- Mbala-Kingebeni P, Aziza A, Di Paola N, Wiley MR, ..., Peeters M, Palacios G, Ahuka-Mundeke S, 2019. _Medical countermeasures during the 2018 Ebola virus disease outbreak in the North Kivu and Ituri Provinces of the Democratic Republic of the Congo: a rapid genomic assessment, `Lancet Infect Dis` 19(6): 648-657; `doi <https://doi.org/10.1016/S1473-3099(19)30118-5>`__.
+- Work TM, Dagenais J, Stacy BA, Ladner JT, ..., Rameyer RA, Taylor DR, Waltzek TB, 2019. _A novel host-adapted strain of Salmonella Typhimurium causes renal disease in olive ridley turtles (Lepidochelys olivacea) in the Pacific, `Scientific Reports`  9: 9313; `doi <https://doi.org/10.1038/s41598-019-45752-5>`__.
+- Poen MJ, Venkatesh D, Bestebroer TM, ..., Brown IH, Fouchier RAM, Lewis NS, 2019. _Co-circulation of genetically distinct highly pathogenic avian influenza A clade 2.3.4.4 (H5N6) viruses in wild waterfowl and poultry in Europe and East Asia, 2017–18, `Virus Evolution` 5(1): vez004; `doi <https://doi.org/10.1093/ve/vez004>`__.
+- Dudas G, Bedford T, 2019. The ability of single genes vs full genomes to resolve time and space in outbreak analysis. `bioRxiv` 582957; `doi <https://doi.org/10.1101/582957>`__.
+- van Vuren JP, Ladner JT, Grobbelaar AA, Wiley MR, Lovett S, Allam M, Ismail A, le Roux C, Weyer J, Moolla N, Storm N, Kgaladi J, Sanchez-Lockhart M, Conteh O, Palacios G, Paweska JT, 2019. _Phylodynamic Analysis of Ebola Virus Disease Transmission in Sierra Leone. `Viruses`, 11(1), 71; `doi <https://doi.org/10.3390/v11010071>`__.
+- Bell SM, Katzelnick L, Bedford T, 2018. _Dengue antigenic relationships predict evolutionary dynamics, `eLife` 8: e42496; `doi <https://doi.org/10.7554/eLife.42496>`__.
+- Wille M, Latorre-Margalef N, ..., Raghwani J, Pybus OG, Olsen B, Waldenström J, 2018. _Where do all the subtypes go? Temporal dynamics of H8–H12 influenza A viruses in waterfowl, `Virus Evolution`, 4(2): vey025; `doi <https://doi.org/10.1093/ve/vey025>`__.
+- Dokubo EK, Wendland A, Mate SE, Ladner JT, ..., Palacios G, Fallah MP, 2018. _Persistence of Ebola virus after the end of widespread transmission in Liberia: an outbreak report, `Lancet Infect Dis` 18: 1015–1024; `doi <https://doi.org/10.1016/S1473-3099(18)30417-1>`__.
+- Lee JM, Huddleston J, Doud MB, Hooper KA, Wu NC, Bedford T, Bloom JD, 2018. _Deep mutational scanning of hemagglutinin helps predict evolutionary fates of human H3N2 influenza variants, `PNAS` 115(35): 8276-8285; `doi <https://doi.org/10.1073/pnas.1806133115>`__.
+- Venkatesh D, Poen MJ, Bestebroer TM, ..., Brown IH, Fouchier RAM, Lewis NS, 2018. _Avian influenza viruses in wild birds: virus evolution in a multi-host ecosystem, `J Virol` 92: e00433-18; `doi <https://doi.org/10.1128/JVI.00433-18>`__.
+- Chu DKW, Hui Kenrie PY, Perera RAPM, Miguel E, Niemeyer D, Zhao J, Channappanavar R, Dudas G, Oladipo JO, Traoré A, Fassi-Fihri O, Ali A, Demissie GF, Muth D, Chan MCW, Nicholls JM, Meyerholz DK, Kuranga SA, Mamo G, Zhou Z, So RTY, Hemida MG, Webby RJ, Roger F, Rambaut A, Poon LLM, Perlman S, Drosten C, Chevalier V, Peiris M, 2018. _MERS coronaviruses from camels in Africa exhibit region-dependent genetic diversity. `PNAS` 115(12): 3144-3149; `doi <https://doi.org/10.1073/pnas.1718769115>`__.
+- Whitmer SLM, Ladner JT, Wiley MR, Patel K, Dudas G, Rambaut A, Sahr F, Prieto K, Shepard SS, Carmody E, Knust B, Naidoo D, Deen G, Formenty P, Nichol ST, Palacios G, Ströher U, 2018. _Active Ebola Virus Replication and Heterogeneous Evolutionary Rates in EVD Survivors. `Cell Reports` 22(5): 1159-1168; `doi <https://doi.org/10.1016/j.celrep.2018.01.008>`__.
+- Dudas G, Carvalho L, Rambaut A, Bedford T. _MERS-CoV spillover at the camel-human interface, 2017. `eLife` 7: e31257; `doi <https://doi.org/10.7554/eLife.31257>`__.
+- Langat P, Raghwani J, Dudas G, ..., Russell C, Pybus OG, McCauley J, Kellam P, Watson SJ. _Genome-wide evolutionary dynamics of influenza B viruses on a global scale, 2017. `PLOS Pathogens` 13(12): e1006749; `doi <https://doi.org/10.1371/journal.ppat.1006749>`__.
+- Grubaugh ND, Ladner JT, Kraemer MUG, Dudas G, Tan AL, Gangavarapu K, Wiley MR, White S, Thézé J, ..., Bedford T, Pybus OG, Isern S, Palacios G, Andersen KG. _Multiple introductions of Zika virus into the United States revealed through genomic epidemiology, 2017. `Nature` 546: 401–405; `doi <https://doi.org/10.1038/nature22400>`__.
+- Dudas G, Carvalho LM, Bedford T, Tatem AJ, ..., Suchard M, Lemey P, Rambaut A. _Virus genomes reveal the factors that spread and sustained the West African Ebola epidemic, 2017. `Nature` 544(7650): 309-315; `doi <https://doi.org/10.1038/nature22040>`__.
+- Bell SM, Bedford T. _Modern-Day SIV viral diversity generated by extensive recombination and cross-species transmission, 2017. `PLoS Pathog` 13(7): e1006466; `doi <https://doi.org/10.1371/journal.ppat.1006466>`__.
+- Holmes EC, Dudas G, Rambaut A, Andersen KG. _The Evolution of Ebola virus: Insights from the 2013-2016 Epidemic, 2016. `Nature` 538(7624): 193-200; `doi <https://doi.org/10.1038/nature19790>`__.
+- Whitmer SLM, Albariño C, Shepard SS, Dudas G, ..., Nichol ST, Ströher U. _Preliminary Evaluation of the Effect of Investigational Ebola Virus Disease Treatments on Viral Genome Sequences, 2016. `Journal of Infectious Diseases`: jiw177; `doi <https://doi.org/10.1093/infdis/jiw177>`__.
+- Rambaut A, Dudas G, Carvalho LM, Park DJ, Yozwiak NL, Holmes EC, Andersen KG. _Comment on “Mutation rate and genotype variation of Ebola virus from Mali case sequences”, 2016. `Science` 353(6300): 658-658; `doi <https://doi.org/10.1126/science.aaf3823>`__.
+- Lewis NS, Russell CA, Langat P, ..., Dudas G, ..., Watson SJ, Brown IH, Vincent AL. _The global antigenic diversity of swine influenza A viruses, 2016. `eLife` 5: e12217; `doi <https://doi.org/10.7554/eLife.12217>`__.
+- Quick J, Loman NJ, Duraffour S, Simpson JT, Severi E, Cowley L ..., Dudas G, ..., Günther S, Carroll MW. _Real-time, portable genome sequencing for Ebola surveillance, 2016. `Nature` 530(7589): 228-232; `doi <https://doi.org/10.1038/nature16996>`__.
+- Dudas G, Rambaut A, _MERS-CoV recombination: implications about the reservoir and potential for adaptation, 2016. `Virus Evolution` 2(1): vev023; `doi <https://doi.org/10.1093/ve/vev023>`__.
+- Ladner JT, Wiley MR, Mate S, Dudas G, ... Palacios G. _Evolution and Spread of Ebola Virus in Liberia, 2014-2015, 2015. `Cell Host & Microbe` 18(6): 659-669; `doi <https://doi.org/10.1016/j.chom.2015.11.008>`__.
+- Park DJ, Dudas G, Wohl S, Goba A, Whitmer SLM, ..., Sabeti PC. _Ebola Virus Epidemiology, Transmission, and Evolution during Seven Months in Sierra Leone, 2015. `Cell` 161(7): 1516-1526; `doi <https://doi.org/10.1016/j.cell.2015.06.007>`__.
+- Carroll MW, Matthews DA, Hiscox JA, ... Dudas G, ... Günther S. _Temporal and spatial analysis of the 2014-2015 Ebola virus outbreak in West Africa, 2015. `Nature` 524(7563): 97-101; `doi <https://doi.org/10.1038/nature14594>`__.
+- Dudas G, Bedford T, Lycett S, Rambaut A. _Reassortment between Influenza B Lineages and the Emergence of a Coadapted PB1–PB2–HA Gene Complex, 2015. `Molecular Biology and Evolution` 32(1): 162-172; `doi <https://doi.org/10.1093/molbev/msu287>`__.
+- Gire SK, Goba A, Andersen KG, ... Dudas G, ... Sabeti PC. _Genomic surveillance elucidates Ebola virus origin and transmission during the 2014 outbreak, 2014. `Science` 345(6202): 1369-1372; `doi <https://doi.org/10.1126/science.1259657>`__.
