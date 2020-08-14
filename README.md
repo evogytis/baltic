@@ -18,10 +18,12 @@ pip install baltic
 ```python
 import baltic as bt
 
-When called with a tree string the `make_tree()` function return a baltic tree object:
+# When called with a tree string the `make_tree()` function return a baltic tree object:
 
 treeString='((A:1.0,B:2.0):1.0,C:3.0);'
 myTree = bt.make_tree(treeString)
+
+# Otherwise you can import trees from newick, nexus or nextstrain JSON files
 
 newickPath='/Users/myUsername/tree.newick'
 myTree = bt.loadNewick(newickPath)
