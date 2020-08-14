@@ -154,6 +154,7 @@ class tree: ## tree class
         if self.root is None: self.root=new_leaf
 
         new_leaf.parent=self.cur_node ## leaf's parent is current node
+        assert self.cur_node.branchType=='node', 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
         self.cur_node.children.append(new_leaf) ## assign leaf to parent's children
         new_leaf.name=name
         self.cur_node=new_leaf ## current node is now new leaf
