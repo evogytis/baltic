@@ -822,6 +822,7 @@ class tree: ## tree class
 
         line_segments = LineCollection(branches,lw=linewidths,color=colours,capstyle='projecting',**kwargs)
         ax.add_collection(line_segments)
+        ax._request_autoscale_view()
         return ax
 
     def plotCircularTree(self,ax,target=None,x_attr=None,y_attr=None,width=None,colour=None,
@@ -878,7 +879,7 @@ class tree: ## tree class
 
         line_segments = LineCollection(branches,lw=linewidths,ls='-',color=colours,capstyle='projecting',zorder=1) ## create line segments
         ax.add_collection(line_segments) ## add collection to axes
-
+        ax._request_autoscale_view()
         return ax
 
     def plotCircularPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,
@@ -1066,7 +1067,7 @@ def make_tree(data,ll=None,verbose=False):
             if verbose==True: print('%d comment: %s'%(i,cerberus.group(2)))
             comment=cerberus.group(2)
             numerics=re.findall('[,&][A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-,]+[\"|\']*',comment) ## strings
+            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
             treelist=re.findall('[,&][A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
             sets=re.findall('[,&][A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
             figtree=re.findall('\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
