@@ -4,9 +4,9 @@ import datetime as dt
 from functools import reduce
 from matplotlib.collections import LineCollection
 
-__all__ = ['decimalDate', 'convertDate', 'reticulation', # make from baltic import * safe
-           'clade', 'node', 'tree',
-           'make_tree', 'make_treeJSON', 'loadJSON', 'loadNexus', 'loadNewick']
+__all__ = ['decimalDate', 'convertDate', 'calendarDate', 'reticulation', # make from baltic import * safe
+           'clade', 'leaf', 'node', 'tree',
+           'make_tree', 'make_treeJSON', 'loadJSON', 'loadNexus', 'loadNewick', 'untangle']
 
 sys.setrecursionlimit(9001)
 
