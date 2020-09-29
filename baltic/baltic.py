@@ -154,6 +154,7 @@ class tree: ## tree class
         if self.root is None: self.root=new_leaf
 
         new_leaf.parent=self.cur_node ## leaf's parent is current node
+        assert self.cur_node.branchType=='node', 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
         self.cur_node.children.append(new_leaf) ## assign leaf to parent's children
         new_leaf.name=name
         self.cur_node=new_leaf ## current node is now new leaf
@@ -166,7 +167,7 @@ class tree: ## tree class
             Returns a new baltic tree instance.
             Note - custom traversal functions can result in multitype trees.
             If this is undesired call singleType() on the resulting subtree afterwards. """
-        subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition))
+        subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition,reset_branches=False))
 
         if subtree is None or len([k for k in subtree if k.branchType=='leaf'])==0:
             return None
@@ -255,14 +256,15 @@ class tree: ## tree class
 
         print('\nNumbers of objects in tree: %d (%d nodes and %d leaves)\n'%(len(obs),len(nodes),len(self.getExternal()))) ## report numbers of different objects in the tree
 
-    def traverse_tree(self,cur_node=None,include_condition=lambda k:k.branchType=='leaf',traverse_condition=lambda k:True,collect=None,verbose=False):
-        if cur_node==None: ## if no starting point defined - start from root
+    def traverse_tree(self,cur_node=None,include_condition=lambda k:k.branchType=='leaf',traverse_condition=lambda k:True,collect=None,reset_branches=True,verbose=False):
+        if reset_branches:
             for k in self.Objects: ## reset various parameters
                 if k.branchType=='node':
                     k.leaves=set()
                     k.childHeight=None
                 k.height=None
 
+        if cur_node==None: ## if no starting point defined - start from root
             if verbose==True: print('Initiated traversal from root')
             cur_node=self.root
 
@@ -285,7 +287,7 @@ class tree: ## tree class
         elif cur_node.branchType=='node': ## cur_node is node
             for child in filter(traverse_condition,cur_node.children): ## only traverse through children we're interested
                 if verbose==True: print('visiting child %s'%(child.index))
-                self.traverse_tree(cur_node=child,include_condition=include_condition,traverse_condition=traverse_condition,verbose=verbose,collect=collect) ## recurse through children
+                self.traverse_tree(cur_node=child,include_condition=include_condition,traverse_condition=traverse_condition,verbose=verbose,collect=collect,reset_branches=False) ## recurse through children
                 if verbose==True: print('child %s done'%(child.index))
             assert len(cur_node.children)>0, 'Tried traversing through hanging node without children. Index: %s'%(cur_node.index)
             cur_node.childHeight=max([child.childHeight if child.branchType=='node' else child.height for child in cur_node.children])
@@ -877,7 +879,6 @@ class tree: ## tree class
 
         line_segments = LineCollection(branches,lw=linewidths,ls='-',color=colours,capstyle='projecting',zorder=1) ## create line segments
         ax.add_collection(line_segments) ## add collection to axes
-
         return ax
 
     def plotCircularPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,
@@ -982,7 +983,7 @@ def make_tree(data,ll=None,verbose=False):
     """
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)',
-        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[]+)(\'|\"|)(\[)*'
+        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"]+)(\'|\"|)*(\[)*'
     }
     if isinstance(data,str)==False: ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
@@ -1065,7 +1066,7 @@ def make_tree(data,ll=None,verbose=False):
             if verbose==True: print('%d comment: %s'%(i,cerberus.group(2)))
             comment=cerberus.group(2)
             numerics=re.findall('[,&][A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-,]+[\"|\']*',comment) ## strings
+            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
             treelist=re.findall('[,&][A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
             sets=re.findall('[,&][A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
             figtree=re.findall('\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
