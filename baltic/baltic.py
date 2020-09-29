@@ -65,6 +65,15 @@ class reticulation: ## reticulation class (recombination, conversion, reassortme
         self.width=0.5
         self.target=None
 
+    def is_leaflike(self):
+        return True
+
+    def is_leaf(self):
+        return False
+
+    def is_node(self):
+        return False
+
 class clade: ## clade class
     def __init__(self,givenName):
         self.branchType='leaf' ## clade class poses as a leaf
@@ -83,6 +92,15 @@ class clade: ## clade class
         self.lastAbsoluteTime=None ## refers to the absolute time of the highest tip in the collapsed clade
         self.width=1
 
+    def is_leaflike(self):
+        return True
+
+    def is_leaf(self):
+        return False
+
+    def is_node(self):
+        return False
+
 class node: ## node class
     def __init__(self):
         self.branchType='node'
@@ -99,6 +117,15 @@ class node: ## node class
         ## contains references to all tips of this node
         self.leaves=set() ## is a set of tips that are descended from it
 
+    def is_leaflike(self):
+        return False
+
+    def is_leaf(self):
+        return False
+
+    def is_node(self):
+        return True
+
 class leaf: ## leaf class
     def __init__(self):
         self.branchType='leaf'
@@ -111,6 +138,15 @@ class leaf: ## leaf class
         self.traits={} ## trait dictionary
         self.x=None ## position of tip on x axis if the tip were to be plotted
         self.y=None ## position of tip on y axis if the tip were to be plotted
+
+    def is_leaflike(self):
+        return True
+
+    def is_leaf(self):
+        return True
+
+    def is_node(self):
+        return False
 
 class tree: ## tree class
     def __init__(self):
@@ -167,7 +203,7 @@ class tree: ## tree class
             Returns a new baltic tree instance.
             Note - custom traversal functions can result in multitype trees.
             If this is undesired call singleType() on the resulting subtree afterwards. """
-        subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition,reset_branches=False))
+        subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition))
 
         if subtree is None or len([k for k in subtree if k.branchType=='leaf'])==0:
             return None
@@ -256,17 +292,20 @@ class tree: ## tree class
 
         print('\nNumbers of objects in tree: %d (%d nodes and %d leaves)\n'%(len(obs),len(nodes),len(self.getExternal()))) ## report numbers of different objects in the tree
 
-    def traverse_tree(self,cur_node=None,include_condition=lambda k:k.branchType=='leaf',traverse_condition=lambda k:True,collect=None,reset_branches=True,verbose=False):
-        if reset_branches:
-            for k in self.Objects: ## reset various parameters
-                if k.branchType=='node':
-                    k.leaves=set()
-                    k.childHeight=None
-                k.height=None
-
+    def traverse_tree(self,cur_node=None,include_condition=None,traverse_condition=None,collect=None,verbose=False):
         if cur_node==None: ## if no starting point defined - start from root
             if verbose==True: print('Initiated traversal from root')
             cur_node=self.root
+
+            if traverse_condition==None and include_condition==None: ## reset heights if traversing from scratch
+                for k in self.Objects: ## reset various parameters
+                    if k.branchType=='node':
+                        k.leaves=set()
+                        k.childHeight=None
+                    k.height=None
+
+        if traverse_condition==None: traverse_condition=lambda k: True
+        if include_condition==None: include_condition=lambda k: k.branchType=='leaf'
 
         if collect==None: ## initiate collect list if not initiated
             collect=[]
@@ -287,7 +326,7 @@ class tree: ## tree class
         elif cur_node.branchType=='node': ## cur_node is node
             for child in filter(traverse_condition,cur_node.children): ## only traverse through children we're interested
                 if verbose==True: print('visiting child %s'%(child.index))
-                self.traverse_tree(cur_node=child,include_condition=include_condition,traverse_condition=traverse_condition,verbose=verbose,collect=collect,reset_branches=False) ## recurse through children
+                self.traverse_tree(cur_node=child,include_condition=include_condition,traverse_condition=traverse_condition,verbose=verbose,collect=collect) ## recurse through children
                 if verbose==True: print('child %s done'%(child.index))
             assert len(cur_node.children)>0, 'Tried traversing through hanging node without children. Index: %s'%(cur_node.index)
             cur_node.childHeight=max([child.childHeight if child.branchType=='node' else child.height for child in cur_node.children])
@@ -983,7 +1022,7 @@ def make_tree(data,ll=None,verbose=False):
     """
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)',
-        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"]+)(\'|\"|)*(\[)*'
+        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*'
     }
     if isinstance(data,str)==False: ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
