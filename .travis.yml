@@ -1,5 +1,7 @@
 language: python
 
+cache: pip
+
 python:
   - "3.4"
   - "3.5"
@@ -10,6 +12,6 @@ python:
 
 install:
   - pip install -r requirements.txt
-
+  - pip install .
 script: 
   - pytest ./tests/testsuite.py
