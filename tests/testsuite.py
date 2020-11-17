@@ -6,11 +6,11 @@ class test_parsers(unittest.TestCase):
     def test_beast1_traits(self):
         print('Testing BEAST v1 trait parsing')
 
-        ll=bt.loadNexus('./data/InfB_HAt_ALLs1.mcc.tree',tip_regex='_([0-9-]+)')
+        ll=bt.loadNexus('./data/miniFluB.mcc.tree',tip_regex='_([0-9-]+)')
 
         ll.traverse_tree()
         print('Test if branches have correct number of traits')
-        assert len(ll.root.traits)==34
+        assert len(ll.root.traits)==77
         print('Root has correct number of traits')
 
         for k in ll.Objects:
@@ -23,7 +23,7 @@ class test_parsers(unittest.TestCase):
 
     def test_beast2_traits(self):
         print('Testing BEAST v2 trait parsing')
-        ll=bt.loadNexus('./data/MERS_274_sCoal.combinedTyped.mcc.tree')
+        ll=bt.loadNexus('./data/MERS.mcc.tree')
 
         ll.traverse_tree()
         print('Test if branches have correct number of traits')
