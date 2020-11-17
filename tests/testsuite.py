@@ -6,7 +6,7 @@ class test_parsers(unittest.TestCase):
     def test_beast1_traits(self):
         print('Testing BEAST v1 trait parsing')
 
-        ll=bt.loadNexus('./data/miniFluB.mcc.tree',tip_regex='_([0-9-]+)')
+        ll=bt.loadNexus('./tests/data/miniFluB.mcc.tree',tip_regex='_([0-9-]+)')
 
         ll.traverse_tree()
         print('Test if branches have correct number of traits')
@@ -23,7 +23,7 @@ class test_parsers(unittest.TestCase):
 
     def test_beast2_traits(self):
         print('Testing BEAST v2 trait parsing')
-        ll=bt.loadNexus('./data/MERS.mcc.tree')
+        ll=bt.loadNexus('./tests/data/MERS.mcc.tree')
 
         ll.traverse_tree()
         print('Test if branches have correct number of traits')
@@ -39,7 +39,7 @@ class test_parsers(unittest.TestCase):
         print('Branches have correct number of traits')
 
     def test_newick(self):
-        tree = bt.loadNewick('./data/zika.nwk')
+        tree = bt.loadNewick('./tests/data/zika.nwk')
         expected_num_nodes = 564
         assert len(tree.Objects) == expected_num_nodes, 'Newick tree does not contain correct number of nodes. Expected: {}. Observed: {}'.format(expected_num_nodes, len(tree.Objects))
         max_height = round(max([i.height for i in tree.Objects]), 4)
@@ -47,7 +47,7 @@ class test_parsers(unittest.TestCase):
         assert max_height == expected_height, 'Newick tree height is not correct. Expected: {}. Observed: {}'.format(expected_height, max_height)
 
     def test_nexus(self):
-        tree = bt.loadNexus('./data/2020-04-13_treetime/divergence_tree.nexus')
+        tree = bt.loadNexus('./tests/data/2020-04-13_treetime/divergence_tree.nexus')
         tree.treeStats()
         pass
 
