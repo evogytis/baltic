@@ -1,2 +1,2 @@
-numpy>=1.17
+numpy>=1.16
 matplotlib>=2.0.0 ## due to import of LineCollections
