@@ -344,25 +344,17 @@ class tree: ## tree class
             # k.name=d[k.numName] ## change its name
             k.name=d[k.name] ## change its name
 
-    def sortBranches(self,descending=True):
+    def sortBranches(self,descending=True,sort_function=None):
         """ Sort descendants of each node. """
-        if descending==True:
-            modifier=-1 ## define the modifier for sorting function later
-        elif descending==False:
-            modifier=1
+        mod=-1 if descending else 0
+        if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
 
         for k in self.getInternal(): ## iterate over nodes
-            ## split node's offspring into nodes and leaves, sort each list individually
-            nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:(-len(q.leaves)*modifier,q.length*modifier))
-            leaves=sorted([x for x in k.children if x.branchType=='leaf'],key=lambda q:q.length*modifier)
+            k.children=sorted(k.children,key=sort_function)
 
-            if modifier==1: ## if sorting one way - nodes come first, leaves later
-                k.children=nodes+leaves
-            elif modifier==-1: ## otherwise sort the other way
-                k.children=leaves+nodes
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
 
-    def drawTree(self,order=None,width_function=None,verbose=False):
+    def drawTree(self,order=None,width_function=None,pad_nodes=None,verbose=False):
         """ Find x and y coordinates of each branch. """
         if order==None:
             order=self.traverse_tree() ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
@@ -383,42 +375,57 @@ class tree: ## tree class
             k.x=None
             k.y=None
 
+        drawn={} ## drawn keeps track of what's been drawn
+        for k in order: ## iterate over tips
+            x=k.height ## x position is height
+            y_idx=name_order[k.name] ## assign y index
+            y=sum(skips[y_idx:])-skips[y_idx]/2.0 ## sum across skips to find y position
+
+            k.x=x ## set x and y coordinates
+            k.y=y
+            drawn[k.index]=None ## remember that this objects has been drawn
+
+        if pad_nodes!=None: ## will be padding nodes
+            for n in pad_nodes: ## iterate over nodes whose descendants will be padded
+                idx=sorted([name_order[lf] for lf in n.leaves]) if n.is_node() else [order.index(n)] ## indices of all tips to be padded
+                for i,k in enumerate(order): ## iterate over all tips
+
+                    if i<idx[0]: ## tip below clade
+                        k.y+=pad_nodes[n] ## pad
+
+                    if (i-1)<idx[-1]: ## tip above clade
+                        k.y+=pad_nodes[n] ## pad again
+
+            all_ys=filter(None,self.getParameter('y')) ## get all y positions in tree that aren't None
+            minY=min(all_ys) ## get min
+            for k in self.getExternal(): ## reset y positions so tree starts at y=0.5
+                k.y-=minY-0.5
+
         assert len(self.getExternal())==len(order),'Number of tips in tree does not match number of unique tips, check if two or more collapsed clades were assigned the same name.'
         storePlotted=0
-        drawn={} ## drawn keeps track of what's been drawn
+
         while len(drawn)!=len(self.Objects): # keep drawing the tree until everything is drawn
             if verbose==True: print('Drawing iteration %d'%(len(drawn)))
-            for k in filter(lambda w:w.index not in drawn,self.getExternal()+self.getInternal()): ## iterate through objects that have not been drawn
-                if k.branchType=='leaf': ## if leaf - get position of leaf, draw branch connecting tip to parent node
-                    if verbose==True: print('Setting leaf %s y coordinate to'%(k.index)),
+            for k in filter(lambda w:w.index not in drawn,self.getInternal()): ## iterate through internal nodes that have not been drawn
+                if len([q.y for q in k.children if q.y!=None])==len(k.children): ## all y coordinates of children known
+                    if verbose==True: print('Setting node %s coordinates to'%(k.index)),
                     x=k.height ## x position is height
-                    y_idx=name_order[k.name]
-                    y=sum(skips[y_idx:])-skips[y_idx]/2.0 ## sum across skips to find y position
-                    k.x=x ## set x and y coordinates
+                    children_y_coords=[q.y for q in k.children if q.y!=None] ## get all existing y coordinates of the node
+                    y=sum(children_y_coords)/float(len(children_y_coords)) ## internal branch is in the middle of the vertical bar
+                    k.x=x
                     k.y=y
                     drawn[k.index]=None ## remember that this objects has been drawn
                     if verbose==True: print('%s (%s branches drawn)'%(k.y,len(drawn)))
-                    if k.parent and hasattr(k.parent,'yRange')==False: ## if parent doesn't have a maximum extent of its children's y coordinates
-                        setattr(k.parent,'yRange',[k.y,k.y]) ## assign it
-
-                if k.branchType=='node': ## if parent is non-root node and y positions of all its children are known
-                    if len([q.y for q in k.children if q.y!=None])==len(k.children):
-                        if verbose==True: print('Setting node %s coordinates to'%(k.index)),
-                        x=k.height ## x position is height
-                        children_y_coords=[q.y for q in k.children if q.y!=None] ## get all existing y coordinates of the node
-                        y=sum(children_y_coords)/float(len(children_y_coords)) ## internal branch is in the middle of the vertical bar
-                        k.x=x
-                        k.y=y
-                        drawn[k.index]=None ## remember that this objects has been drawn
-                        if verbose==True: print('%s (%s branches drawn)'%(k.y,len(drawn)))
-                        minYrange=min([min(child.yRange) if child.branchType=='node' else child.y for child in k.children]) ## get lowest y coordinate across children
-                        maxYrange=max([max(child.yRange) if child.branchType=='node' else child.y for child in k.children]) ## get highest y coordinate across children
-                        setattr(k,'yRange',[minYrange,maxYrange]) ## assign the maximum extent of children's y coordinates
+                    minYrange=min([min(child.yRange) if child.branchType=='node' else child.y for child in k.children]) ## get lowest y coordinate across children
+                    maxYrange=max([max(child.yRange) if child.branchType=='node' else child.y for child in k.children]) ## get highest y coordinate across children
+                    setattr(k,'yRange',[minYrange,maxYrange]) ## assign the maximum extent of children's y coordinates
 
             if len(self.Objects)>len(drawn):
-                assert len(drawn)>storePlotted,'Got stuck trying to find y positions of objects (%d branches drawn this iteration, %d branches during previous iteration out of %d total)'%(len(drawn),storePlotted,len(self.Objects))
-            storePlotted=len(drawn)
-            self.ySpan=sum(skips)
+                assert len(drawn)>storePlotted,'Got stuck trying to find y positions of objects (%d branches drawn this iteration, %d branches during previous iteration out of %d total)'%(len(drawn),storePlotted,len(tree.Objects))
+            storePlotted=len(drawn) ## remember how many branches were drawn this iteration
+
+        yvalues=[k.y for k in self.Objects] ## all y values
+        self.ySpan=max(yvalues)-min(yvalues)+min(yvalues)*2 ## determine appropriate y axis span of tree
 
         if self.root.branchType=='node':
             self.root.x=min([q.x-q.length for q in self.root.children if q.x!=None]) ## set root x and y coordinates

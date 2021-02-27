@@ -8,7 +8,7 @@ with open("requirements.txt") as fh:
 
 setup(
     name="baltic",
-    version="0.1.5",
+    version="0.1.6",
     packages=find_packages(),
     url="https://github.com/evogytis/baltic",
     download_url="https://github.com/evogytis/baltic/archive/v0.1.5.tar.gz",
