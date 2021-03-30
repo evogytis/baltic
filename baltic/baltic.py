@@ -1133,11 +1133,15 @@ def make_tree(data,ll=None,verbose=False):
             for val in treelist:
                 tr,val=val.split('=')
                 tr=tr[1:]
-                microcerberus=re.findall('{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
+                microcerberus = []
+                if val.count(",") == 2:
+                    microcerberus=re.findall('{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
+                elif val.count(",") == 3:
+                    microcerberus=re.findall('{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
                 ll.cur_node.traits[tr]=[]
                 for val in microcerberus:
-                    codon,timing,start,end=val.split(',')
-                    ll.cur_node.traits[tr].append((int(codon),float(timing),start,end))
+                    val_split = val.split(',')
+                    ll.cur_node.traits[tr].append(val.split(","))
 
             for vals in sets:
                 tr,val=vals.split('=')
