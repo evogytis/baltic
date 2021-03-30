@@ -140,7 +140,7 @@ class leaf: ## leaf class
         self.y=None ## position of tip on y axis if the tip were to be plotted
 
     def is_leaflike(self):
-        return True
+        return False
 
     def is_leaf(self):
         return True
@@ -178,7 +178,7 @@ class tree: ## tree class
             self.root=new_node
 
         new_node.parent=self.cur_node ## new node's parent is current node
-        assert self.cur_node.branchType=='node', 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
+        assert self.cur_node.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
         self.cur_node.children.append(new_node) ## new node is a child of current node
         self.cur_node=new_node ## current node is now new node
         self.Objects.append(self.cur_node) ## add new node to list of objects in the tree
@@ -190,7 +190,7 @@ class tree: ## tree class
         if self.root is None: self.root=new_leaf
 
         new_leaf.parent=self.cur_node ## leaf's parent is current node
-        assert self.cur_node.branchType=='node', 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
+        assert self.cur_node.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
         self.cur_node.children.append(new_leaf) ## assign leaf to parent's children
         new_leaf.name=name
         self.cur_node=new_leaf ## current node is now new leaf
@@ -205,7 +205,7 @@ class tree: ## tree class
             If this is undesired call singleType() on the resulting subtree afterwards. """
         subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition))
 
-        if subtree is None or len([k for k in subtree if k.branchType=='leaf'])==0:
+        if subtree is None or len([k for k in subtree if k.is_leaf()])==0:
             return None
         else:
             local_tree=tree() ## create a new tree object where the subtree will be
@@ -234,9 +234,9 @@ class tree: ## tree class
 
     def singleType(self):
         """ Removes any branches with a single child (multitype nodes). """
-        multiTypeNodes=[k for k in self.Objects if k.branchType=='node' and len(k.children)==1]
+        multiTypeNodes=[k for k in self.Objects if k.is_node() and len(k.children)==1]
         while len(multiTypeNodes)>0:
-            multiTypeNodes=[k for k in self.Objects if k.branchType=='node' and len(k.children)==1]
+            multiTypeNodes=[k for k in self.Objects if k.is_node() and len(k.children)==1]
 
             for k in sorted(multiTypeNodes,key=lambda x:-x.height):
                 child=k.children[0] ## fetch child
@@ -299,13 +299,13 @@ class tree: ## tree class
 
             if traverse_condition==None and include_condition==None: ## reset heights if traversing from scratch
                 for k in self.Objects: ## reset various parameters
-                    if k.branchType=='node':
+                    if k.is_node():
                         k.leaves=set()
                         k.childHeight=None
                     k.height=None
 
         if traverse_condition==None: traverse_condition=lambda k: True
-        if include_condition==None: include_condition=lambda k: k.branchType=='leaf'
+        if include_condition==None: include_condition=lambda k: k.is_leaf()
 
         if collect==None: ## initiate collect list if not initiated
             collect=[]
@@ -320,21 +320,22 @@ class tree: ## tree class
         if include_condition(cur_node): ## test if interested in cur_node
             collect.append(cur_node) ## add to collect list for reporting later
 
-        if cur_node.branchType=='leaf' and self.root!=cur_node: ## cur_node is a tip (and tree is not single tip)
+        if cur_node.is_leaf() and self.root!=cur_node: ## cur_node is a tip (and tree is not single tip)
             cur_node.parent.leaves.add(cur_node.name) ## add to parent's list of tips
 
-        elif cur_node.branchType=='node': ## cur_node is node
+        elif cur_node.is_node(): ## cur_node is node
             for child in filter(traverse_condition,cur_node.children): ## only traverse through children we're interested
                 if verbose==True: print('visiting child %s'%(child.index))
                 self.traverse_tree(cur_node=child,include_condition=include_condition,traverse_condition=traverse_condition,verbose=verbose,collect=collect) ## recurse through children
                 if verbose==True: print('child %s done'%(child.index))
             assert len(cur_node.children)>0, 'Tried traversing through hanging node without children. Index: %s'%(cur_node.index)
-            cur_node.childHeight=max([child.childHeight if child.branchType=='node' else child.height for child in cur_node.children])
+            cur_node.childHeight=max([child.childHeight if child.is_node() else child.height for child in cur_node.children])
 
             if cur_node.parent:
                 cur_node.parent.leaves=cur_node.parent.leaves.union(cur_node.leaves) ## pass tips seen during traversal to parent
             self.treeHeight=cur_node.childHeight ## it's the highest child of the starting node
         return collect
+
 
     def renameTips(self,d=None):
         """ Give each tip its correct label using a dictionary. """
@@ -416,8 +417,8 @@ class tree: ## tree class
                     k.y=y
                     drawn[k.index]=None ## remember that this objects has been drawn
                     if verbose==True: print('%s (%s branches drawn)'%(k.y,len(drawn)))
-                    minYrange=min([min(child.yRange) if child.branchType=='node' else child.y for child in k.children]) ## get lowest y coordinate across children
-                    maxYrange=max([max(child.yRange) if child.branchType=='node' else child.y for child in k.children]) ## get highest y coordinate across children
+                    minYrange=min([min(child.yRange) if child.is_node() else child.y for child in k.children]) ## get lowest y coordinate across children
+                    maxYrange=max([max(child.yRange) if child.is_node() else child.y for child in k.children]) ## get highest y coordinate across children
                     setattr(k,'yRange',[minYrange,maxYrange]) ## assign the maximum extent of children's y coordinates
 
             if len(self.Objects)>len(drawn):
@@ -427,7 +428,7 @@ class tree: ## tree class
         yvalues=[k.y for k in self.Objects] ## all y values
         self.ySpan=max(yvalues)-min(yvalues)+min(yvalues)*2 ## determine appropriate y axis span of tree
 
-        if self.root.branchType=='node':
+        if self.root.is_node():
             self.root.x=min([q.x-q.length for q in self.root.children if q.x!=None]) ## set root x and y coordinates
             children_y_coords=[q.y for q in self.root.children if q.y!=None]
             self.root.y=sum(children_y_coords)/float(len(children_y_coords))
@@ -447,7 +448,7 @@ class tree: ## tree class
                 k.x=0.0
                 k.y=0.0
 
-        if n.branchType=='leaf':
+        if n.is_leaf():
             w=2*math.pi*1.0/float(total)
         else:
             w=2*math.pi*len(n.leaves)/float(total)
@@ -460,9 +461,9 @@ class tree: ## tree class
         n.y = n.parent.y + n.length * math.sin(n.traits['tau'] + w*0.5)
         eta=n.traits['tau']
 
-        if n.branchType=='node':
+        if n.is_node():
             for ch in n.children:
-                if ch.branchType=='leaf':
+                if ch.is_leaf():
                     w=2*math.pi*1.0/float(total)
                 else:
                     w=2*math.pi*len(ch.leaves)/float(total)
@@ -486,7 +487,7 @@ class tree: ## tree class
 
     def collapseSubtree(self,cl,givenName,verbose=False,widthFunction=lambda k:len(k.leaves)):
         """ Collapse an entire subtree into a clade object. """
-        assert cl.branchType=='node','Cannot collapse non-node class'
+        assert cl.is_node(),'Cannot collapse non-node class'
         collapsedClade=clade(givenName)
         collapsedClade.index=cl.index
         collapsedClade.leaves=cl.leaves
@@ -542,7 +543,7 @@ class tree: ## tree class
         """
         newTree=copy.deepcopy(self) ## work on a copy of the tree
         if len(designated_nodes)==0: ## no nodes were designated for deletion - relying on anonymous function to collapse nodes
-            nodes_to_delete=list(filter(lambda n: n.branchType=='node' and collapseIf(n)==True and n!=newTree.root, newTree.Objects)) ## fetch a list of all nodes who are not the root and who satisfy the condition
+            nodes_to_delete=list(filter(lambda n: n.is_node() and collapseIf(n)==True and n!=newTree.root, newTree.Objects)) ## fetch a list of all nodes who are not the root and who satisfy the condition
         else:
             assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
             assert len([w for w in designated_nodes if w!=newTree.root])==0,'Root node was designated for deletion'
@@ -572,7 +573,7 @@ class tree: ## tree class
                 nodes_to_delete.remove(k) ## in fact, the node never existed
 
                 if len(designated_nodes)==0:
-                    nodes_to_delete==list(filter(lambda n: n.branchType=='node' and collapseIf(n)==True and n!=newTree.root, newTree.Objects))
+                    nodes_to_delete==list(filter(lambda n: n.is_node() and collapseIf(n)==True and n!=newTree.root, newTree.Objects))
                 else:
                     assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
                     assert len([w for w in designated_nodes if w!=newTree.root])==0,'Root node was designated for deletion'
@@ -623,7 +624,7 @@ class tree: ## tree class
                         if verbose==True: print('adding range comment %s'%(comment[-1]))
                 elif verbose==True: print('trait %s unavailable for %s (%s)'%(tr,cur_node.index,cur_node.branchType))
 
-        if cur_node.branchType=='node':
+        if cur_node.is_node():
             if verbose==True: print('node: %s'%(cur_node.index))
             string_fragment.append('(')
             traverseChildren=list(filter(traverse_condition,cur_node.children))
@@ -635,7 +636,7 @@ class tree: ## tree class
                     string_fragment.append(',')
             string_fragment.append(')') ## last child, node terminates
 
-        elif cur_node.branchType=='leaf':
+        elif cur_node.is_leaf():
             if rename==None:
                 treeName=cur_node.name ## designated numName
             else:
@@ -682,7 +683,7 @@ class tree: ## tree class
         Returns a new baltic tree object.
         """
         assert len(keep)>0,"No tips given to reduce the tree to."
-        assert len([k for k in keep if k.branchType!='leaf'])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.branchType!='leaf']))
+        assert len([k for k in keep if k.is_leaf()])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.is_leaf()==False]))
         if verbose==True: print("Preparing branch hash for keeping %d branches"%(len(keep)))
         branch_hash={k.index:k for k in keep}
         embedding=[]
@@ -697,7 +698,7 @@ class tree: ## tree class
                     embedding.append(cur_b) ## keep track of the path to root
                     cur_b=cur_b.parent
         embedding.append(reduced_tree.root) ## add root to embedding
-        if verbose==True: print("Finished extracting embedding with %s branches (%s tips, %s nodes)"%(len(embedding),len([w for w in embedding if w.branchType=='leaf']),len([w for w in embedding if w.branchType=='node'])))
+        if verbose==True: print("Finished extracting embedding with %s branches (%s tips, %s nodes)"%(len(embedding),len([w for w in embedding if w.is_leaf()]),len([w for w in embedding if w.is_node()])))
         embedding=set(embedding) ## prune down to only unique branches
 
         reduced_tree.Objects=sorted(list(embedding),key=lambda x:x.height) ## assign branches that are kept to new tree's Objects
@@ -722,7 +723,7 @@ class tree: ## tree class
         Get all branches whose branchType is "leaf".
         A function can be provided to filter internal nodes according to an additional property.
         """
-        externals=list(filter(secondFilter,filter(lambda k:k.branchType=='leaf',self.Objects)))
+        externals=list(filter(secondFilter,filter(lambda k: k.is_leaf(),self.Objects)))
         return externals
 
     def getInternal(self,secondFilter=None):
@@ -730,7 +731,7 @@ class tree: ## tree class
         Get all branches whose branchType is "node".
         A function can be provided to filter internal nodes according to an additional property.
         """
-        internals=list(filter(secondFilter,filter(lambda k:k.branchType=='node',self.Objects)))
+        internals=list(filter(secondFilter,filter(lambda k: k.is_node(),self.Objects)))
         return internals
 
     def getBranches(self,attrs=lambda x:True,warn=True):
@@ -765,7 +766,7 @@ class tree: ## tree class
         """
         Remove internal nodes without any children.
         """
-        hangingCondition=lambda k:k.branchType=='node' and len(k.children)==0
+        hangingCondition=lambda k: k.is_node() and len(k.children)==0
         hangingNodes=list(filter(hangingCondition,self.Objects)) ## check for nodes without any children (hanging nodes)
         while len(hangingNodes)>0:
             for h in sorted(hangingNodes,key=lambda x:-x.height):
@@ -775,7 +776,7 @@ class tree: ## tree class
             hangingNodes=list(filter(hangingCondition,self.Objects)) ## regenerate list
 
     def addText(self,ax,target=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
-        if target==None: target=lambda k: k.branchType=='leaf'
+        if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k: k.x
         if y_attr==None: y_attr=lambda k: k.y
         if text==None: text=lambda k: k.name
@@ -788,7 +789,7 @@ class tree: ## tree class
 
     def plotPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
-        if target==None: target=lambda k: k.branchType=='leaf'
+        if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
         if size==None: size=40
@@ -853,7 +854,7 @@ class tree: ## tree class
 
             if connection_type=='baltic':
                 branches.append(((xp,y),(x,y)))
-                if k.branchType=='node':
+                if k.is_node():
                     yl,yr=y_attr(k.children[0]),y_attr(k.children[-1])
                     branches.append(((x,yl),(x,yr)))
                     linewidths.append(linewidths[-1])
@@ -909,7 +910,7 @@ class tree: ## tree class
             Y=math.cos(y)
             branches.append(((X*xp,Y*xp),(X*x,Y*x)))
 
-            if k.branchType=='node':
+            if k.is_node():
                 yl,yr=y_attr(k.children[0]),y_attr(k.children[-1]) ## get leftmost and rightmost children's y coordinates
                 yl=circ_s+circ*yl/self.ySpan ## transform y into a fraction of total y
                 yr=circ_s+circ*yr/self.ySpan
@@ -929,7 +930,7 @@ class tree: ## tree class
 
     def plotCircularPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
-        if target==None: target=lambda k: k.branchType=='leaf'
+        if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
         if size==None: size=40
@@ -1008,7 +1009,7 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
                 if len(k.children)>=10: raise RuntimeWarning('Node is too polytomic and untangling will take an astronomically long time')
                 if verbose==True: print(len(k.children))
                 for permutation in permutations(k.children): ## iterate over permutations of node's children
-                    clade_order=sum([[child.name] if child.branchType=='leaf' else list(child.leaves) for child in permutation],[]) ## flat list of tip names as they would appear in permutation order
+                    clade_order=sum([[child.name] if child.is_leaf() else list(child.leaves) for child in permutation],[]) ## flat list of tip names as they would appear in permutation order
                     new_y_positions={clade_order[i]: clade_y_positions[i] for i in range(len(clade_y_positions))} ## assign available y positions in order
 
                     tip_costs=list(map(cost_function,[(y_positions[tree1][tip],new_y_positions[tip]) for tip in clade_order if tip in y_positions[tree1]]))
@@ -1062,12 +1063,12 @@ def make_tree(data,ll=None,verbose=False):
             ll.add_leaf(i,cerberus.group(3).strip('"').strip("'"))  ## add tip
             i+=len(cerberus.group(3))+cerberus.group().count("'")+cerberus.group().count('"') ## advance in tree string by however many characters the tip is encoded
 
-        cerberus=re.match('\)([0-9]+)\[',data[i-1:i+100]) ## look for multitype tree singletons.
+        cerberus=re.match(r'\)([0-9]+)\[',data[i-1:i+100]) ## look for multitype tree singletons.
         if cerberus is not None:
             if verbose==True: print('%d adding multitype node %s'%(i,cerberus.group(1)))
             i+=len(cerberus.group(1))
 
-        cerberus=re.match('[\(,](#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for beginning of reticulate branch
+        cerberus=re.match(r'[\(,](#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for beginning of reticulate branch
         if cerberus is not None:
             if verbose==True: print('%d adding outgoing reticulation branch %s'%(i,cerberus.group(1)))
             ll.add_reticulation(cerberus.group(1)) ## add reticulate branch
@@ -1087,7 +1088,7 @@ def make_tree(data,ll=None,verbose=False):
                 if verbose==True: print('destination of %s not identified yet'%(cerberus.group(1)))
             i+=len(cerberus.group())-1
 
-        cerberus=re.match('\)(#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for landing point of reticulate branch
+        cerberus=re.match(r'\)(#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for landing point of reticulate branch
         if cerberus is not None:
             if verbose==True: print('%d adding incoming reticulation branch %s'%(i,cerberus.group(1)))
             ll.cur_node.traits['label']=cerberus.group(1) ## set node label
@@ -1107,7 +1108,7 @@ def make_tree(data,ll=None,verbose=False):
                 if verbose==True: print('origin of %s not identified yet'%(cerberus.group(1)))
             i+=len(cerberus.group())-1
 
-        cerberus=re.match('(\:)*\[(&[A-Za-z\_\-{}\,0-9\.\%=\"\'\+!# :\/\(\)\&]+)\]',data[i:])## look for MCC comments
+        cerberus=re.match(r'(\:)*\[(&[A-Za-z\_\-{}\,0-9\.\%=\"\'\+!# :\/\(\)\&]+)\]',data[i:])## look for MCC comments
         if cerberus is not None:
             if verbose==True: print('%d comment: %s'%(i,cerberus.group(2)))
             comment=cerberus.group(2)
@@ -1135,9 +1136,9 @@ def make_tree(data,ll=None,verbose=False):
                 tr=tr[1:]
                 microcerberus = []
                 if val.count(",") == 2:
-                    microcerberus=re.findall('{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
+                    microcerberus=re.findall(r'{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
                 elif val.count(",") == 3:
-                    microcerberus=re.findall('{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
+                    microcerberus=re.findall(r'{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
                 ll.cur_node.traits[tr]=[]
                 for val in microcerberus:
                     val_split = val.split(',')
@@ -1164,14 +1165,14 @@ def make_tree(data,ll=None,verbose=False):
 
             i+=len(cerberus.group()) ## advance in tree string by however many characters it took to encode labels
 
-        cerberus=re.match('([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
+        cerberus=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
         if cerberus is not None:
             if verbose==True: print('old school comment found: %s'%(cerberus.group(1)))
             ll.cur_node.traits['label']=cerberus.group(1)
 
             i+=len(cerberus.group(1))
 
-        microcerberus=re.match('(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
+        microcerberus=re.match(r'(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
         if microcerberus is not None:
             if verbose==True: print('adding branch length (%d) %.6f'%(i,float(microcerberus.group(2))))
             ll.cur_node.length=float(microcerberus.group(2)) ## set branch length of current node

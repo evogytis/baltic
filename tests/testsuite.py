@@ -1,8 +1,11 @@
 import unittest
-import baltic as bt
+import importlib.util
+spec = importlib.util.spec_from_file_location("baltic", "baltic/baltic.py")
+bt = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(bt)
 
 class test_parsers(unittest.TestCase):
-
+    
     def test_beast1_traits(self):
         print('Testing BEAST v1 trait parsing')
 
@@ -39,6 +42,7 @@ class test_parsers(unittest.TestCase):
         print('Branches have correct number of traits')
 
     def test_newick(self):
+
         tree = bt.loadNewick('./tests/data/zika.nwk')
         expected_num_nodes = 564
         assert len(tree.Objects) == expected_num_nodes, 'Newick tree does not contain correct number of nodes. Expected: {}. Observed: {}'.format(expected_num_nodes, len(tree.Objects))
@@ -47,6 +51,7 @@ class test_parsers(unittest.TestCase):
         assert max_height == expected_height, 'Newick tree height is not correct. Expected: {}. Observed: {}'.format(expected_height, max_height)
 
     def test_nexus(self):
+
         tree = bt.loadNexus('./tests/data/2020-04-13_treetime/divergence_tree.nexus')
         tree.treeStats()
         pass
