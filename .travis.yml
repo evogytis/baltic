@@ -3,7 +3,6 @@ language: python
 cache: pip
 
 python:
-  - "3.4"
   - "3.5"
   - "3.6"      # current default Python on Travis CI
   - "3.7"
