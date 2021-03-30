@@ -20,7 +20,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=requirements,
-    python_requires=">=3.4.*",
+    python_requires=">=3.5.*",
     include_package_data=False,
     zip_safe=False,
     # classifiers=[],
