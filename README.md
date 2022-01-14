@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/evogytis/baltic.svg?branch=master)](https://travis-ci.com/evogytis/baltic)
+
 # baltic
 
 baltic is a Python library for parsing phylogenetic trees. It takes newick, Nexus or nextstrain JSON trees and allows you to manipulate, explore and visualise them. baltic stands for Backronymed Adaptable Lightweight Tree Import Code if you like that sort of thing.
