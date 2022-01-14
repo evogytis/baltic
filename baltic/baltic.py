@@ -305,7 +305,7 @@ class tree: ## tree class
             # k.name=d[k.numName] ## change its name
             k.name=d[k.name] ## change its name
 
-    def sortBranches(self,descending=True):
+    def sortBranches(self,descending=True, sortByHeight=True):
         """ Sort descendants of each node. """
         if descending==True:
             modifier=-1 ## define the modifier for sorting function later
@@ -313,14 +313,21 @@ class tree: ## tree class
             modifier=1
 
         for k in self.getInternal(): ## iterate over nodes
-            ## split node's offspring into nodes and leaves, sort each list individually
-            nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:(-len(q.leaves)*modifier,q.length*modifier))
-            leaves=sorted([x for x in k.children if x.branchType=='leaf'],key=lambda q:q.length*modifier)
-
-            if modifier==1: ## if sorting one way - nodes come first, leaves later
-                k.children=nodes+leaves
-            elif modifier==-1: ## otherwise sort the other way
-                k.children=leaves+nodes
+            if sortByHeight: # Sort nodes by height and group nodes and leaves together
+                ## split node's offspring into nodes and leaves, sort each list individually
+                nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:(-len(q.leaves)*modifier,q.length*modifier))
+                leaves=sorted([x for x in k.children if x.branchType=='leaf'],key=lambda q:q.length*modifier)
+                if modifier==1: ## if sorting one way - nodes come first, leaves later
+                    k.children=nodes+leaves
+                elif modifier==-1: ## otherwise sort the other way
+                    k.children=leaves+nodes
+            else: # Do not sort by height. Retain leaves at original positions. Only sort nodes
+                leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.branchType=="leaf"] # Get original indices of leaves
+                nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:-len(q.leaves)*modifier) # Sort nodes only by number of descendants
+                children = nodes
+                for i in leavesIdx: # Insert leaves back into same positions
+                    children.insert(i[1], i[0])
+                k.children = children
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def drawTree(self,order=None,width_function=None,verbose=False):
@@ -1166,7 +1173,7 @@ def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
             ll.cur_node=ll.cur_node.parent
     return ll
 
-def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',variableDate=True,absoluteTime=False,verbose=False):
+def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',variableDate=True,absoluteTime=False,verbose=False, sortBranches = True):
     """
     Load newick file
     """
@@ -1185,7 +1192,8 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
 
     assert ll,'Regular expression failed to find tree string'
     ll.traverse_tree(verbose=verbose) ## traverse tree
-    ll.sortBranches() ## traverses tree, sorts branches, draws tree
+    if sortBranches: 
+        ll.sortBranches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime==True:
         tipDates=[]
@@ -1203,7 +1211,7 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
         handle.close()
     return ll
 
-def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False):
+def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False, sortBranches=True):
     """
     Load nexus file
     """
@@ -1245,7 +1253,8 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
 
     assert ll,'Regular expression failed to find tree string'
     ll.traverse_tree() ## traverse tree
-    ll.sortBranches() ## traverses tree, sorts branches, draws tree
+    if sortBranches:
+        ll.sortBranches() ## traverses tree, sorts branches, draws tree
     if len(tips)>0:
         ll.renameTips(tips) ## renames tips from numbers to actual names
         ll.tipMap=tips
