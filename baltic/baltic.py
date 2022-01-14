@@ -354,12 +354,13 @@ class tree: ## tree class
             for k in self.getInternal(): ## iterate over nodes
                 k.children=sorted(k.children,key=sort_function)
         else: # Do not sort by height. Retain leaves at original positions. Only sort nodes
-            leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.branchType=="leaf"] # Get original indices of leaves
-            nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:-len(q.leaves)*modifier) # Sort nodes only by number of descendants
-            children = nodes
-            for i in leavesIdx: # Insert leaves back into same positions
-                children.insert(i[1], i[0])
-            self.children = children
+            for k in self.getInternal():
+                leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.branchType=="leaf"] # Get original indices of leaves
+                nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:-len(q.leaves)*mod) # Sort nodes only by number of descendants
+                children = nodes
+                for i in leavesIdx: # Insert leaves back into same positions
+                    children.insert(i[1], i[0])
+                k.children = children
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def drawTree(self,order=None,width_function=None,pad_nodes=None,verbose=False):
