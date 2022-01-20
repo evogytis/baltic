@@ -346,17 +346,17 @@ class tree: ## tree class
             k.name=d[k.name] ## change its name
 
     def sortBranches(self,descending=True,sort_function=None,sortByHeight=True):
-        mod=-1 if descending else 0
+        mod=-1 if descending else -1
+        if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
         if sortByHeight: # Sort nodes by height and group nodes and leaves together
             """ Sort descendants of each node. """                
-            if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
 
             for k in self.getInternal(): ## iterate over nodes
                 k.children=sorted(k.children,key=sort_function)
         else: # Do not sort by height. Retain leaves at original positions. Only sort nodes
             for k in self.getInternal():
                 leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.branchType=="leaf"] # Get original indices of leaves
-                nodes=sorted([x for x in k.children if x.branchType=='node'],key=lambda q:-len(q.leaves)*mod) # Sort nodes only by number of descendants
+                nodes=sorted([x for x in k.children if x.branchType=='node'],key=sort_function) # Sort nodes only by number of descendants
                 children = nodes
                 for i in leavesIdx: # Insert leaves back into same positions
                     children.insert(i[1], i[0])
