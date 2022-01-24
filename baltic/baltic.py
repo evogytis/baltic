@@ -691,7 +691,7 @@ class tree: ## tree class
         Returns a new baltic tree object.
         """
         assert len(keep)>0,"No tips given to reduce the tree to."
-        assert len([k for k in keep if k.is_leaf()])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.is_leaf()==False]))
+        assert len([k for k in keep if not k.is_leaf()])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.is_leaf()==False]))
         if verbose==True: print("Preparing branch hash for keeping %d branches"%(len(keep)))
         branch_hash={k.index:k for k in keep}
         embedding=[]
