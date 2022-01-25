@@ -629,7 +629,14 @@ class tree: ## tree class
                             elif isinstance(val,float) or isinstance(val,int): ## float or integer
                                 rangeComment.append('%s'%(val))
                             elif isinstance(val, list): ## list of lists, example complete history annotated on tree
-                                rangeComment.append("{{'{}'}}".format("','".join(val)))
+                                transformed_vals = []
+                                for i in val:
+                                    try:
+                                        i = float(i)
+                                        transformed_vals.append(str(i))
+                                    except:
+                                        transformed_vals.append("'{}'".format(i))
+                                rangeComment.append("{{{}}}".format(",".join(transformed_vals)))
                         comment.append('%s={%s}'%(tr,','.join(rangeComment)))
                         if verbose==True: print('adding range comment %s'%(comment[-1]))
                 elif verbose==True: print('trait %s unavailable for %s (%s)'%(tr,cur_node.index,cur_node.branchType))
