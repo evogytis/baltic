@@ -349,7 +349,7 @@ class tree: ## tree class
         mod=-1 if descending else -1
         if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
         if sortByHeight: # Sort nodes by height and group nodes and leaves together
-            """ Sort descendants of each node. """                
+            """ Sort descendants of each node. """
 
             for k in self.getInternal(): ## iterate over nodes
                 k.children=sorted(k.children,key=sort_function)
@@ -443,23 +443,20 @@ class tree: ## tree class
         else:
             self.root.x=self.root.length
 
-    def drawUnrooted(self,n=None,total=None):
+    def drawUnrooted(self,rotate=0.0,n=None,total=None):
         """
         Calculate x and y coordinates in an unrooted arrangement.
         Code translated from https://github.com/nextstrain/auspice/commit/fc50bbf5e1d09908be2209450c6c3264f298e98c, written by Richard Neher.
         """
         if n==None:
-            total=sum([1 if isinstance(x,leaf) else x.width+1 for x in self.getExternal()])
+            total=sum([1 if x.is_leaf() else x.width+1 for x in self.getExternal()])
             n=self.root#.children[0]
             for k in self.Objects:
-                k.traits['tau']=0.0
+                k.traits['tau']=2*math.pi*rotate
                 k.x=0.0
                 k.y=0.0
 
-        if n.is_leaf():
-            w=2*math.pi*1.0/float(total)
-        else:
-            w=2*math.pi*len(n.leaves)/float(total)
+        w=2*math.pi*1.0/float(total) if n.is_leaf() else 2*math.pi*len(n.leaves)/float(total)
 
         if n.parent.x==None:
             n.parent.x=0.0
@@ -471,13 +468,11 @@ class tree: ## tree class
 
         if n.is_node():
             for ch in n.children:
-                if ch.is_leaf():
-                    w=2*math.pi*1.0/float(total)
-                else:
-                    w=2*math.pi*len(ch.leaves)/float(total)
+                w=2*math.pi*1.0/float(total) if ch.is_leaf() else 2*math.pi*len(ch.leaves)/float(total)
+
                 ch.traits['tau'] = eta
                 eta += w
-                self.drawUnrooted(ch,total)
+                self.drawUnrooted(rotate,ch,total)
 
     def commonAncestor(self,descendants,strict=False):
         """
@@ -1242,7 +1237,7 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
 
     assert ll,'Regular expression failed to find tree string'
     ll.traverse_tree(verbose=verbose) ## traverse tree
-    if sortBranches: 
+    if sortBranches:
         ll.sortBranches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime==True:
