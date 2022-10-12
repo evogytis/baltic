@@ -345,14 +345,22 @@ class tree: ## tree class
             # k.name=d[k.numName] ## change its name
             k.name=d[k.name] ## change its name
 
-    def sortBranches(self,descending=True,sort_function=None):
-        """ Sort descendants of each node. """
-        mod=-1 if descending else 0
+    def sortBranches(self,descending=True,sort_function=None,sortByHeight=True):
+        mod=-1 if descending else -1
         if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
+        if sortByHeight: # Sort nodes by height and group nodes and leaves together
+            """ Sort descendants of each node. """                
 
-        for k in self.getInternal(): ## iterate over nodes
-            k.children=sorted(k.children,key=sort_function)
-
+            for k in self.getInternal(): ## iterate over nodes
+                k.children=sorted(k.children,key=sort_function)
+        else: # Do not sort by height. Retain leaves at original positions. Only sort nodes
+            for k in self.getInternal():
+                leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.branchType=="leaf"] # Get original indices of leaves
+                nodes=sorted([x for x in k.children if x.branchType=='node'],key=sort_function) # Sort nodes only by number of descendants
+                children = nodes
+                for i in leavesIdx: # Insert leaves back into same positions
+                    children.insert(i[1], i[0])
+                k.children = children
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def drawTree(self,order=None,width_function=None,pad_nodes=None,verbose=False):
@@ -620,6 +628,8 @@ class tree: ## tree class
                                 rangeComment.append('"%s"'%(val))
                             elif isinstance(val,float) or isinstance(val,int): ## float or integer
                                 rangeComment.append('%s'%(val))
+                            elif isinstance(val, list): ## list of lists, example complete history annotated on tree
+                                rangeComment.append("{{{}}}".format(",".join(val)))
                         comment.append('%s={%s}'%(tr,','.join(rangeComment)))
                         if verbose==True: print('adding range comment %s'%(comment[-1]))
                 elif verbose==True: print('trait %s unavailable for %s (%s)'%(tr,cur_node.index,cur_node.branchType))
@@ -683,7 +693,7 @@ class tree: ## tree class
         Returns a new baltic tree object.
         """
         assert len(keep)>0,"No tips given to reduce the tree to."
-        assert len([k for k in keep if k.is_leaf()])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.is_leaf()==False]))
+        assert len([k for k in keep if not k.is_leaf()])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.is_leaf()==False]))
         if verbose==True: print("Preparing branch hash for keeping %d branches"%(len(keep)))
         branch_hash={k.index:k for k in keep}
         embedding=[]
@@ -1213,7 +1223,7 @@ def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
             ll.cur_node=ll.cur_node.parent
     return ll
 
-def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',variableDate=True,absoluteTime=False,verbose=False):
+def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',variableDate=True,absoluteTime=False,verbose=False, sortBranches = True):
     """
     Load newick file
     """
@@ -1232,7 +1242,8 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
 
     assert ll,'Regular expression failed to find tree string'
     ll.traverse_tree(verbose=verbose) ## traverse tree
-    ll.sortBranches() ## traverses tree, sorts branches, draws tree
+    if sortBranches: 
+        ll.sortBranches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime==True:
         tipDates=[]
@@ -1250,7 +1261,7 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
         handle.close()
     return ll
 
-def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False):
+def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False, sortBranches=True):
     """
     Load nexus file
     """
@@ -1292,7 +1303,8 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
 
     assert ll,'Regular expression failed to find tree string'
     ll.traverse_tree() ## traverse tree
-    ll.sortBranches() ## traverses tree, sorts branches, draws tree
+    if sortBranches:
+        ll.sortBranches() ## traverses tree, sorts branches, draws tree
     if len(tips)>0:
         ll.renameTips(tips) ## renames tips from numbers to actual names
         ll.tipMap=tips
