@@ -873,7 +873,8 @@ class tree: ## tree class
             else:
                 pass ## for now
 
-        line_segments = LineCollection(branches,lw=linewidths,color=colours,capstyle='projecting',**kwargs)
+        if 'capstyle' not in kwargs: kwargs['capstyle']='projecting'
+        line_segments = LineCollection(branches,lw=linewidths,color=colours,**kwargs)
         ax.add_collection(line_segments)
         return ax
 
