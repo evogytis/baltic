@@ -346,7 +346,7 @@ class tree: ## tree class
             k.name=d[k.name] ## change its name
 
     def sortBranches(self,descending=True,sort_function=None,sortByHeight=True):
-        mod=-1 if descending else -1
+        mod=-1 if descending else 1
         if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
         if sortByHeight: # Sort nodes by height and group nodes and leaves together
             """ Sort descendants of each node. """
@@ -1273,12 +1273,12 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
     for line in handle:
         l=line.strip('\n')
 
-        cerberus=re.search('dimensions ntax=([0-9]+);',l.lower())
+        cerberus=re.search('Dimensions ntax=([0-9]+);',l)
         if cerberus is not None:
             tipNum=int(cerberus.group(1))
             if verbose==True: print('File should contain %d taxa'%(tipNum))
 
-        cerberus=re.search(treestring_regex,l.lower())
+        cerberus=re.search(treestring_regex,l)
         if cerberus is not None:
             treeString_start=l.index('(')
             ll=make_tree(l[treeString_start:]) ## send tree string to make_tree function
@@ -1292,7 +1292,7 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
             elif ';' not in l:
                 print('tip not captured by regex:',l.replace('\t',''))
 
-        if 'translate' in l.lower():
+        if 'Translate' in l:
             tipFlag=True
         if ';' in l:
             tipFlag=False
