@@ -792,64 +792,64 @@ class tree: ## tree class
             ax.text(x,y,text(k),zorder=z,**kwargs)
         return ax
 
-def addTextUnrooted(self,ax,target=None,rotation=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
-    if target==None: target=lambda k: k.is_leaf()
-    if rotation==None: rotation=lambda k: 0.0
-    if x_attr==None: x_attr=lambda k: k.x
-    if y_attr==None: y_attr=lambda k: k.y
-    if text==None: text=lambda k: k.name
-    if zorder==None: zorder=4
-    
-    for k in filter(target,self.Objects):
-        local_kwargs=dict(kwargs)
+    def addTextUnrooted(self,ax,target=None,rotation=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
+        if target==None: target=lambda k: k.is_leaf()
+        if rotation==None: rotation=lambda k: 0.0
+        if x_attr==None: x_attr=lambda k: k.x
+        if y_attr==None: y_attr=lambda k: k.y
+        if text==None: text=lambda k: k.name
+        if zorder==None: zorder=4
         
-        x,y=x_attr(k),y_attr(k)
-        z=zorder
-        
-        assert 'tau' in k.traits, 'Branch does not have angle tau computed by drawUnrooted().'
-        rot=np.rad2deg(k.traits['tau'])%360
-        
-        if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 90<rot<270 else 'left'
-        if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
-        
-        rot=rot+180 if 90<rot<270 else rot
-        
-        ax.text(x,y,text(k),rotation=rot,rotation_mode='anchor',zorder=z,**local_kwargs)
-        
-    return ax
+        for k in filter(target,self.Objects):
+            local_kwargs=dict(kwargs)
+            
+            x,y=x_attr(k),y_attr(k)
+            z=zorder
+            
+            assert 'tau' in k.traits, 'Branch does not have angle tau computed by drawUnrooted().'
+            rot=np.rad2deg(k.traits['tau'])%360
+            
+            if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 90<rot<270 else 'left'
+            if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
+            
+            rot=rot+180 if 90<rot<270 else rot
+            
+            ax.text(x,y,text(k),rotation=rot,rotation_mode='anchor',zorder=z,**local_kwargs)
+            
+        return ax
 
-def addTextCircular(self,ax,target=None,text=None,x_attr=None,y_attr=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,zorder=None,**kwargs):
-    if target==None: target=lambda k: k.is_leaf()
-    if x_attr==None: x_attr=lambda k:k.x
-    if y_attr==None: y_attr=lambda k:k.y
-    if text==None: text=lambda k: k.name
-    if zorder==None: zorder=4
-    
-    circ_s=circStart*math.pi*2
-    circ=circFrac*math.pi*2
-    
-    allXs=list(map(x_attr,self.Objects))
-    if normaliseHeight==None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
+    def addTextCircular(self,ax,target=None,text=None,x_attr=None,y_attr=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,zorder=None,**kwargs):
+        if target==None: target=lambda k: k.is_leaf()
+        if x_attr==None: x_attr=lambda k:k.x
+        if y_attr==None: y_attr=lambda k:k.y
+        if text==None: text=lambda k: k.name
+        if zorder==None: zorder=4
         
-    for k in filter(target,self.Objects): ## iterate over branches
-        local_kwargs=dict(kwargs) ## copy global kwargs into a local version
+        circ_s=circStart*math.pi*2
+        circ=circFrac*math.pi*2
         
-        x=normaliseHeight(x_attr(k)+inwardSpace) ## get branch x position
-        y=y_attr(k) ## get y position
+        allXs=list(map(x_attr,self.Objects))
+        if normaliseHeight==None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
+            
+        for k in filter(target,self.Objects): ## iterate over branches
+            local_kwargs=dict(kwargs) ## copy global kwargs into a local version
+            
+            x=normaliseHeight(x_attr(k)+inwardSpace) ## get branch x position
+            y=y_attr(k) ## get y position
+            
+            y=circ_s+circ*y/self.ySpan
+            X=math.sin(y)
+            Y=math.cos(y)
+            
+            rot=np.rad2deg(y)%360
+            
+            if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 180<rot<360 else 'left' ## rotate labels to aid readability
+            if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
+            rot=360-rot-90 if 180<rot<360 else 360-rot+90
+            
+            ax.text(X*x,Y*x,text(k),rotation=rot,rotation_mode='anchor',zorder=zorder,**local_kwargs)
         
-        y=circ_s+circ*y/self.ySpan
-        X=math.sin(y)
-        Y=math.cos(y)
-        
-        rot=np.rad2deg(y)%360
-        
-        if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 180<rot<360 else 'left' ## rotate labels to aid readability
-        if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
-        rot=360-rot-90 if 180<rot<360 else 360-rot+90
-        
-        ax.text(X*x,Y*x,text(k),rotation=rot,rotation_mode='anchor',zorder=zorder,**local_kwargs)
-    
-    return ax
+        return ax
 
     def plotPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
