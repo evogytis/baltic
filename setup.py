@@ -8,10 +8,10 @@ with open("requirements.txt") as fh:
 
 setup(
     name="baltic",
-    version="0.1.8",
+    version="0.2.0",
     packages=find_packages(),
     url="https://github.com/evogytis/baltic",
-    download_url="https://github.com/evogytis/baltic/archive/v0.1.8.tar.gz",
+    download_url="https://github.com/evogytis/baltic/archive/v0.2.0.tar.gz",
     keywords = ['phylogeny', 'visualization'],
     license="gpl-3.0",
     author="Gytis Dudas",
