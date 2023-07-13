@@ -140,7 +140,7 @@ class leaf: ## leaf class
         self.y=None ## position of tip on y axis if the tip were to be plotted
 
     def is_leaflike(self):
-        return False
+        return True
 
     def is_leaf(self):
         return True
@@ -355,8 +355,8 @@ class tree: ## tree class
                 k.children=sorted(k.children,key=sort_function)
         else: # Do not sort by height. Retain leaves at original positions. Only sort nodes
             for k in self.getInternal():
-                leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.branchType=="leaf"] # Get original indices of leaves
-                nodes=sorted([x for x in k.children if x.branchType=='node'],key=sort_function) # Sort nodes only by number of descendants
+                leavesIdx = [(i,ctr) for ctr, i in enumerate(k.children) if i.is_leaflike()] # Get original indices of leaves
+                nodes=sorted([x for x in k.children if x.is_node()],key=sort_function) # Sort nodes only by number of descendants
                 children = nodes
                 for i in leavesIdx: # Insert leaves back into same positions
                     children.insert(i[1], i[0])
@@ -366,7 +366,7 @@ class tree: ## tree class
     def drawTree(self,order=None,width_function=None,pad_nodes=None,verbose=False):
         """ Find x and y coordinates of each branch. """
         if order==None:
-            order=self.traverse_tree() ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
+            order=self.traverse_tree(include_condition=lambda k: k.is_leaflike()) ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
             if verbose==True: print('Drawing tree in pre-order')
         else:
             if verbose==True: print('Drawing tree with provided order')
@@ -410,7 +410,7 @@ class tree: ## tree class
             for k in self.getExternal(): ## reset y positions so tree starts at y=0.5
                 k.y-=minY-0.5
 
-        assert len(self.getExternal())==len(order),'Number of tips in tree does not match number of unique tips, check if two or more collapsed clades were assigned the same name.'
+        assert len([k for k in self.Objects if k.is_leaflike()])==len(order),'Number of tips in tree does not match number of unique tips, check if two or more collapsed clades were assigned the same name.'
         storePlotted=0
 
         while len(drawn)!=len(self.Objects): # keep drawing the tree until everything is drawn
@@ -548,7 +548,7 @@ class tree: ## tree class
         if len(designated_nodes)==0: ## no nodes were designated for deletion - relying on anonymous function to collapse nodes
             nodes_to_delete=list(filter(lambda n: n.is_node() and collapseIf(n)==True and n!=newTree.root, newTree.Objects)) ## fetch a list of all nodes who are not the root and who satisfy the condition
         else:
-            assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
+            assert len([w for w in designated_nodes if w.is_node()])==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
             assert len([w for w in designated_nodes if w!=newTree.root])==0,'Root node was designated for deletion'
 
             nodes_to_delete=list(filter(lambda w: w.index in [q.index for q in designated_nodes], newTree.Objects)) ## need to look up nodes designated for deletion by their indices, since the tree has been copied and nodes will have new memory addresses
@@ -578,7 +578,7 @@ class tree: ## tree class
                 if len(designated_nodes)==0:
                     nodes_to_delete==list(filter(lambda n: n.is_node() and collapseIf(n)==True and n!=newTree.root, newTree.Objects))
                 else:
-                    assert [w.branchType for w in designated_nodes].count('node')==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
+                    assert len([w for w in designated_nodes if w.is_node()])==len(designated_nodes),'Non-node class detected in list of nodes designated for deletion'
                     assert len([w for w in designated_nodes if w!=newTree.root])==0,'Root node was designated for deletion'
                     nodes_to_delete=[w for w in newTree.Objects if w.index in [q.index for q in designated_nodes]]
 
@@ -688,7 +688,7 @@ class tree: ## tree class
         Returns a new baltic tree object.
         """
         assert len(keep)>0,"No tips given to reduce the tree to."
-        assert len([k for k in keep if not k.is_leaf()])==0, "Embedding contains %d non-leaf branches."%(len([k for k in keep if k.is_leaf()==False]))
+        assert len([k for k in keep if not k.is_leaflike()])==0, "Embedding contains %d branches that are not leaf-like."%(len([k for k in keep if k.is_leaflike()==False]))
         if verbose==True: print("Preparing branch hash for keeping %d branches"%(len(keep)))
         branch_hash={k.index:k for k in keep}
         embedding=[]
@@ -725,7 +725,7 @@ class tree: ## tree class
 
     def getExternal(self,secondFilter=None):
         """
-        Get all branches whose branchType is "leaf".
+        Get all leaf branches.
         A function can be provided to filter internal nodes according to an additional property.
         """
         externals=list(filter(secondFilter,filter(lambda k: k.is_leaf(),self.Objects)))
@@ -733,7 +733,7 @@ class tree: ## tree class
 
     def getInternal(self,secondFilter=None):
         """
-        Get all branches whose branchType is "node".
+        Get all node branches.
         A function can be provided to filter internal nodes according to an additional property.
         """
         internals=list(filter(secondFilter,filter(lambda k: k.is_node(),self.Objects)))
@@ -807,7 +807,8 @@ class tree: ## tree class
             z=zorder
             
             assert 'tau' in k.traits, 'Branch does not have angle tau computed by drawUnrooted().'
-            rot=np.rad2deg(k.traits['tau'])%360
+            
+            rot=math.degrees(k.traits['tau'])%360
             
             if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 90<rot<270 else 'left'
             if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
@@ -841,7 +842,7 @@ class tree: ## tree class
             X=math.sin(y)
             Y=math.cos(y)
             
-            rot=np.rad2deg(y)%360
+            rot=math.degrees(y)%360
             
             if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 180<rot<360 else 'left' ## rotate labels to aid readability
             if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
