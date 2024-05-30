@@ -1101,6 +1101,10 @@ def make_tree(data,ll=None,verbose=False):
     if isinstance(data,str)==False: ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
 
+    # Add in some checks that the data are in correct format
+    assert data.endswith(";"), "Improperly formatted string: must end in semicolon"
+    assert data.count("(")==data.count(")"), "Improperly formatted string: must have matching parentheses"
+
     if ll==None: ## calling without providing a tree object - create one
         ll=tree()
     i=0 ## is an adjustable index along the tree string, it is incremented to advance through the string
