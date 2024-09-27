@@ -11,7 +11,31 @@ __all__ = ['decimalDate', 'convertDate', 'calendarDate', 'reticulation', # make 
 sys.setrecursionlimit(9001)
 
 def decimalDate(date,fmt="%Y-%m-%d",variable=False):
-    """ Converts calendar dates in specified format to decimal date. """
+    """
+    Converts calendar dates in specified format to decimal date. 
+    
+    A decimal date represents the fraction of the year that has passed by the given date.
+    
+    Parameters:
+    date (str): The date to be converted.
+    fmt (str): The format of the input date string. Default is "%Y-%m-%d".
+    variable (bool): If True, allows for variable date precision. Default is False.
+    
+    Returns:
+    float: The decimal representation of the date.
+    
+    Notes:
+    - If `variable` is True, the function adjusts the format to match the available precision in the date.
+    - For example, a date like "2023" will be interpreted as 2023 Jan 01, while "2023-05" will be interpreted as 2023 May 01.
+    
+    Examples:
+    >>> decimalDate("2023-05-23")
+    2023.3890410958904
+    >>> decimalDate("2023", fmt="%Y", variable=True)
+    2023.0
+
+    Docstring generated with ChatGPT 4o.
+    """
     if fmt == "":
         return date
     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
@@ -37,7 +61,27 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False):
     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
 def calendarDate(timepoint,fmt='%Y-%m-%d'):
-    """ Converts decimal dates to a specified calendar date format. """
+    """
+    Converts decimal dates to a specified calendar date format.
+    
+    A decimal date represents the fraction of the year that has passed by the given timepoint.
+    This function converts it back to a calendar date in the given format.
+    
+    Parameters:
+    timepoint (float): The decimal representation of the date.
+    fmt (str): The desired format of the output date string. Default is '%Y-%m-%d'.
+    
+    Returns:
+    str: The date in the specified calendar format.
+    
+    Examples:
+    >>> calendarDate(2023.3923497267758)
+    '2023-05-24'
+    >>> calendarDate(2023.0, fmt='%Y')
+    '2023'
+    
+    Docstring generated with ChatGPT 4o.
+    """
     year = int(timepoint)
     rem = timepoint - year
 
@@ -46,11 +90,53 @@ def calendarDate(timepoint,fmt='%Y-%m-%d'):
 
     return dt.datetime.strftime(result,fmt)
 
-def convertDate(x,start,end):
-    """ Converts calendar dates between given formats """
-    return dt.datetime.strftime(dt.datetime.strptime(x,start),end)
+def convertDate(date_string,start,end):
+    """
+    Converts calendar dates between given formats.
+    
+    Parameters:
+    x (str): The date string to be converted.
+    start (str): The format of the input date string.
+    end (str): The desired format of the output date string.
+    
+    Returns:
+    str: The date converted to the new format.
+    
+    Examples:
+    >>> convertDate('23-05-2023', '%d-%m-%Y', '%Y/%m/%d')
+    '2023/05/23'
+    >>> convertDate('2023/05/23', '%Y/%m/%d', '%B %d, %Y')
+    'May 23, 2023'
+    
+    Docstring generated with ChatGPT 4o.
+    """
+    return dt.datetime.strftime(dt.datetime.strptime(date_string,start),end)
+    try:
+        date_obj = dt.datetime.strptime(date_string, start)
+        return dt.datetime.strftime(date_obj, end)
+    except ValueError as e:
+        raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(date_string, start, end, e))
 
 class reticulation: ## reticulation class (recombination, conversion, reassortment)
+    """
+    Represents a reticulation event in a phylogenetic tree, such as recombination or reassortment.
+    
+    Attributes:
+    branchType (str): The type of branch, default is 'leaf'.
+    length (float): The length of the branch, assigned in `make_tree()`.
+    height (float): The height of the branch, assigned in `traverse_tree()`.
+    absoluteTime (float or None): The absolute time of the event, default is None, typically assigned in `setAbsoluteTime()`.
+    parent (node): The parent node, assigned in `make_tree()`.
+    traits (dict): Dictionary of traits associated with the reticulation event, default is empty.
+    index (int): The index of the node in the tree string, assigned in `make_tree()`.
+    name (str): The name of the reticulation event.
+    x (float or None): The x-coordinate for plotting, default is None.
+    y (float or None): The y-coordinate for plotting, default is None.
+    width (float): The width of the node for plotting, default is 0.5.
+    target (node or leaf): The target node where reticulation event lands, assigned in `make_tree()`.
+    
+    Docstring generated with ChatGPT 4o.
+    """
     def __init__(self,name):
         self.branchType='leaf'
         self.length=0.0
@@ -75,6 +161,28 @@ class reticulation: ## reticulation class (recombination, conversion, reassortme
         return False
 
 class clade: ## clade class
+    """
+    Represents a collapsed clade in a phylogenetic tree.
+    
+    Attributes:
+    branchType (str): The type of branch, default is 'leaf'.
+    subtree (list): The subtree containing all the branches that were collapsed, assigned in `collapseSubtree()`.
+    leaves (set): Names of descendant tips in the collapsed clade, assigned in `collapseSubtree()`.
+    length (float): The length of the branch, assigned in `collapseSubtree()`.
+    height (float or None): The height of the branch, assigned in `collapseSubtree()`.
+    absoluteTime (float or None): The absolute time of the event, assigned in `collapseSubtree()`.
+    parent (node): The parent node, assigned in `collapseSubtree()`.
+    traits (dict): Dictionary of traits associated with the clade, assigned in `collapseSubtree()`.
+    index (int or None): The index of the node, assigned in `collapseSubtree()`.
+    name (str): The name assigned to the clade when it was collapsed.
+    x (float or None): The x-coordinate for plotting, default is None.
+    y (float or None): The y-coordinate for plotting, default is None.
+    lastHeight (float): The height of the highest tip in the collapsed clade, assigned in `collapseSubtree()`.
+    lastAbsoluteTime (float or None): The absolute time of the highest tip in the collapsed clade, assigned in `collapseSubtree()`.
+    width (float): The width of the node for plotting, default is 1.
+    
+    Docstring generated with ChatGPT 4o.
+    """
     def __init__(self,givenName):
         self.branchType='leaf' ## clade class poses as a leaf
         self.subtree=None ## subtree will contain all the branches that were collapsed
@@ -102,6 +210,25 @@ class clade: ## clade class
         return False
 
 class node: ## node class
+    """
+    Represents a node in a phylogenetic tree.
+    
+    Attributes:
+    branchType (str): The type of branch, default is 'node'.
+    length (float): The length of the branch, assigned in `make_tree()`.
+    height (float): The height of the branch, assigned in `traverse_tree()`.
+    absoluteTime (float or None): The branch endpoint in absolute time, assigned in `setAbsoluteTime()`.
+    parent (node): The parent node, assigned in `make_tree()`.
+    children (list): A list of descendant branches of this node, assigned in `make_tree()`.
+    traits (dict): Dictionary containing annotations from the tree string, assigned in `make_tree()`.
+    index (int): The index of the character designating this object in the tree string, a unique identifier.
+    childHeight (float or None): The height of the youngest (last) descendant tip of this node, assigned in `traverse_tree()`.
+    x (float or None): The x-coordinate for plotting, default is None.
+    y (float or None): The y-coordinate for plotting, default is None.
+    leaves (set): A set of tips that are descended from this node, assigned in `traverse_tree()`.
+    
+    Docstring generated with ChatGPT 4o.
+    """
     def __init__(self):
         self.branchType='node'
         self.length=0.0 ## branch length, recovered from string
@@ -127,6 +254,23 @@ class node: ## node class
         return True
 
 class leaf: ## leaf class
+    """
+    Represents a leaf in a phylogenetic tree.
+    
+    Attributes:
+    branchType (str): The type of branch, default is 'leaf'.
+    name (str): The name of the tip after translation, assigned in `make_tree()`.
+    index (int): The index of the character that defines this object in the tree string, assigned in `make_tree()`.
+    length (float): The length of the branch, assigned in `make_tree()`.
+    absoluteTime (float or None): The position of the tip in absolute time, assigned in `setAbsoluteTime()`.
+    height (float): The height of the tip, assigned in `traverse_tree()`.
+    parent (node): The parent node, assigned in `make_tree()`.
+    traits (dict): Dictionary containing traits associated with the leaf, assigned in `make_tree()`.
+    x (float or None): The x-coordinate for plotting, default is None.
+    y (float or None): The y-coordinate for plotting, default is None.
+
+    Docstring generated with ChatGPT 4o.
+    """
     def __init__(self):
         self.branchType='leaf'
         self.name=None ## name of tip after translation, since BEAST trees will generally have numbers for taxa but will provide a map at the beginning of the file
@@ -149,7 +293,27 @@ class leaf: ## leaf class
         return False
 
 class tree: ## tree class
+    """
+    Represents a phylogenetic tree.
+    
+    Attributes:
+    cur_node (node): The current node in the tree, initialized as a new instance of the node class when building the tree in `make_tree()`.
+    root (node): The root of the tree.
+    Objects (list): A flat list of all branches (nodes, leaves, reticulations) in the tree.
+    tipMap (dict or None): A mapping of tip numbers to names used when importing trees in NEXUS format, assigned by `loadNexus()`.
+    treeHeight (float): The height of the tree, defined as the distance between the root and the most recent tip.
+    mostRecent (node or None): The most recent node in the tree.
+    ySpan (float): The vertical span of the tree for plotting.
+    
+    Docstring generated with ChatGPT 4o.
+    """
+
     def __init__(self):
+        """
+        Initializes a new tree instance.
+        
+        Docstring generated with ChatGPT 4o.
+        """
         self.cur_node=node() ## current node is a new instance of a node class
         self.cur_node.index='Root' ## first object in the tree is the root to which the rest gets attached
         self.cur_node.length=0.0 ## startind node branch length is 0
@@ -162,7 +326,14 @@ class tree: ## tree class
         self.ySpan=0.0
 
     def add_reticulation(self,name):
-        """ Adds a reticulate branch. """
+        """
+        Adds a reticulate branch to the tree.
+        
+        Parameters:
+        name (str): The name of the reticulate branch.
+        
+        Docstring generated with ChatGPT 4o.
+        """
         ret=reticulation(name)
         ret.index=name
         ret.parent=self.cur_node
@@ -171,20 +342,39 @@ class tree: ## tree class
         self.cur_node=ret
 
     def add_node(self,i):
-        """ Attaches a new node to current node. """
+        """
+        Attaches a new node to the current node.
+        
+        Parameters:
+        i (int): The index of the new node, representing its position along the tree string.
+        
+        Raises:
+        AssertionError: If the current node is not a node (i.e., if it is a leaf or another non-node object).
+        
+        Docstring generated with ChatGPT 4o.
+        """
         new_node=node() ## new node instance
         new_node.index=i ## new node's index is the position along the tree string
         if self.root is None:
             self.root=new_node
+            self.root.length=0.0
 
         new_node.parent=self.cur_node ## new node's parent is current node
-        assert self.cur_node.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
+        assert self.cur_node.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses or commas.'
         self.cur_node.children.append(new_node) ## new node is a child of current node
         self.cur_node=new_node ## current node is now new node
         self.Objects.append(self.cur_node) ## add new node to list of objects in the tree
 
     def add_leaf(self,i,name):
-        """ Attach a new leaf (tip) to current node. """
+        """
+        Attaches a new leaf (tip) to the current node.
+        
+        Parameters:
+        i (int): The index of the new leaf, representing its position along the tree string.
+        name (str): The name of the new leaf.
+
+        Docstring generated with ChatGPT 4o.
+        """
         new_leaf=leaf() ## new instance of leaf object
         new_leaf.index=i ## index is position along tree string
         if self.root is None: self.root=new_leaf
@@ -196,49 +386,97 @@ class tree: ## tree class
         self.cur_node=new_leaf ## current node is now new leaf
         self.Objects.append(self.cur_node) ## add leaf to all objects in the tree
 
-    def subtree(self,k=None,traverse_condition=None,stem=True):
-        """ Generate a subtree (as a baltic tree object) from a traversal.
-            k is the starting branch for traversal (default: root).
-            traverse_condition is a function that determines whether a child branch should be visited (default: always true).
-            Returns a new baltic tree instance.
-            Note - custom traversal functions can result in multitype trees.
-            If this is undesired call singleType() on the resulting subtree afterwards. """
-        subtree=copy.deepcopy(self.traverse_tree(k,include_condition=lambda k:True,traverse_condition=traverse_condition))
+    def subtree(self,starting_node=None,traverse_condition=None,stem=True):
+        """
+        Generate a subtree (as a baltic tree object) from a tree traversal starting from a provided node.
+        
+        Parameters:
+        k (node or None): The starting branch for traversal. Default is None, which means the traversal starts from the root.
+        traverse_condition (function or None): A function that determines whether a child branch should be visited. 
+                                                Default is None, which means all branches are visited.
+        stem (bool): If True, includes the stem leading to the root of the subtree. Default is True.
+        
+        Returns:
+        tree or None: A new baltic tree instance representing the subtree. 
+                      Returns None if the subtree is empty or contains no leaves.
+        
+        Notes:
+        - Custom traversal functions can result in multitype trees. 
+          If this is undesired, call `singleType()` on the resulting subtree afterwards.
+        
+        Example:
+        >>> subtree = original_tree.subtree(k=some_node, traverse_condition=lambda node: node.traits['some_state'] == some_node.traits['some_state']) ## will only traverse through children in the same trait state as the starting node
+        
+        Docstring generated with ChatGPT 4o.
+        """
+        
+        if starting_node is None: starting_node = self.root
+        if traverse_condition is None: traverse_condition = lambda k: True
 
-        if subtree is None or len([k for k in subtree if k.is_leaf()])==0:
+        node = starting_node.parent if stem else starting_node ## move up a node if we want the stem
+
+        subtree_branches=self.traverse_tree(node,include_condition=lambda k:True,traverse_condition=traverse_condition)
+        subtree_branches=copy.deepcopy(subtree_branches)
+
+        if stem: ## using stem - need to prune subtrees from root now
+            unwanted_branches=[]
+            for child in node.children: ## iterate over parent's children
+                if child.index!=starting_node.index: ## not at focal branch (unwanted sibling)
+                    unwanted_branches+=self.traverse_tree(child,include_condition=lambda w: True) ## add all branches resulting from traversals of unwanted siblings
+
+            remove=[k for k in subtree_branches if k.index in [ub.index for ub in unwanted_branches]] ## iterate over subtree branches, remember those that belong to unwanted subtrees 
+            for r in remove: ## iterate over branches belong to unwanted subtrees
+                subtree_branches.remove(r) ## remove from list
+
+        if subtree_branches is None or not any(node.is_leaf() for node in subtree_branches): ## nothing found or no leaf objects in traversal
             return None
-        else:
-            local_tree=tree() ## create a new tree object where the subtree will be
-            local_tree.Objects=subtree ## assign branches to new tree object
 
-            local_tree.root=subtree[0] ## root is the beginning of the traversal
+        local_tree=tree() ## create a new tree object where the subtree will be
+        local_tree.Objects=subtree_branches ## assign branches to new tree object
 
-            if stem==True: ## we want the stem
-                local_tree.root.parent=copy.deepcopy(k.parent) ## means assigning an invisible parent to root
-                local_tree.root.parent.height=0.0 ## set height to 0.0 so heights can be set
-                if local_tree.root.parent.parent: local_tree.root.parent.parent=None ## remove reference to the invisible parent's parent
-            else: ## don't want stem
-                local_tree.root.parent=None ## tree begins strictly at node
+        local_tree.root=subtree_branches[0] ## root is the beginning of the traversal
+        local_tree.root.parent=None ## tree begins strictly at node
 
-            subtree_set=set(subtree) ## turn branches into set for quicker look up later
+        subtree_set=set(subtree_branches) ## turn branches into set for quicker look up later
 
-            if traverse_condition is not None: ## didn't use default traverse condition, might need to deal with hanging nodes and prune children
-                for nd in local_tree.getInternal(): ## iterate over nodes
-                    nd.children=list(filter(lambda k:k in subtree_set,nd.children)) ## only keep children seen in traversal
-                local_tree.fixHangingNodes()
+        if traverse_condition is not None: ## didn't use default traverse condition, might need to deal with hanging nodes and prune children
+            for nd in local_tree.getInternal(): ## iterate over nodes
+                nd.children=[child for child in nd.children if child in subtree_set] ## only keep children seen in traversal
+            local_tree.fixHangingNodes()
 
-            if self.tipMap: ## if original tree has a tipMap dictionary
-                local_tree.tipMap={tipNum: self.tipMap[tipNum] for tipNum in self.tipMap if self.tipMap[tipNum] in [w.name for w in local_tree.getExternal()]} ## copy over the relevant tip translations
+        if self.tipMap: ## if original tree has a tipMap dictionary
+            local_tree.tipMap={tipNum: self.tipMap[tipNum] for tipNum in self.tipMap if self.tipMap[tipNum] in [w.name for w in local_tree.getExternal()]} ## copy over the relevant tip translations
 
-            return local_tree
+        return local_tree
 
     def singleType(self):
-        """ Removes any branches with a single child (multitype nodes). """
-        multiTypeNodes=[k for k in self.Objects if k.is_node() and len(k.children)==1]
-        while len(multiTypeNodes)>0:
-            multiTypeNodes=[k for k in self.Objects if k.is_node() and len(k.children)==1]
+        """
+        Removes any branches with a single child (multitype nodes) from the tree.
+        
+        This method simplifies the tree by removing nodes that have only one child, effectively
+        merging these nodes with their single child to ensure each node has either no children (leaves)
+        or multiple children.
+        
+        The process involves:
+        - Identifying nodes with a single child.
+        - Reassigning the child node to the grandparent of the original single child node.
+        - Adjusting the branch lengths accordingly.
+        - Removing the single child node from the tree.
+        
+        This process is repeated until no multitype nodes remain.
+        
+        Returns:
+        None (modifies the baltic tree object in-place)
 
-            for k in sorted(multiTypeNodes,key=lambda x:-x.height):
+        Docstring generated with ChatGPT 4o.
+        """
+        while True:
+            multitype_nodes=self.getInternal(lambda k: len(k.children)==1)
+
+            if not multitype_nodes:
+                break
+
+            for k in sorted(multitype_nodes,key=lambda x:-x.height):
                 child=k.children[0] ## fetch child
                 grandparent=k.parent if k.parent.index else self.root ## fetch grandparent
 
@@ -249,41 +487,58 @@ class tree: ## tree class
 
                 child.length+=k.length ## adjust child length
 
-                multiTypeNodes.remove(k) ## remove old parent from multitype nodes
                 self.Objects.remove(k) ## remove old parent from all objects
         self.sortBranches()
 
     def setAbsoluteTime(self,date):
-        """ place all objects in absolute time by providing the date of the most recent tip """
-        for i in self.Objects: ## iterate over all objects
-            i.absoluteTime=date-self.treeHeight+i.height ## heights are in units of time from the root
-        self.mostRecent=max([k.absoluteTime for k in self.Objects])
+        """
+        Places all objects in absolute time by providing the date of the most recent tip.
+        
+        Parameters:
+        date (float): The date of the most recent tip in the tree in decimal date format (see the `decimalDate()` function).
+        
+        This method calculates the absolute time for each object in the tree based on its height and
+        the provided date of the most recent tip (most recent date - tree height + node/leaf height). The absolute time is stored in the `absoluteTime`
+        attribute of each object.
+        
+        Example:
+        >>> tree.setAbsoluteTime(2023.0)
+
+        Docstring generated with ChatGPT 4o.
+        """
+        for k in self.Objects: ## iterate over all objects
+            k.absoluteTime=date - self.treeHeight + k.height ## heights are in units of time from the root
+        self.mostRecent=max(k.absoluteTime for k in self.Objects)
 
     def treeStats(self):
-        """ provide information about the tree """
+        """
+        Provides information about the tree.
+        
+        This method traverses the tree to gather and print various statistics, including:
+        - Tree height and length.
+        - Whether the tree is strictly bifurcating, multitype, or a singleton (comprised of a single tip).
+        - The presence of annotations (traits).
+        - The number of nodes and leaves.
+        
+        The method prints the collected statistics to the console.
+        
+        Example:
+        >>> tree.treeStats()
+
+        Docstring generated with ChatGPT 4o.
+        """
         self.traverse_tree() ## traverse the tree
         obs=self.Objects ## convenient list of all objects in the tree
         print('\nTree height: %.6f\nTree length: %.6f'%(self.treeHeight,sum([x.length for x in obs]))) ## report the height and length of tree
 
         nodes=self.getInternal() ## get all nodes
-        strictlyBifurcating=False ## assume tree is not strictly bifurcating
-        multiType=False
-        singleton=False
-
-        N_children=[len(x.children) for x in nodes]
-        if len(N_children)==0:
-            singleton=True
-        else:
-            minChildren,maxChildren=min(N_children),max(N_children) ## get the largest number of descendant branches of any node
-            if maxChildren==2 and minChildren==2: ## if every node has at most two children branches
-                strictlyBifurcating=True ## it's strictly bifurcating
-            if minChildren==1:
-                multiType=True
+        strictlyBifurcating=all(len(x.children) == 2 for x in nodes) ## assume tree is not strictly bifurcating
+        multiType=any(len(x.children) == 1 for x in nodes)
+        singleton=len(nodes) == 0
 
         hasTraits=False ## assume tree has no annotations
-        maxAnnotations=max([len(x.traits) for x in obs]) ## check the largest number of annotations any branch has
-        if maxAnnotations>0: ## if it's more than 0
-            hasTraits=True ## there are annotations
+        max_annotations = max(len(k.traits) for k in obs) ## check the largest number of annotations any branch has
+        has_traits = max_annotations > 0
 
         if strictlyBifurcating: print('strictly bifurcating tree') ## report
         if multiType: print('multitype tree') ## report
@@ -293,6 +548,26 @@ class tree: ## tree class
         print('\nNumbers of objects in tree: %d (%d nodes and %d leaves)\n'%(len(obs),len(nodes),len(self.getExternal()))) ## report numbers of different objects in the tree
 
     def traverse_tree(self,cur_node=None,include_condition=None,traverse_condition=None,collect=None,verbose=False):
+        """
+        Traverses the tree starting from a specified node and collects nodes based on conditions.
+        
+        Parameters:
+        cur_node (node or None): The starting node for traversal. If None, starts from the root. Default is None.
+        include_condition (function or None): A function that determines whether a node should be included in the `collect` list.
+                                              Default is None, which includes leaf-like nodes.
+        traverse_condition (function or None): A function that determines whether a child node should be traversed.
+                                               Default is None, which traverses all nodes.
+        collect (list): A list to collect nodes that meet the include condition. Default is None, which collects and returns only leaf and leaf-like (`clade` and `reticulation`) objects.
+        verbose (bool): If True, prints verbose output during traversal. Default is False.
+        
+        Returns:
+        list: A list of nodes that pass `include_condition` that were encountered during the traversal that meets the `traverse_condition`.
+        
+        Example:
+        >>> descendant_tip_list = tree.traverse_tree(include_condition=lambda node: node.is_leaf()) ## will return a list of all leaf (but not leaf-like) objects encountered during the traversal
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if cur_node==None: ## if no starting point defined - start from root
             if verbose==True: print('Initiated traversal from root')
             cur_node=self.root
@@ -305,7 +580,7 @@ class tree: ## tree class
                     k.height=None
 
         if traverse_condition==None: traverse_condition=lambda k: True
-        if include_condition==None: include_condition=lambda k: k.is_leaf()
+        if include_condition==None: include_condition=lambda k: k.is_leaflike()
 
         if collect==None: ## initiate collect list if not initiated
             collect=[]
@@ -338,14 +613,47 @@ class tree: ## tree class
 
 
     def renameTips(self,d=None):
-        """ Give each tip its correct label using a dictionary. """
+        """
+        Rename each tip using a dictionary.
+        
+        Parameters:
+        d (dict or None): A dictionary mapping original tip names to new tip names. 
+                          If None, uses the tree's `tipMap` attribute if it exists (see `loadNexus()`). Default is to assume tipMap exists.
+        
+        This method iterates over all leaf objects in the tree and updates their names based on the provided dictionary.
+        
+        Example:
+        >>> tree.renameTips({'tip1': 'new_name1', 'tip2': 'new_name2'})
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if d==None and self.tipMap!=None:
             d=self.tipMap
+
+        if d is None: raise ValueError("No dictionary provided for renaming tips.")
+
         for k in self.getExternal(): ## iterate through leaf objects in tree
             # k.name=d[k.numName] ## change its name
             k.name=d[k.name] ## change its name
 
     def sortBranches(self,descending=True,sort_function=None,sortByHeight=True):
+        """
+        Sort descendants of each node.
+        
+        Parameters:
+        descending (bool): If True, sorts in descending order. Default is True.
+        sort_function (function or None): A custom sorting function. Default sorts nodes by number of descendants and length.
+        sortByHeight (bool): If True, sorts nodes by height and groups nodes and leaves together. Default is True.
+        
+        This method sorts the children of each internal node in the tree according to the specified sorting function 
+        and order. It then updates the x and y positions of each branch by calling `drawTree()`.
+        
+        Example:
+        >>> tree.sortBranches(descending=False)
+        
+        Docstring generated with ChatGPT 4o.
+        """
+
         mod=-1 if descending else 1
         if sort_function==None: sort_function=lambda k: (k.is_node(),-len(k.leaves)*mod,k.length*mod) if k.is_node() else (k.is_node(),k.length*mod)
         if sortByHeight: # Sort nodes by height and group nodes and leaves together
@@ -364,7 +672,24 @@ class tree: ## tree class
         self.drawTree() ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def drawTree(self,order=None,width_function=None,pad_nodes=None,verbose=False):
-        """ Find x and y coordinates of each branch. """
+        """
+        Assign x and y coordinates of each branch in the tree.
+        
+        Parameters:
+        order (list or None): A list of tips recovered from a tree traversal to ensure they are plotted in the correct order along the vertical tree dimension. 
+                              If None, performs a pre-order traversal. Default is None.
+        width_function (function or None): A function to determine the width of each branch. 
+                                           If None, uses default widths (1 unit for leaf objects, width + 1 for clades). Default is None.
+        pad_nodes (dict or None): A dictionary specifying nodes to be padded with extra space around their descendants (`node` class : float or int). Default is None.
+        verbose (bool): If True, prints verbose output during drawing. Default is False.
+        
+        This method assigns branch height as x and calculates the y coordinates (with adjustments, if any) for each branch in the tree for plotting purposes.
+        
+        Example:
+        >>> tree.drawTree()
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if order==None:
             order=self.traverse_tree(include_condition=lambda k: k.is_leaflike()) ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
             if verbose==True: print('Drawing tree in pre-order')
@@ -445,9 +770,24 @@ class tree: ## tree class
 
     def drawUnrooted(self,rotate=0.0,n=None,total=None):
         """
-        Calculate x and y coordinates in an unrooted arrangement.
+        Calculate x and y coordinates of each branch in an unrooted arrangement.
+        
+        This method arranges the branches of the tree in an unrooted, circular layout.
+        The coordinates are calculated recursively for each node.
+        
+        Parameters:
+        rotate (float): The initial rotation angle in radians. Default is 0.0.
+        n (node or None): The current node being processed. If None, starts from the root. Default is None.
+        total (int or None): The total number of tips or the sum of widths for clades. Default is None.
+        
         Code translated from https://github.com/nextstrain/auspice/commit/fc50bbf5e1d09908be2209450c6c3264f298e98c, written by Richard Neher.
+        
+        Example:
+        >>> tree.drawUnrooted(rotate=0.1)
+        
+        Docstring generated with ChatGPT 4o.
         """
+
         if n==None:
             total=sum([1 if x.is_leaf() else x.width+1 for x in self.getExternal()])
             n=self.root#.children[0]
@@ -474,9 +814,23 @@ class tree: ## tree class
                 eta += w
                 self.drawUnrooted(rotate,ch,total)
 
-    def commonAncestor(self,descendants,strict=False):
+    def commonAncestor(self,descendants):
         """
         Find the most recent node object that gave rise to a given list of descendant branches.
+        
+        Parameters:
+        descendants (list): A list of descendant branches (as `node`, `leaf`, `clade` and/or `reticulation` classes) for which to find the most recent common ancestor.
+        
+        Returns:
+        node: The most recent common ancestor node.
+        
+        Raises:
+        AssertionError: If the number of descendants is less than 2.
+        
+        Example:
+        >>> ancestor = tree.commonAncestor([descendant1, descendant2])
+        
+        Docstring generated with ChatGPT 4o.
         """
         assert len(descendants)>1,'Not enough descendants to find common ancestor: %d'%(len(descendants))
         paths_to_root={k.index: set() for k in descendants} ## for every descendant create an empty set
@@ -489,7 +843,26 @@ class tree: ## tree class
         return sorted(reduce(set.intersection,paths_to_root.values()),key=lambda k: k.height)[-1] ## return the most recent branch that is shared across all paths to root
 
     def collapseSubtree(self,cl,givenName,verbose=False,widthFunction=lambda k:len(k.leaves)):
-        """ Collapse an entire subtree into a clade object. """
+        """
+        Collapse an entire subtree into a clade object.
+        
+        Parameters:
+        cl (node): The node representing the root of the subtree to collapse.
+        givenName (str): The name to assign to the new clade.
+        verbose (bool): If True, prints verbose output during the process. Default is False.
+        widthFunction (function): A function to determine the width of the clade when computing branch y coordinates in `drawTree()`. Default calculates width based on the number of leaves.
+        
+        Returns:
+        clade: The newly created clade object representing the collapsed subtree.
+        
+        Raises:
+        AssertionError: If the provided branch is not a `node` class or if attempting to collapse the entire tree.
+        
+        Example:
+        >>> collapsed_clade = tree.collapseSubtree(node, "new_clade")
+
+        Docstring generated with ChatGPT 4o.
+        """
         assert cl.is_node(),'Cannot collapse non-node class'
         collapsedClade=clade(givenName)
         collapsedClade.index=cl.index
@@ -525,7 +898,18 @@ class tree: ## tree class
         return collapsedClade
 
     def uncollapseSubtree(self):
-        """ Uncollapse all collapsed subtrees. """
+        """
+        Uncollapse all collapsed subtrees in the tree.
+        
+        This method restores all previously collapsed clades back to their original subtree structures.
+        It iterates through all objects in the tree, identifies clades, and replaces each clade with its
+        corresponding subtree that was stored in the `clade` class.
+        
+        Example:
+        >>> tree.uncollapseSubtree()
+        
+        Docstring generated with ChatGPT 4o.
+        """
         while len([k for k in self.Objects if isinstance(k,clade)])>0:
             clades=[k for k in self.Objects if isinstance(k,clade)]
             for cl in clades:
@@ -540,9 +924,26 @@ class tree: ## tree class
         self.traverse_tree()
 
     def collapseBranches(self,collapseIf=lambda x:x.traits['posterior']<=0.5,designated_nodes=[],verbose=False):
-        """ Collapse all branches that satisfy a function collapseIf (default is an anonymous function that returns true if posterior probability is <=0.5).
-            Alternatively, a list of nodes can be supplied to the script.
-            Returns a deep copied version of the tree.
+        """
+        Collapse all branches that satisfy a function `collapseIf` (default is an anonymous function that returns true if posterior probability is <= 0.5).
+        Alternatively, a list of nodes can be supplied to the script.
+        A branch designated for deletion gets its descendants assigned to its parent with branch lengths adjusted accordingly before being pruned out of the tree.
+        
+        Parameters:
+        collapseIf (function): A function that determines whether a branch should be collapsed. Default is a function that returns True if the posterior probability is <= 0.5.
+        designated_nodes (list): A list of nodes to be collapsed. If empty, the collapseIf function is used to determine nodes to collapse. Default is an empty list.
+        verbose (bool): If True, prints verbose output during the process. Default is False.
+        
+        Returns:
+        tree: A deep copied version of the tree with the specified branches collapsed.
+        
+        Raises:
+        AssertionError: If non-node classes are detected in the designated_nodes list or if the root node is designated for deletion.
+        
+        Example:
+        >>> new_tree = tree.collapseBranches()
+        
+        Docstring generated with ChatGPT 4o.
         """
         newTree=copy.deepcopy(self) ## work on a copy of the tree
         if len(designated_nodes)==0: ## no nodes were designated for deletion - relying on anonymous function to collapse nodes
@@ -587,21 +988,35 @@ class tree: ## tree class
         return newTree ## return collapsed tree
 
     def toString(self,cur_node=None,traits=None,verbose=False,nexus=False,string_fragment=None,traverse_condition=None,rename=None,quotechar="'",json=False):
-        """ Output the topology of the tree with branch lengths and comments to stringself.
-            cur_node: starting point (default: None, starts at root)
-            traits: list of keys that will be used to output entries in traits dict of each branch (default: all traits)
-            numName: boolean, whether encoded (True) or decoded (default: False) tip names will be output
-            verbose: boolean, debug
-            nexus: boolean, whether to output newick (default: False) or nexus (True) formatted tree
-            string_fragment: list of characters that comprise the tree string
+        """
+        Output the topology of the tree with branch lengths and comments to a string.
+        
+        Parameters:
+        cur_node (node or None): The starting point for traversal. Default is None, which starts at the root.
+        traits (list or None): A list of keys to output entries in the traits dictionary of each branch. Default is all available traits.
+        verbose (bool): If True, prints verbose output during the process. Default is False.
+        nexus (bool): If True, outputs in NEXUS format. Default is False, which outputs in Newick format.
+        string_fragment (list or None): A list of characters that comprise the tree string. Default is None.
+        traverse_condition (function or None): A function that determines whether a child branch should be traversed. Default is None which traverses all children.
+        rename (dict or None): A dictionary to rename tip names. Default is None.
+        quotechar (str): The character to use for quoting tip names. Default is "'".
+        json (bool): If True, outputs in auspice JSON format (somewhat experimental). Default is False.
+        
+        Returns:
+        str: The tree string in the specified format.
+        
+        Example:
+        >>> tree_string = tree.toString()
+        
+        Docstring generated with ChatGPT 4o.
         """
         if cur_node==None: cur_node=self.root#.children[-1]
         if traits==None: traits=set(sum([list(k.traits.keys()) for k in self.Objects],[])) ## fetch all trait keys
         if string_fragment==None:
             string_fragment=[]
-            if nexus==True:
-                assert json==False,'Nexus format not a valid option for JSON output'
-                if verbose==True: print('Exporting to Nexus format')
+            if nexus:
+                assert not json,'Nexus format not a valid option for JSON output'
+                if verbose==True: print('Exporting to NEXUS format')
                 string_fragment.append('#NEXUS\nBegin trees;\ntree TREE1 = [&R] ')
         if traverse_condition==None: traverse_condition=lambda k: True
 
@@ -669,6 +1084,22 @@ class tree: ## tree class
             return ''.join(string_fragment)
 
     def allTMRCAs(self):
+        """
+        Calculate the time to the most recent common ancestor (TMRCA) for all pairs of tips in the tree.
+        
+        This method creates a pairwise matrix of tips and iterates over all internal nodes to find the TMRCA (as `absoluteTime` attribute)
+        for each pair of descendant tips. The matrix is symmetric, and the diagonal elements are set to 0.0
+        as the TMRCA of a tip with itself is zero.
+        
+        Returns:
+        dict: A dictionary where each key is a tip name and the corresponding value is another dictionary
+              with tip names as keys and their TMRCA as values.
+        
+        Example:
+        >>> tmrca_matrix = tree.allTMRCAs()
+        
+        Docstring generated with ChatGPT 4o.
+        """
         tip_names=[k.name for k in self.getExternal()]
         tmrcaMatrix={x:{y:None if x!=y else 0.0 for y in tip_names} for x in tip_names} ## pairwise matrix of tips
 
@@ -684,8 +1115,22 @@ class tree: ## tree class
 
     def reduceTree(self,keep,verbose=False):
         """
-        Reduce the tree to just those tracking a small number of tips.
-        Returns a new baltic tree object.
+        Reduce the tree to include only the branches tracking a specified set of tips to the root.
+        
+        Parameters:
+        keep (list): A list of tip branches to retain in the reduced tree.
+        verbose (bool): If True, prints verbose output during the process. Default is False.
+        
+        Returns:
+        tree: A new tree object containing only the specified tips and the necessary branches to connect them to the root. Can result in a tree with multitype-like branches (nodes with a single child).
+        
+        Raises:
+        AssertionError: If no tips are given to reduce the tree to, or if the list contains non-leaf-like branches.
+        
+        Example:
+        >>> reduced_tree = tree.reduceTree([tip1, tip2, tip3])
+        
+        Docstring generated with ChatGPT 4o.
         """
         assert len(keep)>0,"No tips given to reduce the tree to."
         assert len([k for k in keep if not k.is_leaflike()])==0, "Embedding contains %d branches that are not leaf-like."%(len([k for k in keep if k.is_leaflike()==False]))
@@ -721,25 +1166,82 @@ class tree: ## tree class
         return reduced_tree ## return new tree
 
     def countLineages(self,t,attr='absoluteTime',condition=lambda x:True):
+        """
+        Count the number of lineages present at a specific time point.
+        
+        Parameters:
+        t (float): The time point at which to count the lineages.
+        attr (str): The attribute used to determine the time of the nodes. Default is `absoluteTime`.
+        condition (function): A function that determines whether a lineage should be included in the count. Default is a function that always returns True.
+        
+        Returns:
+        int: The number of lineages present at the specified time point (branches whose time is above and parent is below the time point provided).
+        
+        Example:
+        >>> num_lineages = tree.countLineages(2020.5)
+        
+        Docstring generated with ChatGPT 4o.
+        """
         return len([k for k in self.Objects if getattr(k.parent,attr)!=None and getattr(k.parent,attr)<t<=getattr(k,attr) and condition(k)])
 
     def getExternal(self,secondFilter=None):
         """
-        Get all leaf branches.
-        A function can be provided to filter internal nodes according to an additional property.
+        Get all leaf-like branches (`leaf`, `clade`, and `reticulation` classes).
+        
+        Parameters:
+        secondFilter (function or None): An optional function to further filter the leaf branches based on an additional property. Default is None.
+        
+        Returns:
+        list: A list of leaf branches that optionally satisfy the secondFilter condition.
+        
+        Example:
+        >>> leaves = tree.getExternal()
+        >>> filtered_leaves = tree.getExternal(lambda x: x.absoluteTime >= 2023.0)
+        
+        Docstring generated with ChatGPT 4o.
         """
-        externals=list(filter(secondFilter,filter(lambda k: k.is_leaf(),self.Objects)))
+        externals=list(filter(secondFilter,filter(lambda k: k.is_leaflike(),self.Objects)))
         return externals
 
     def getInternal(self,secondFilter=None):
         """
-        Get all node branches.
-        A function can be provided to filter internal nodes according to an additional property.
+        Get all branches belonging to the `node` class.
+        
+        Parameters:
+        secondFilter (function or None): An optional function to further filter the internal nodes based on an additional property. Default is None.
+        
+        Returns:
+        list: A list of node branches that optionally satisfy the secondFilter condition.
+        
+        Example:
+        >>> nodes = tree.getInternal()
+        >>> filtered_nodes = tree.getInternal(lambda x: x.absoluteTime >= 2023.0)
+        
+        Docstring generated with ChatGPT 4o.
         """
         internals=list(filter(secondFilter,filter(lambda k: k.is_node(),self.Objects)))
         return internals
 
     def getBranches(self,attrs=lambda x:True,warn=True):
+        """
+        Get branches that satisfy a specified condition.
+        
+        Parameters:
+        attrs (function): A function that determines whether a branch should be included. Default is a function that always returns True.
+        warn (bool): If True, raises an exception if no branches satisfying the condition are found. Default is True.
+        
+        Returns:
+        list or object: A list of branches that satisfy the condition (list is empty if warn is False). If only one branch satisfies the condition, returns that branch.
+        
+        Raises:
+        Exception: If no branches satisfying the condition are found and warn is True.
+        
+        Example:
+        >>> branches = tree.getBranches(lambda x: x.length > 0.5)
+        >>> single_branch = tree.getBranches(lambda x: x.index == 'node1', warn=False)
+        
+        Docstring generated with ChatGPT 4o.
+        """
         select=list(filter(attrs,self.Objects))
 
         if len(select)==0 and warn==True:
@@ -753,8 +1255,25 @@ class tree: ## tree class
 
     def getParameter(self,statistic,use_trait=False,which=None):
         """
-        Return either branch trait or attribute (default: trait, to switch to attribute set use_trait parameter to False) statistic across branches determined by the which_branches function (default: all objects in the tree).
-        Note - branches which do not have the trait or attribute are skipped.
+        Return a list of either branch trait or attribute states across branches.
+        
+        Parameters:
+        statistic (str): The name of the trait or attribute to retrieve.
+        use_trait (bool): If True, retrieves the trait from the branch's traits dictionary. If False, retrieves the attribute directly from branch attributes. Default is False (retrieves attributes).
+        which (function or None): A function that determines which branches to include. Default is None, which includes all branches in the tree.
+        
+        Returns:
+        list: A list of values for the specified trait or attribute across the selected branches.
+        
+        Note:
+        - Branches that do not have the specified trait or attribute are skipped.
+        
+        Example:
+        >>> branch_lengths = tree.getParameter('length')
+        >>> posteriors = tree.getParameter('posterior', use_trait=True)
+        >>> node_heights = tree.getParameter('height', which=lambda x: x.is_node())
+        
+        Docstring generated with ChatGPT 4o.
         """
         if which==None:
             branches=self.Objects
@@ -769,32 +1288,82 @@ class tree: ## tree class
 
     def fixHangingNodes(self):
         """
-        Remove internal nodes without any children.
+        Remove internal nodes without any children. Used in `reduceTree()` and `subtree()` functions internally.
+        
+        This method iterates over all objects in the tree and removes nodes that have no children. It continues to check
+        for and remove hanging nodes until none are left.
+        
+        Example:
+        >>> tree.fixHangingNodes()
+        
+        Docstring generated with ChatGPT 4o.
         """
-        hangingCondition=lambda k: k.is_node() and len(k.children)==0
-        hangingNodes=list(filter(hangingCondition,self.Objects)) ## check for nodes without any children (hanging nodes)
-        while len(hangingNodes)>0:
-            for h in sorted(hangingNodes,key=lambda x:-x.height):
-                h.parent.children.remove(h) ## remove old parent from grandparent's children
-                hangingNodes.remove(h) ## remove old parent from multitype nodes
-                self.Objects.remove(h) ## remove old parent from all objects
-            hangingNodes=list(filter(hangingCondition,self.Objects)) ## regenerate list
+        while True:
+            hanging_nodes = [node for node in self.Objects if node.is_node() and not node.children] ## nodes without children (hanging nodes)
+            if not hanging_nodes:
+                break
+
+            for node in hanging_nodes:
+                node.parent.children.remove(node)
+                self.Objects.remove(node)
 
     def addText(self,ax,target=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
+        """
+        Add text annotations to the tree plot.
+        
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
+        target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
+        x_attr (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
+        text (function or None): A function to determine the text content. Default is None, which uses the `leaf` name attribute.
+        zorder (int or None): The z-order for the text. Default is None, which sets the z-order to 4.
+        **kwargs: Additional keyword arguments to pass to the `ax.text` method.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the text annotations added.
+        
+        Example:
+        >>> tree.addText(ax, target=lambda node: node.is_node(), x_attr=lambda node: node.x - 7/365, y_attr=lambda node: node.y - 0.25, text=lambda node: node.traits['posterior'], ha='right', va='top') ## adds posterior values to the left and below internal nodes
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k: k.x
         if y_attr==None: y_attr=lambda k: k.y
         if text==None: text=lambda k: k.name
         if zorder==None: zorder=4
+        local_kwargs=dict(kwargs)
+        if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
+
         for k in filter(target,self.Objects):
             x,y=x_attr(k),y_attr(k)
             z=zorder
-            ax.text(x,y,text(k),zorder=z,**kwargs)
+            ax.text(x,y,text(k),zorder=z,**local_kwargs)
         return ax
 
-    def addTextUnrooted(self,ax,target=None,rotation=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
+    def addTextUnrooted(self,ax,target=None,x_attr=None,y_attr=None,text=None,zorder=None,**kwargs):
+        """
+        Add text annotations to an unrooted tree plot.
+        
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
+        target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
+        x_attr (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
+        text (function or None): A function to determine the text content. Default is None, which uses the branch's name attribute.
+        zorder (int or None): The z-order for the text. Default is None, which sets the z-order to 4.
+        **kwargs: Additional keyword arguments to pass to the `ax.text` method.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the text annotations added.
+        
+        Example:
+        >>> tree.addTextUnrooted(ax) ## adds tip names to the tree
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if target==None: target=lambda k: k.is_leaf()
-        if rotation==None: rotation=lambda k: 0.0
         if x_attr==None: x_attr=lambda k: k.x
         if y_attr==None: y_attr=lambda k: k.y
         if text==None: text=lambda k: k.name
@@ -820,6 +1389,31 @@ class tree: ## tree class
         return ax
 
     def addTextCircular(self,ax,target=None,text=None,x_attr=None,y_attr=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,zorder=None,**kwargs):
+        """
+        Add text annotations to a circular tree plot.
+
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
+        target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
+        text (function or None): A function to determine the text content. Default is None, which uses the `leaf` name attribute.
+        x_attr (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
+        circStart (float): The starting angle (in fractions of 2*pi, i.e. radians) for the circular layout. Default is 0.0.
+        circFrac (float): The fraction of the full circle to use for the layout. Default is 1.0.
+        inwardSpace (float): Amount of space to leave in the middle of the tree (can be negative for inward-facing trees). Default is 0.0.
+        normaliseHeight (function or None): A function to normalize the x-coordinates. Default is None, creates a normalisation that returns 0.0 at root and 1.0 at the most diverged tip.
+        zorder (int or None): The z-order for the text. Default is None, which sets the z-order to 4.
+        **kwargs: Additional keyword arguments to pass to the `ax.text` method.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the text annotations added.
+        
+        Example:
+        >>> tree.addTextCircular(ax) ## adds `leaf` names to a circular tree plot
+        
+        Docstring generated with ChatGPT 4o.
+        """
+
         if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
@@ -854,6 +1448,30 @@ class tree: ## tree class
 
     def plotPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
+        """
+        Plot points on the tree plot.
+        
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to add the points to.
+        x_attr (function or None): A function to determine the x-coordinate for the points. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the points. Default is None, which uses the branch's y attribute.
+        target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` objects.
+        size (int or function or None): The size of the points. Default is None, which sets the size to 40.
+        colour (str or function or None): The color of the points. Default is None, which sets the color to 'k' (black).
+        zorder (int or None): The z-order for the points. Default is None, which sets the z-order to 3.
+        outline (bool or None): If True, adds an outline to the points. Default is None, which sets the outline to True.
+        outline_size (int or function or None): The size of the outline. Default is None, which sets the outline size to twice the size of the points.
+        outline_colour (str or function or None): The color of the outline. Default is None, which sets the outline color to 'k' (black).
+        **kwargs: Additional keyword arguments to pass to the `ax.scatter` method.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the points added.
+        
+        Example:
+        >>> tree.plotPoints(ax, target=lambda node: node.traits['posterior'] >= 0.95) ## will add circles at nodes with greater than 0.95 posterior support
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
@@ -895,6 +1513,27 @@ class tree: ## tree class
     def plotTree(self,ax,connection_type=None,target=None,
              x_attr=None,y_attr=None,width=None,
              colour=None,**kwargs):
+        """
+        Plot the tree on a given matplotlib axes.
+        
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to plot the tree on.
+        connection_type (str or None): The type of connection between nodes. Options are 'baltic' (parental branches are plotted as two straight lines - one horizontal, one vertical), 'direct' (diagonal line that directly connects parent and child branches), or 'elbow' (each child has its own angled branch connecting it to the parent). Default is 'baltic'.
+        target (function or None): A function to select which branches to plot. Default is None, which selects all branches.
+        x_attr (function or None): A function to determine the x-coordinate for the nodes. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the nodes. Default is None, which uses the branch's y attribute.
+        width (int or function or None): The width of the lines. Default is None, which sets the width to 2.
+        colour (str or function or None): The color of the lines. Default is None, which sets the color to 'k' (black).
+        **kwargs: Additional keyword arguments to pass to the LineCollection.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the tree plot added.
+        
+        Example:
+        >>> tree.plotTree(ax)
+        
+        Docstring generated with ChatGPT 4o.
+        """
         if target==None: target=lambda k: True
         if x_attr==None: x_attr=lambda k: k.x
         if y_attr==None: y_attr=lambda k: k.y
@@ -914,20 +1553,20 @@ class tree: ## tree class
             try:
                 colours.append(colour(k)) if callable(colour) else colours.append(colour)
             except KeyError:
-                colours.append((0.7,0.7,0.7))
+                colours.append((0.7,0.7,0.7)) ## in case no colour available for branch set it to grey
             linewidths.append(width(k)) if callable(width) else linewidths.append(width)
 
-            if connection_type=='baltic':
+            if connection_type=='baltic': ## each node has a single vertical line to which descendant branches are connected
                 branches.append(((xp,y),(x,y)))
                 if k.is_node():
-                    yl,yr=y_attr(k.children[0]),y_attr(k.children[-1])
+                    yl,yr=y_attr(k.children[0]),y_attr(k.children[-1]) ## y positions of first and last child
                     branches.append(((x,yl),(x,yr)))
                     linewidths.append(linewidths[-1])
                     colours.append(colours[-1])
-            elif connection_type=='elbow':
+            elif connection_type=='elbow': ## more standard connection where each branch connects to its parent via a right-angled line
                 yp=y_attr(k.parent) if k.parent else y ## get parent x position
                 branches.append(((xp,yp),(xp,y),(x,y)))
-            elif connection_type=='direct':
+            elif connection_type=='direct': ## this gives triangular looking trees where descendants connect directly to their parents
                 yp=y_attr(k.parent) ## get y position
                 branches.append(((xp,yp),(x,y)))
             else:
@@ -940,6 +1579,31 @@ class tree: ## tree class
 
     def plotCircularTree(self,ax,target=None,x_attr=None,y_attr=None,width=None,colour=None,
                          circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,precision=15,**kwargs):
+        """
+        Plot the tree in a circular layout on a given matplotlib axes.
+        
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to plot the tree on.
+        target (function or None): A function to select which branches to plot. Default is None, which selects all branches.
+        x_attr (function or None): A function to determine the x-coordinate for the nodes. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the nodes. Default is None, which uses the branch's y attribute.
+        width (int or function or None): The width of the lines. Default is None, which sets the width to 2.
+        colour (str or function or None): The color of the lines. Default is None, which sets the color to 'k' (black).
+        circStart (float): The starting angle (in fractions of 2*pi, i.e. radians) for the circular layout. Default is 0.0.
+        circFrac (float): The fraction of the full circle to use for the layout. Default is 1.0.
+        inwardSpace (float): Amount of space to leave in the middle of the tree (can be negative for inward-facing trees). Default is 0.0.
+        normaliseHeight (function or None): A function to normalize the x-coordinates. Default is None, creates a normalisation that returns 0.0 at root and 1.0 at the most diverged tip.
+        precision (int): The number of points used to plot curved segments. Default is 15.
+        **kwargs: Additional keyword arguments to pass to the LineCollection.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the circular tree plot added.
+        
+        Example:
+        >>> tree.plotCircularTree(ax)
+        
+        Docstring generated with ChatGPT 4o.
+        """
 
         if target==None: target=lambda k: True
         if x_attr==None: x_attr=lambda k:k.x
@@ -996,6 +1660,35 @@ class tree: ## tree class
 
     def plotCircularPoints(self,ax,x_attr=None,y_attr=None,target=None,size=None,colour=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,
                zorder=None,outline=None,outline_size=None,outline_colour=None,**kwargs):
+        """
+        Plot points on a circular tree plot.
+        
+        Parameters:
+        ax (matplotlib.axes.Axes): The matplotlib axes to add the points to.
+        x_attr (function or None): A function to determine the x-coordinate for the points. Default is None, which uses the branch's x attribute.
+        y_attr (function or None): A function to determine the y-coordinate for the points. Default is None, which uses the branch's y attribute.
+        target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
+        size (int or function or None): The size of the points. Default is None, which sets the size to 40.
+        colour (str or function or None): The color of the points. Default is None, which sets the color to 'k' (black).
+        circStart (float): The starting angle (in fractions of 2*pi, i.e. radians) for the circular layout. Default is 0.0.
+        circFrac (float): The fraction of the full circle to use for the layout. Default is 1.0.
+        inwardSpace (float): Amount of space to leave in the middle of the tree (can be negative for inward-facing trees). Default is 0.0.
+        normaliseHeight (function or None): A function to normalize the x-coordinates. Default is None, creates a normalisation that returns 0.0 at root and 1.0 at the most diverged tip.
+        zorder (int or None): The z-order for the points. Default is None, which sets the z-order to 3.
+        outline (bool or None): If True, adds an outline to the points. Default is None, which sets the outline to True.
+        outline_size (int or function or None): The size of the outline. Default is None, which sets the outline size to twice the size of the points.
+        outline_colour (str or function or None): The color of the outline. Default is None, which sets the outline color to 'k' (black).
+        **kwargs: Additional keyword arguments to pass to the `ax.scatter` method.
+        
+        Returns:
+        matplotlib.axes.Axes: The axes with the points added.
+        
+        Example:
+        >>> tree.plotCircularPoints(ax)
+        
+        Docstring generated with ChatGPT 4o.
+        """
+
         if target==None: target=lambda k: k.is_leaf()
         if x_attr==None: x_attr=lambda k:k.x
         if y_attr==None: y_attr=lambda k:k.y
@@ -1053,6 +1746,21 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
     Minimise y-axis discrepancies between tips of trees in a list.
     Only the tangling of adjacent trees in the list is minimised, so the order of trees matters.
     Trees do not need to have the same number of tips but tip names should match.
+    
+    Parameters:
+    trees (list): A list of tree objects to untangle.
+    cost_function (function or None): A function to calculate the cost of y-axis discrepancies between tips.
+                                      Default is None, which uses the squared difference between y axis positions.
+    iterations (int or None): The number of iterations to perform. Default is None, which sets the iterations to 3.
+    verbose (bool): If True, prints verbose output during the process. Default is False.
+    
+    Returns:
+    list: The list of untangled tree objects.
+    
+    Example:
+    >>> untangled_trees = untangle(list_of_trees, iterations=5, verbose=True)
+    
+    Docstring generated with ChatGPT 4o.
     """
     from itertools import permutations
 
@@ -1092,11 +1800,25 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
 
 def make_tree(data,ll=None,verbose=False):
     """
-    data is a tree string, ll (LL) is an instance of a tree object
+    Parse a tree string and create a tree object.
+    
+    Parameters:
+    data (str): The tree string to be parsed.
+    ll (tree or None): An instance of a tree object. If None, a new tree object is created. Default is None.
+    verbose (bool): If True, prints verbose output during the process. Default is False.
+    
+    Returns:
+    tree: The tree object created from the parsed tree string.
+    
+    Example:
+    >>> tree_string = "(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"
+    >>> tree = make_tree(tree_string)
+    
+    Docstring generated with ChatGPT 4o.
     """
     patterns = {
-        'beast_tip': r'(\(|,)([0-9]+)(\[|\:)',
-        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*'
+        'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
+        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
     }
     if isinstance(data,str)==False: ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
@@ -1109,75 +1831,75 @@ def make_tree(data,ll=None,verbose=False):
     while i < len(data): ## while there's characters left in the tree string - loop away
         if stored_i == i and verbose==True: print('%d >%s<'%(i,data[i]))
 
-        assert (stored_i != i),'\nTree string unparseable\nStopped at >>%s<<\nstring region looks like this: %s'%(data[i],data[i:i+5000]) ## make sure that you've actually parsed something last time, if not - there's something unexpected in the tree string
-        stored_i=i ## store i for later
+        assert (stored_i != i),'\nTree string unparseable\nStopped at >>%s<<\nstring region looks like this: %s'%(data[i],data[i:i+5000]) # Ensure that the index has advanced; if not, raise an error indicating an unparseable string
+        stored_i=i # Store the current index at the end of the loop to check for infinite loops
 
         if data[i] == '(': ## look for new nodes
             if verbose==True: print('%d adding node'%(i))
             ll.add_node(i) ## add node to current node in tree ll
             i+=1 ## advance in tree string by one character
 
-        cerberus=re.match(patterns['beast_tip'],data[i-1:i+100]) ## look for tips in BEAST format (integers).
-        if cerberus is not None:
-            if verbose==True: print('%d adding leaf (BEAST) %s'%(i,cerberus.group(2)))
-            ll.add_leaf(i,cerberus.group(2)) ## add tip
-            i+=len(cerberus.group(2)) ## advance in tree string by however many characters the tip is encoded
+        match=re.match(patterns['beast_tip'],data[i-1:i+100]) ## look for tips in BEAST format (integers).
+        if match:
+            if verbose==True: print('%d adding leaf (BEAST) %s'%(i,match.group(2)))
+            ll.add_leaf(i,match.group(2)) ## add tip
+            i+=len(match.group(2)) ## advance in tree string by however many characters the tip is encoded
 
-        cerberus=re.match(patterns['non_beast_tip'],data[i-1:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
-        if cerberus is not None:
-            if verbose==True: print('%d adding leaf (non-BEAST) %s'%(i,cerberus.group(3)))
-            ll.add_leaf(i,cerberus.group(3).strip('"').strip("'"))  ## add tip
-            i+=len(cerberus.group(3))+cerberus.group().count("'")+cerberus.group().count('"') ## advance in tree string by however many characters the tip is encoded
+        match=re.match(patterns['non_beast_tip'],data[i-1:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
+        if match:
+            if verbose==True: print('%d adding leaf (non-BEAST) %s'%(i,match.group(3)))
+            ll.add_leaf(i,match.group(3).strip('"').strip("'"))  ## add tip
+            i+=len(match.group(3))+match.group().count("'")+match.group().count('"') ## advance in tree string by however many characters the tip is encoded
 
-        cerberus=re.match(r'\)([0-9]+)\[',data[i-1:i+100]) ## look for multitype tree singletons.
-        if cerberus is not None:
-            if verbose==True: print('%d adding multitype node %s'%(i,cerberus.group(1)))
-            i+=len(cerberus.group(1))
+        match=re.match(r'\)([0-9]+)\[',data[i-1:i+100]) ## look for multitype tree singletons.
+        if match:
+            if verbose==True: print('%d adding multitype node %s'%(i,match.group(1)))
+            i+=len(match.group(1))
 
-        cerberus=re.match(r'[\(,](#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for beginning of reticulate branch
-        if cerberus is not None:
-            if verbose==True: print('%d adding outgoing reticulation branch %s'%(i,cerberus.group(1)))
-            ll.add_reticulation(cerberus.group(1)) ## add reticulate branch
+        match=re.match(r'[\(,](#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for beginning of reticulate branch
+        if match:
+            if verbose==True: print('%d adding outgoing reticulation branch %s'%(i,match.group(1)))
+            ll.add_reticulation(match.group(1)) ## add reticulate branch
 
             destination=None
             for k in ll.Objects: ## iterate over branches parsed so far
-                if 'label' in k.traits and k.traits['label']==cerberus.group(1): ## if there's a branch with a matching id
+                if 'label' in k.traits and k.traits['label']==match.group(1): ## if there's a branch with a matching id
                     if destination==None: ## not set destination before
                         destination=k ## destination is matching node
                     else: ## destination seen before - raise an error (indicates reticulate branch ids are not unique)
-                        raise Exception('Reticulate branch not unique: %s seen elsewhere in the tree'%(cerberus.group(1)))
+                        raise Exception('Reticulate branch not unique: %s seen elsewhere in the tree'%(match.group(1)))
             if destination: ## identified destination of this branch
-                if verbose==True: print('identified %s destination'%(cerberus.group(1)))
+                if verbose==True: print('identified %s destination'%(match.group(1)))
                 ll.cur_node.target=destination ## set current node's target as the destination
                 setattr(destination,"contribution",ll.cur_node) ## add contributing edge to destination
             else:
-                if verbose==True: print('destination of %s not identified yet'%(cerberus.group(1)))
-            i+=len(cerberus.group())-1
+                if verbose==True: print('destination of %s not identified yet'%(match.group(1)))
+            i+=len(match.group())-1
 
-        cerberus=re.match(r'\)(#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for landing point of reticulate branch
-        if cerberus is not None:
-            if verbose==True: print('%d adding incoming reticulation branch %s'%(i,cerberus.group(1)))
-            ll.cur_node.traits['label']=cerberus.group(1) ## set node label
+        match=re.match(r'\)(#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for landing point of reticulate branch
+        if match:
+            if verbose==True: print('%d adding incoming reticulation branch %s'%(i,match.group(1)))
+            ll.cur_node.traits['label']=match.group(1) ## set node label
 
             origin=None ## branch is landing, check if its origin was seen previously
             for k in ll.Objects: ## iterate over currently existing branches
-                if isinstance(k,reticulation) and k.name==cerberus.group(1): ## check if any reticulate branches match the origin
+                if isinstance(k,reticulation) and k.name==match.group(1): ## check if any reticulate branches match the origin
                     if origin == None: ## origin not identified yet
                         origin=k ## origin is reticulate branch with the correct name
                     else: ## origin has been identified - shouldn't happen, implies that multiple reticulate branches exist with the same name
-                        raise Exception('Reticulate branch not unique: %s seen elsewhere in the tree'%(cerberus.group(1)))
+                        raise Exception('Reticulate branch not unique: %s seen elsewhere in the tree'%(match.group(1)))
             if origin: ## identified origin
-                if verbose==True: print('identified %s origin'%(cerberus.group(1)))
+                if verbose==True: print('identified %s origin'%(match.group(1)))
                 origin.target=ll.cur_node ## set origin's landing at this node
                 setattr(ll.cur_node,"contribution",origin) ## add contributing edge to this node
             else:
-                if verbose==True: print('origin of %s not identified yet'%(cerberus.group(1)))
-            i+=len(cerberus.group())-1
+                if verbose==True: print('origin of %s not identified yet'%(match.group(1)))
+            i+=len(match.group())-1
 
-        cerberus=re.match(r'(\:)*\[(&[A-Za-z\_\-{}\,0-9\.\%=\"\'\+!# :\/\(\)\&]+)\]',data[i:])## look for MCC comments
-        if cerberus is not None:
-            if verbose==True: print('%d comment: %s'%(i,cerberus.group(2)))
-            comment=cerberus.group(2)
+        match=re.match(r'(\:)*\[(&[A-Za-z\_\-{}\,0-9\.\%=\"\'\+!# :\/\(\)\&]+)\]',data[i:])## look for MCC comments
+        if match:
+            if verbose==True: print('%d comment: %s'%(i,match.group(2)))
+            comment=match.group(2)
             numerics=re.findall('[,&][A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
             strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
             treelist=re.findall('[,&][A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
@@ -1200,13 +1922,13 @@ def make_tree(data,ll=None,verbose=False):
             for val in treelist:
                 tr,val=val.split('=')
                 tr=tr[1:]
-                microcerberus = []
+                micromatch = []
                 if val.count(",") == 2:
-                    microcerberus=re.findall(r'{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
+                    micromatch=re.findall(r'{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
                 elif val.count(",") == 3:
-                    microcerberus=re.findall(r'{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
+                    micromatch=re.findall(r'{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
                 ll.cur_node.traits[tr]=[]
-                for val in microcerberus:
+                for val in micromatch:
                     val_split = val.split(',')
                     ll.cur_node.traits[tr].append(val.split(","))
 
@@ -1229,20 +1951,22 @@ def make_tree(data,ll=None,verbose=False):
             if len(figtree)>0:
                 print('FigTree comment found, ignoring')
 
-            i+=len(cerberus.group()) ## advance in tree string by however many characters it took to encode labels
+            i+=len(match.group()) ## advance in tree string by however many characters it took to encode labels
 
-        cerberus=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
-        if cerberus is not None:
-            if verbose==True: print('old school comment found: %s'%(cerberus.group(1)))
-            ll.cur_node.traits['label']=cerberus.group(1)
+        # match=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
+        match=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;|\[)',data[i:])## look for old school node labels
 
-            i+=len(cerberus.group(1))
+        if match:
+            if verbose==True: print('old school comment found: %s'%(match.group(1)))
+            ll.cur_node.traits['label']=match.group(1)
 
-        microcerberus=re.match(r'(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
-        if microcerberus is not None:
-            if verbose==True: print('adding branch length (%d) %.6f'%(i,float(microcerberus.group(2))))
-            ll.cur_node.length=float(microcerberus.group(2)) ## set branch length of current node
-            i+=len(microcerberus.group()) ## advance in tree string by however many characters it took to encode branch length
+            i+=len(match.group(1))
+
+        micromatch=re.match(r'(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
+        if micromatch is not None:
+            if verbose==True: print('adding branch length (%d) %.6f'%(i,float(micromatch.group(2))))
+            ll.cur_node.length=float(micromatch.group(2)) ## set branch length of current node
+            i+=len(micromatch.group()) ## advance in tree string by however many characters it took to encode branch length
 
         if data[i] == ',' or data[i] == ')': ## look for bifurcations or clade ends
             i+=1 ## advance in tree string
@@ -1253,6 +1977,20 @@ def make_tree(data,ll=None,verbose=False):
             break ## end loop
 
 def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
+    """
+    Parse an auspice JSON tree and create a baltic tree object.
+    
+    Parameters:
+    JSONnode (dict): The JSON node to be parsed.
+    json_translation (dict): A dictionary for translating JSON keys to tree attributes.
+    ll (tree or None): An instance of a tree object. If None, a new tree object is created. Default is None.
+    verbose (bool): If True, prints verbose output during the process. Default is False.
+    
+    Returns:
+    tree: The tree object created from the parsed JSON.
+    
+    Docstring generated with ChatGPT 4o.
+    """
     if 'children' in JSONnode: ## only nodes have children
         new_node=node()
     else:
@@ -1281,13 +2019,31 @@ def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
 
 def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',variableDate=True,absoluteTime=False,verbose=False, sortBranches = True):
     """
-    Load newick file
+    Load a tree from a Newick file and process it.
+    
+    Parameters:
+    tree_path (str or file-like object): The path to the Newick file or a file-like object containing the Newick formatted tree.
+    tip_regex (str): A regular expression to extract dates from tip names. Default is '\|([0-9]+\-[0-9]+\-[0-9]+)'.
+    date_fmt (str): The date format for the extracted dates. Default is '%Y-%m-%d'.
+    variableDate (bool): If True, allows for variable date formats. Default is True.
+    absoluteTime (bool): If True, converts the tree to absolute time using the tip dates encoded in tip names. Default is False.
+    verbose (bool): If True, prints verbose output during the process. Default is False.
+    sortBranches (bool): If True, sorts the branches of the tree after loading. Default is True.
+    
+    Returns:
+    tree: The tree object created from the Newick file.
+    
+    Raises:
+    AssertionError: If the tree string cannot be found or if tip dates cannot be extracted when absoluteTime is True.
+    
+    Example:
+    >>> tree = loadNewick("path/to/tree.newick", absoluteTime=False, verbose=True)
+    
+    Docstring generated with ChatGPT 4o.
     """
     ll=None
-    if isinstance(tree_path,str):
-        handle=open(tree_path,'r')
-    else:
-        handle=tree_path
+
+    handle = open(tree_path, 'r') if isinstance(tree_path, str) else tree_path
 
     for line in handle:
         l=line.strip('\n')
@@ -1298,66 +2054,84 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
 
     assert ll,'Regular expression failed to find tree string'
     ll.traverse_tree(verbose=verbose) ## traverse tree
-    if sortBranches:
-        ll.sortBranches() ## traverses tree, sorts branches, draws tree
+    
+    if sortBranches: ll.sortBranches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime==True:
-        tipDates=[]
-        tipNames=[]
+        tip_dates=[]
+        tip_names=[]
         for k in ll.getExternal():
-            n=k.name
-            tipNames.append(n)
-            cerberus=re.search(tip_regex,n)
-            if cerberus is not None:
-                tipDates.append(decimalDate(cerberus.group(1),fmt=date_fmt,variable=variableDate))
-        assert len(tipDates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tipNames[0],tip_regex,date_fmt)
-        highestTip=max(tipDates)
-        ll.setAbsoluteTime(highestTip)
+            tip_names.append(k.name)
+            match=re.search(tip_regex,k.name)
+            if match:
+                tip_dates.append(decimalDate(match.group(1),fmt=date_fmt,variable=variableDate))
+        assert len(tip_dates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tip_names[0],tip_regex,date_fmt)
+        ll.setAbsoluteTime(max(tip_dates))
+
     if isinstance(tree_path,str):
         handle.close()
     return ll
 
 def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%d',treestring_regex='tree [A-Za-z\_]+([0-9]+)',variableDate=True,absoluteTime=True,verbose=False, sortBranches=True):
     """
-    Load nexus file
+    Load a tree from a Nexus file and process it.
+    
+    Parameters:
+    tree_path (str or file-like object): The path to the Nexus file or a file-like object containing the NEXUS formatted tree.
+    tip_regex (str): A regular expression to extract dates from tip names. Default is '\|([0-9]+\-[0-9]+\-[0-9]+)'.
+    date_fmt (str): The date format for the extracted dates. Default is '%Y-%m-%d'.
+    treestring_regex (str): A regular expression to identify the tree string in the NEXUS file. Default is 'tree [A-Za-z\_]+([0-9]+)'.
+    variableDate (bool): If True, allows for variable date formats. Default is True.
+    absoluteTime (bool): If True, converts the tree to absolute time using the tip dates extracted from tip names. Default is True.
+    verbose (bool): If True, prints verbose output during the process. Default is False.
+    sortBranches (bool): If True, sorts the branches of the tree after loading. Default is True.
+    
+    Returns:
+    tree: The tree object created from the NEXUS file.
+    
+    Raises:
+    AssertionError: If the tree string cannot be found or if tip dates cannot be extracted when absoluteTime is True.
+    
+    Example:
+    >>> tree = loadNexus("path/to/tree.nexus", absoluteTime=True, verbose=True)
+    
+    Docstring generated with ChatGPT 4o.
     """
-    tipFlag=False
+    tip_flag=False
     tips={}
-    tipNum=0
+    tip_num=0
     ll=None
-    if isinstance(tree_path,str):
-        handle=open(tree_path,'r')
-    else:
-        handle=tree_path
+
+    handle = open(tree_path, 'r') if isinstance(tree_path, str) else tree_path
 
     for line in handle:
         l=line.strip('\n')
 
-        cerberus=re.search('Dimensions ntax=([0-9]+);',l)
-        if cerberus is not None:
-            tipNum=int(cerberus.group(1))
-            if verbose==True: print('File should contain %d taxa'%(tipNum))
+        match=re.search('Dimensions ntax=([0-9]+);',l)
+        if match:
+            tip_num=int(match.group(1))
+            if verbose==True: print('File should contain %d taxa'%(tip_num))
 
-        cerberus=re.search(treestring_regex,l)
-        if cerberus is not None:
+        match=re.search(treestring_regex,l)
+        if match:
             treeString_start=l.index('(')
             ll=make_tree(l[treeString_start:],verbose=verbose) ## send tree string to make_tree function
             if verbose==True: print('Identified tree string')
 
-        if tipFlag==True:
-            cerberus=re.search('([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
-            if cerberus is not None:
-                tips[cerberus.group(1)]=cerberus.group(2).strip('"').strip("'")
-                if verbose==True: print('Identified tip translation %s: %s'%(cerberus.group(1),tips[cerberus.group(1)]))
+        if tip_flag:
+            match=re.search('([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
+            if match:
+                tips[match.group(1)]=match.group(2).strip('"').strip("'")
+                if verbose==True: print('Identified tip translation %s: %s'%(match.group(1),tips[match.group(1)]))
             elif ';' not in l:
                 print('tip not captured by regex:',l.replace('\t',''))
 
         if 'Translate' in l:
-            tipFlag=True
+            tip_flag=True
         if ';' in l:
-            tipFlag=False
+            tip_flag=False
 
-    assert ll,'Regular expression failed to find tree string'
+    assert ll,'Failed to find tree string using regular expression'
     ll.traverse_tree() ## traverse tree
     if sortBranches:
         ll.sortBranches() ## traverses tree, sorts branches, draws tree
@@ -1365,17 +2139,16 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
         ll.renameTips(tips) ## renames tips from numbers to actual names
         ll.tipMap=tips
     if absoluteTime==True:
-        tipDates=[]
-        tipNames=[]
+        tip_dates=[]
+        tip_names=[]
         for k in ll.getExternal():
-            tipNames.append(k.name)
-            cerberus=re.search(tip_regex,k.name)
-            if cerberus is not None:
-                tipDates.append(decimalDate(cerberus.group(1),fmt=date_fmt,variable=variableDate))
+            tip_names.append(k.name)
+            match=re.search(tip_regex,k.name)
+            if match:
+                tip_dates.append(decimalDate(match.group(1),fmt=date_fmt,variable=variableDate))
 
-        assert len(tipDates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tipNames[0],tip_regex,date_fmt)
-        highestTip=max(tipDates)
-        ll.setAbsoluteTime(highestTip)
+        assert len(tip_dates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tip_names[0],tip_regex,date_fmt)
+        ll.setAbsoluteTime(max(tip_dates))
 
     if isinstance(tree_path,str):
         handle.close()
@@ -1383,11 +2156,31 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
 
 def loadJSON(json_object,json_translation={'name':'name','absoluteTime':'num_date'},verbose=False,sort=True,stats=True):
     """
-    Load a nextstrain JSON by providing either the path to JSON or a file handle.
-    json_translation is a dictionary that translates JSON attributes to baltic branch attributes (e.g. 'absoluteTime' is called 'num_date' in nextstrain JSONs).
-    Note that to avoid conflicts in setting node heights you can either define the absolute time of each node or branch lengths (e.g. if you want a substitution tree).
+    Load a Nextstrain JSON file and create a tree object.
+    
+    Parameters:
+    json_object (str or dict): The path to the JSON file, a URL to a Nextstrain JSON, or a JSON object.
+    json_translation (dict): A dictionary that translates JSON attributes to tree attributes (e.g., baltic branch attribute 'absoluteTime' is called 'num_date' in Nextstrain JSONs).
+                             Default is {'name': 'name', 'absoluteTime': 'num_date'}.
+    verbose (bool): If True, prints verbose output during the process. Default is False.
+    sort (bool): If True, sorts the branches of the tree after loading. Default is True.
+    stats (bool): If True, calculates tree statistics after loading. Default is True.
+    
+    Returns:
+    tuple: A tuple containing the tree object created from the JSON and the metadata from the JSON.
+    
+    Raises:
+    AssertionError: If the json_translation dictionary is missing the `name` attribute (crucial for tips) and least one branch length attribute (`absoluteTime`, `length` or `height`).
+    KeyError: If a string attribute in json_translation is not found in the JSON data structure.
+    AttributeError: If an attribute in json_translation is neither a string nor callable.
+    
+    Example:
+    >>> tree, metadata = loadJSON("path/to/tree.json", verbose=True)
+    
+    Docstring generated with ChatGPT 4o.
     """
-    assert 'name' in json_translation and ('absoluteTime' in json_translation or 'length' in json_translation or 'height' in json_translation),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name','height','absoluteTime','length'] if (entry in json_translation)==False]))
+    length_keys = ['absoluteTime', 'length', 'height']
+    assert 'name' in json_translation and any(key in json_translation for key in required_keys),'JSON translation dictionary missing entries: %s'%(', '.join([entry for entry in ['name']+length_keys if (entry in json_translation)==False]))
     if verbose==True: print('Reading JSON')
 
     if isinstance(json_object,str): ## string provided - either nextstrain URL or local path
