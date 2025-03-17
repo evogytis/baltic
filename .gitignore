@@ -1,2 +1,4 @@
 .DS_Store
-.pyc
+.pyc__pycache__/
+baltic/__pycache__/
+*.pyc
