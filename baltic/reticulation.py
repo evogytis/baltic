@@ -1,4 +1,6 @@
-class Reticulation: ## reticulation class (recombination, conversion, reassortment)
+from .branchLike import BranchLike
+
+class Reticulation(BranchLike): ## reticulation class (recombination, conversion, reassortment)
     """
     Represents a reticulation event in a phylogenetic tree, such as recombination or reassortment.
     
@@ -19,16 +21,8 @@ class Reticulation: ## reticulation class (recombination, conversion, reassortme
     Docstring generated with ChatGPT 4o.
     """
     def __init__(self,name):
+        super().__init__() # Inherit traits from BranchLike
         self.branchType='leaf'
-        self.length=0.0
-        self.height=0.0
-        self.absoluteTime=None
-        self.parent=None
-        self.traits={}
-        self.index=None
-        self.name=name
-        self.x=None
-        self.y=None
         self.width=0.5
         self.target=None
 

@@ -1,4 +1,6 @@
-class Leaf: ## leaf class
+from .branchLike import BranchLike
+
+class Leaf(BranchLike): ## leaf class
     """
     Represents a leaf in a phylogenetic tree.
     
@@ -17,16 +19,7 @@ class Leaf: ## leaf class
     Docstring generated with ChatGPT 4o.
     """
     def __init__(self):
-        self.branchType='leaf'
-        self.name=None ## name of tip after translation, since BEAST trees will generally have numbers for taxa but will provide a map at the beginning of the file
-        self.index=None ## index of the character that defines this object, will be a unique ID for each object in the tree
-        self.length=None ## branch length
-        self.absoluteTime=None ## position of tip in absolute time
-        self.height=None ## height of tip
-        self.parent=None ## parent
-        self.traits={} ## trait dictionary
-        self.x=None ## position of tip on x axis if the tip were to be plotted
-        self.y=None ## position of tip on y axis if the tip were to be plotted
+        super().__init__() # all of leaf's traits come from BranchLike
 
     def is_leaflike(self):
         return True
