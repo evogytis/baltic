@@ -23,6 +23,7 @@ class Reticulation(BranchLike): ## reticulation class (recombination, conversion
     def __init__(self,name):
         super().__init__() # Inherit traits from BranchLike
         self.branchType='leaf'
+        self.name=name
         self.width=0.5
         self.target=None
 

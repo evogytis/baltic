@@ -1,5 +1,6 @@
 import re
 import datetime as dt
+import numpy as np
 
 def decimalDate(date,fmt="%Y-%m-%d",variable=False):
     """
@@ -165,3 +166,40 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
                 y_positions[tree2][k.name]=k.y ## remember new coordinates
 
     return trees
+
+def _rtt(root_candidate, tip_dates, tip_heights, res, stat='r^2', force_positive=True, frac=None):
+    """
+    Given tip dates and tip heights compute root-to-tip regression parameters, update res dict if better value found.
+    Can force only positive rates.
+    Probably need to check if scipy is installed.
+    """
+    from scipy.stats import linregress
+    
+    slope,intercept,rval,pval,err = linregress(tip_dates,tip_heights) ## run linear regression
+    corr = np.corrcoef((tip_dates,tip_heights))[0,1] ## correlation coefficient
+    ssq = sum([(y-(slope*x+intercept))**2 for x,y in zip(tip_dates,tip_heights)]) ## sum of squares
+    
+    if stat=='correlation': ## set stat to optimise
+        local_stat = corr
+    elif stat=='sum of squares':
+        local_stat = ssq
+    elif stat=='r^2':
+        local_stat = rval
+    
+    opt_stat = res[stat] if stat in res else (np.inf if stat in ['sum of squares'] else -np.inf)
+    
+    if (local_stat < opt_stat if stat in ['sum of squares'] else local_stat > opt_stat): ## minimise sum of squares or maximise correlation/r^2
+        if force_positive and slope<0: ## force positive True and slope<0
+            pass ## if forcing positive root slope must be positive, do nothing
+        else: ## force_positive is False or true and slope>0
+            opt_stat = local_stat ## better root found
+#             new_root = [w for w in self.Objects if w.index==k.index][0]
+            res['correlation']=corr
+            res['sum of squares']=ssq
+            res['slope']=slope
+            res['intercept']=intercept
+            res['r^2']=rval
+            res['root']=root_candidate
+            if frac!=None: res['frac']=frac
+        
+    return res

@@ -1,11 +1,12 @@
 import copy,math
+import numpy as np
 from functools import reduce
 from matplotlib.collections import LineCollection
 from .node import Node
 from .leaf import Leaf
 from .clade import Clade
 from .reticulation import Reticulation
-
+from .bt_utils import _rtt
 
 class Tree: ## tree class
     """
@@ -90,14 +91,14 @@ class Tree: ## tree class
 
         Docstring generated with ChatGPT 4o.
         """
-        new_leaf=Leaf() ## new instance of leaf object
+        new_leaf=Leaf(name) ## new instance of leaf object
         new_leaf.index=i ## index is position along tree string
         if self.root is None: self.root=new_leaf
 
         new_leaf.parent=self.cur_node ## leaf's parent is current node
         assert self.cur_node.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
         self.cur_node.children.append(new_leaf) ## assign leaf to parent's children
-        new_leaf.name=name
+        # new_leaf.name=name
         self.cur_node=new_leaf ## current node is now new leaf
         self.Objects.append(self.cur_node) ## add leaf to all objects in the tree
 
@@ -164,7 +165,7 @@ class Tree: ## tree class
 
         return local_tree
 
-    def singleType(self):
+    def singleType(self,verbose=False):
         """
         Removes any branches with a single child (multitype nodes) from the tree.
         
@@ -188,13 +189,17 @@ class Tree: ## tree class
         while True:
             multitype_nodes=self.getInternal(lambda k: len(k.children)==1)
 
+            if verbose:
+                print('Number of multitype nodes in tree: %d'%(len(multitype_nodes)))
             if not multitype_nodes:
                 break
 
             for k in sorted(multitype_nodes,key=lambda x:-x.height):
+
                 child=k.children[0] ## fetch child
                 grandparent=k.parent if k.parent.index else self.root ## fetch grandparent
-
+                if verbose:
+                    print('At multitype node %s with child %s and grandparent %s'%(k.index,child.index,grandparent.index))
                 child.parent=grandparent ## child's parent is now grandparent
                 grandparent.children.append(child) ## add child to grandparent's children
                 grandparent.children.remove(k) ## remove old parent from grandparent's children
@@ -350,6 +355,221 @@ class Tree: ## tree class
         for k in self.getExternal(): ## iterate through leaf objects in tree
             # k.name=d[k.numName] ## change its name
             k.name=d[k.name] ## change its name
+
+    def get_path_to_root(self, node):
+        """
+        Retrieves the path from designated node to root (includes root by default).
+        """
+        path=[]
+        
+        cur_node=node
+        while cur_node:
+            path.append(cur_node)
+            cur_node=cur_node.parent
+            
+        return path
+
+    def reroot(self, branch=None, branch_frac=0.5, fix_singletons=True, verbose=False):
+        """
+        Shouldn't be allowed for time trees, complex data structures or trees without branch lengths.
+        Code translated from Biopython.
+        If branch is None - root at midpoint.
+        """
+        if branch==self.root:
+            if verbose:
+                print('Rerooting attempted on existing root')
+            return self
+
+        old_tree_length=sum(self.getParameter('length')) ## get old tree length
+        ###############
+        if branch==None: ## midpoint rooting
+            if verbose:
+                print('No branch provided, rooting at midpoint')
+            # Identify the largest pairwise distance
+            max_distance = 0.0
+            
+            for tip in self.getExternal(): ## iterate over tips
+                
+                self.reroot(branch = tip, branch_frac = 0.0)
+                self.traverse_tree() ## set heights
+                
+                highest_tip = sorted(self.getExternal(),key=lambda k: k.height)[-1]
+                new_max = highest_tip.height
+                if new_max > max_distance: ## check if current height is bigger 
+                    tip1 = tip
+                    tip2 = highest_tip
+                    max_distance = new_max
+    #                 print('setting %s as current highest tip at height %s'%(tip2.name,max_distance))
+            
+            if verbose:
+                print('First step of midpoint root - rooting on highest tip under current topology (%s)'%(tip1.name))
+            self.reroot(branch = tip1, branch_frac = 0.0)
+            
+            # Depth to go from the ingroup tip toward the outgroup tip
+            root_remainder = 0.5 * max_distance# - (self.root.length or 0))
+            assert root_remainder >= 0
+            # Identify the midpoint and reroot there.
+            # Trace the path to the outgroup tip until all of the root depth has
+            # been traveled/accounted for.
+            path=self.get_path_to_root(tip2)[:-1]
+            
+            for node in path[::-1]: ## iterate from old root to new
+                root_remainder -= node.length
+    #             print('iterating over path: %s root remainder: %s'%(node.index,root_remainder))
+                if root_remainder < 0:
+                    outgroup_node = node
+                    branch_frac = -root_remainder / outgroup_node.length
+                    break
+    #         print('rerooting on %s with %s frac'%(node.index,branch_frac))
+            if verbose:
+                print('Second step of midpoint root - rooting on node %s halfway from previous highest tip and current highest tip %s'%(outgroup_node.index,tip2.name))
+            self.reroot(branch = outgroup_node, branch_frac = branch_frac, fix_singletons = fix_singletons)
+            
+            return self
+        
+        ##############
+        path=self.get_path_to_root(branch)[:-1] ## get path from new root to old root, ignore actual root node
+        path=path[-2::-1] ## invert
+        
+        og_len=float(branch.length) ## store branch length on the new root branch
+        prev_blen = og_len
+        branch.length = og_len*(branch_frac) ## this modifies unchanged path branch length
+        ##################
+
+        import random,string
+        characters = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
+        random_string=''.join(random.choices(characters, k=10))
+
+
+        new_root=Node() ## create new root
+        new_root.index='new_root_%s_%s_%s'%(branch.index,branch_frac,random_string)
+        new_root.length=0.0
+        new_root.children.append(branch)
+
+        if verbose:
+            print('Created new root %s'%(new_root.index))
+        
+        ######################
+        if len(path) == 1: ## new root is the old root (but maybe branch length is adjusted)
+            new_parent = new_root    
+        else: ## 
+            parent = path.pop(-2) ## get previous branch
+            parent.children.remove(branch) ## remove child
+            
+            prev_blen, parent.length = parent.length, (prev_blen - branch.length) ## store previous branch length, assign new branch length
+            
+            new_root.children.append(parent) ## add branch as child of new root
+            
+            parent.parent=new_root ## assign new parent
+            new_parent=parent ## set new_parent variable
+        
+        #######################
+        for parent in path[-2::-1]: ## iterate from new root to old root
+            parent.children.remove(new_parent) ## remove parent (used to be child)
+            parent.parent=new_parent ## assign child as parent
+            prev_blen, parent.length = parent.length, prev_blen ## pass branch length to the next node
+            new_parent.children.append(parent) ## add former parent as child
+            new_parent=parent ## move up to next node
+        #################
+
+        if verbose:
+            print('Cleaning up old root')
+
+        old_root = self.root ## get old root
+        
+        if branch in old_root.children: ## remove child that was on the way to the new root from old root's children
+            assert len(path) == 1
+            old_root.children.remove(branch)
+        else:
+            old_root.children.remove(new_parent)
+        
+        if branch.parent==self.root: ## if we were rooting on a branch connected to the root
+            old_root.length = prev_blen*(1-branch_frac)
+        else:
+            old_root.length = prev_blen
+        
+        new_parent.children.append(old_root) ## add old root as child
+        old_root.parent=new_parent ## set parent as old root
+        ########
+
+        if verbose:
+            print('Setting up root parent node (it\'s a baltic thing)')
+        self.root=new_root ## set root to new root
+        
+        root_parent=Node() ## baltic tree roots have an additional parent node to the root
+        root_parent.index='Root'
+        root_parent.length=0.0
+        root_parent.height=0.0
+        
+        root_parent.children.append(self.root) ## set up basal baltic root parent node
+        self.root.parent=root_parent
+        self.Objects.append(self.root)
+        
+        branch.parent=new_root
+        #############
+        if fix_singletons: ## fixing singleton nodes (node's with 1 child, i.e. old root)
+            if verbose:
+                print('Fixing singletons')
+            self.singleType(verbose=verbose) ## tree class can handle it
+        
+        ############
+        new_tree_length=sum([k.length for k in self.traverse_tree(include_condition=lambda q: True)]) ## get new tree length
+        assert math.isclose(old_tree_length,new_tree_length),'Tree length changed after rerooting - was %s, now %s'%(old_tree_length,new_tree_length) ## check if tree length hasn't changed after rerooting
+        
+        self.traverse_tree()
+        
+        return self
+
+    def root_by_regression(self,stat='r^2',force_positive=True,verbose=False):
+        """
+        Run root-to-tip regression to find optimal root based on minimising sum of squares or maximising r^2 or correlation coefficient.
+        New root is placed in the middle of the branch.
+        """
+        valid_methods=['r^2','correlation','sum of squares']
+        assert stat in valid_methods,'Invalid option for root-to-tip regression: %s (options are %s)'%(stat,valid_methods)
+        
+        cll=copy.deepcopy(self) ## deepcopy entire tree
+        
+        res={} ## will be used to track better regressions with new roots
+        for k in self.Objects[1:]: ## iterate over branches in tree (ignore root)
+            cll = cll.reroot([w for w in cll.Objects if w.index==k.index][0],fix_singletons=False,verbose=verbose) ## reroot on branch provided
+            tips=cll.getExternal() ## get all tips
+            
+            xs,ys=zip(*[(w.absoluteTime,w.height) for w in tips]) ## get collection dates
+            res = _rtt(k,xs,ys,res,stat=stat,force_positive=force_positive) ## check root-to-tip regression, update res if better
+        ##############
+        if verbose:
+            print('Rooting tree first time at node %s with regression: %s'%(res['root'],res))
+        self = self.reroot(res['root'],verbose=verbose) ## reroot on branch optimising stat
+        ############
+        if len(self.root.children) == 2: ## if root is strictly bifurcating - also optimise branch fraction
+            if verbose:
+                print('Bifurcating root, finding more precise rooting along new root')
+            res['frac'] = 0.0 ## add frac argument
+            left,right = self.root.children ## get left and right children
+            
+            total_branch = left.length + right.length ## total amount of branch length adjustment available at root
+            left_subtree = self.traverse_tree(left) ## get left subtree
+            right_subtree = self.traverse_tree(right) ## get right subtree
+            
+            lxs = [k.absoluteTime for k in left_subtree] ## get x coordinates for left subtree
+            rxs = [k.absoluteTime for k in right_subtree] ## get x coordinates for right subtree
+            
+            for f in np.linspace(0,1,21): ## check root positions along best overall root
+                adjustL = -left.length + total_branch * f ## height adjustments for left subtree
+                adjustR = -right.length + total_branch * (1-f) ## height adjustments for right subtree
+                
+                lys = [k.height+adjustL for k in left_subtree] ## adjust left subtree heights
+                rys = [k.height+adjustR for k in right_subtree] ## same for right
+                
+                res = _rtt(left,xs,ys,res,stat=stat,force_positive=force_positive,frac=f) ## check regression
+            
+            self = self.reroot(branch = res['root'], branch_frac = res['frac'],verbose=verbose) ## reroot on branch optimising stat
+        #############
+        print('Correlation coefficient: %s\nSum of squares: %s\nEvolutionary rate: %s\nIntercept (TMRCA): %s\nr^2: %s'%(res['correlation'],res['sum of squares'],res['slope'],max(xs)-res['intercept'],res['r^2']))
+        
+        return self
+
 
     def sortBranches(self,descending=True,sort_function=None,sortByHeight=True):
         """
@@ -507,7 +727,7 @@ class Tree: ## tree class
             total=sum([1 if x.is_leaf() else x.width+1 for x in self.getExternal()])
             n=self.root#.children[0]
             for k in self.Objects:
-                k.traits['tau']=2*math.pi*rotate
+                k._tau=2*math.pi*rotate
                 k.x=0.0
                 k.y=0.0
 
@@ -519,13 +739,13 @@ class Tree: ## tree class
 
         n.x = n.parent.x + n.length * math.cos(n.traits['tau'] + w*0.5)
         n.y = n.parent.y + n.length * math.sin(n.traits['tau'] + w*0.5)
-        eta=n.traits['tau']
+        eta=n._tau
 
         if n.is_node():
             for ch in n.children:
                 w=2*math.pi*1.0/float(total) if ch.is_leaf() else 2*math.pi*len(ch.leaves)/float(total)
 
-                ch.traits['tau'] = eta
+                ch._tau = eta
                 eta += w
                 self.drawUnrooted(rotate,ch,total)
 
@@ -555,7 +775,7 @@ class Tree: ## tree class
                 paths_to_root[k.index].add(cur_node) ## remember every node visited along the way
                 cur_node=cur_node.parent ## descend
 
-        return sorted(reduce(set.intersection,paths_to_root.values()),key=lambda k: k.height)[-1] ## return the most recent branch that is shared across all paths to root
+        return sorted(reduce(set.intersection,paths_to_root.values()),key=lambda k: (-len(k.leaves), k.height))[-1] ## return the most recent branch that is shared across all paths to root
 
     def collapseSubtree(self,cl,givenName,verbose=False,widthFunction=lambda k:len(k.leaves)):
         """
@@ -899,7 +1119,7 @@ class Tree: ## tree class
         """
         return len([k for k in self.Objects if getattr(k.parent,attr)!=None and getattr(k.parent,attr)<t<=getattr(k,attr) and condition(k)])
 
-    def getExternal(self,secondFilter=None):
+    def getExternal(self,secondFilter=None,only_tips=True):
         """
         Get all leaf-like branches (`leaf`, `clade`, and `reticulation` classes).
         
@@ -915,7 +1135,7 @@ class Tree: ## tree class
         
         Docstring generated with ChatGPT 4o.
         """
-        externals=list(filter(secondFilter,filter(lambda k: k.is_leaflike(),self.Objects)))
+        externals=list(filter(secondFilter,filter(lambda k: k.is_leaf() if only_tips else k.is_leaflike(),self.Objects)))
         return externals
 
     def getInternal(self,secondFilter=None):

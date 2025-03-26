@@ -18,8 +18,10 @@ class Leaf(BranchLike): ## leaf class
 
     Docstring generated with ChatGPT 4o.
     """
-    def __init__(self):
+    def __init__(self,name):
         super().__init__() # all of leaf's traits come from BranchLike
+        self.branchType='leaf'
+        self.name=name
 
     def is_leaflike(self):
         return True
