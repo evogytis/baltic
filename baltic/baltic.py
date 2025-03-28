@@ -40,13 +40,13 @@ def make_tree(data,ll=None,verbose=False):
     if ll==None: ## calling without providing a tree object - create one
         ll=Tree()
     i=0 ## is an adjustable index along the tree string, it is incremented to advance through the string
-    stored_i=None ## store the i at the end of the loop, to make sure we haven't gotten stuck somewhere in an infinite loop
+    storedI=None ## store the i at the end of the loop, to make sure we haven't gotten stuck somewhere in an infinite loop
 
     while i < len(data): ## while there's characters left in the tree string - loop away
-        if stored_i == i and verbose==True: print('%d >%s<'%(i,data[i]))
+        if storedI == i and verbose==True: print('%d >%s<'%(i,data[i]))
 
-        assert (stored_i != i),'\nTree string unparseable\nStopped at >>%s<<\nstring region looks like this: %s'%(data[i],data[i:i+5000]) # Ensure that the index has advanced; if not, raise an error indicating an unparseable string
-        stored_i=i # Store the current index at the end of the loop to check for infinite loops
+        assert (storedI != i),'\nTree string unparseable\nStopped at >>%s<<\nstring region looks like this: %s'%(data[i],data[i:i+5000]) # Ensure that the index has advanced; if not, raise an error indicating an unparseable string
+        storedI=i # Store the current index at the end of the loop to check for infinite loops
 
         if data[i] == '(': ## look for new nodes
             if verbose==True: print('%d adding node'%(i))
@@ -84,8 +84,8 @@ def make_tree(data,ll=None,verbose=False):
                         raise Exception('Reticulate branch not unique: %s seen elsewhere in the tree'%(match.group(1)))
             if destination: ## identified destination of this branch
                 if verbose==True: print('identified %s destination'%(match.group(1)))
-                ll.cur_node.target=destination ## set current node's target as the destination
-                setattr(destination,"contribution",ll.cur_node) ## add contributing edge to destination
+                ll.currentNode.target=destination ## set current node's target as the destination
+                setattr(destination,"contribution",ll.currentNode) ## add contributing edge to destination
             else:
                 if verbose==True: print('destination of %s not identified yet'%(match.group(1)))
             i+=len(match.group())-1
@@ -93,7 +93,7 @@ def make_tree(data,ll=None,verbose=False):
         match=re.match(r'\)(#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for landing point of reticulate branch
         if match:
             if verbose==True: print('%d adding incoming reticulation branch %s'%(i,match.group(1)))
-            ll.cur_node.traits['label']=match.group(1) ## set node label
+            ll.currentNode.traits['label']=match.group(1) ## set node label
 
             origin=None ## branch is landing, check if its origin was seen previously
             for k in ll.Objects: ## iterate over currently existing branches
@@ -104,8 +104,8 @@ def make_tree(data,ll=None,verbose=False):
                         raise Exception('Reticulate branch not unique: %s seen elsewhere in the tree'%(match.group(1)))
             if origin: ## identified origin
                 if verbose==True: print('identified %s origin'%(match.group(1)))
-                origin.target=ll.cur_node ## set origin's landing at this node
-                setattr(ll.cur_node,"contribution",origin) ## add contributing edge to this node
+                origin.target=ll.currentNode ## set origin's landing at this node
+                setattr(ll.currentNode,"contribution",origin) ## add contributing edge to this node
             else:
                 if verbose==True: print('origin of %s not identified yet'%(match.group(1)))
             i+=len(match.group())-1
@@ -121,17 +121,17 @@ def make_tree(data,ll=None,verbose=False):
             figtree=re.findall('\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
 
             for vals in strings:
-                tr,val=vals.split('=')
+                tr,val=vals.split('=') # tr := trait; val := value
                 tr=tr[1:]
                 if '+' in val:
                     val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
-                ll.cur_node.traits[tr]=val.strip('"')
+                ll.currentNode.traits[tr]=val.strip('"')
 
             for vals in numerics: ## assign all parsed annotations to traits of current branch
                 tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
                 tr=tr[1:]
                 if val.replace('E','',1).replace('e','',1).replace('-','',1).replace('.','',1).isdigit():
-                    ll.cur_node.traits[tr]=float(val)
+                    ll.currentNode.traits[tr]=float(val)
 
             for val in treelist:
                 tr,val=val.split('=')
@@ -141,24 +141,24 @@ def make_tree(data,ll=None,verbose=False):
                     micromatch=re.findall(r'{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
                 elif val.count(",") == 3:
                     micromatch=re.findall(r'{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
-                ll.cur_node.traits[tr]=[]
+                ll.currentNode.traits[tr]=[]
                 for val in micromatch:
-                    val_split = val.split(',')
-                    ll.cur_node.traits[tr].append(val.split(","))
+                    val_split = val.split(',') #NOTE this variable is never used. remove?
+                    ll.currentNode.traits[tr].append(val.split(","))
 
             for vals in sets:
                 tr,val=vals.split('=')
                 tr=tr[1:]
                 if 'set' in tr:
-                    ll.cur_node.traits[tr]=[]
+                    ll.currentNode.traits[tr]=[]
                     for v in val[1:-1].split(','):
                         if 'set.prob' in tr:
-                            ll.cur_node.traits[tr].append(float(v))
+                            ll.currentNode.traits[tr].append(float(v))
                         else:
-                            ll.cur_node.traits[tr].append(v.strip('"'))
+                            ll.currentNode.traits[tr].append(v.strip('"'))
                 else:
                     try:
-                        ll.cur_node.traits[tr]=list(map(float,val[1:-1].split(',')))
+                        ll.currentNode.traits[tr]=list(map(float,val[1:-1].split(',')))
                     except:
                         print('some other trait: %s'%(vals))
 
@@ -172,25 +172,25 @@ def make_tree(data,ll=None,verbose=False):
 
         if match:
             if verbose==True: print('old school comment found: %s'%(match.group(1)))
-            ll.cur_node.traits['label']=match.group(1)
+            ll.currentNode.traits['label']=match.group(1)
 
             i+=len(match.group(1))
 
         micromatch=re.match(r'(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
         if micromatch is not None:
             if verbose==True: print('adding branch length (%d) %.6f'%(i,float(micromatch.group(2))))
-            ll.cur_node.length=float(micromatch.group(2)) ## set branch length of current node
+            ll.currentNode.length=float(micromatch.group(2)) ## set branch length of current node
             i+=len(micromatch.group()) ## advance in tree string by however many characters it took to encode branch length
 
         if data[i] == ',' or data[i] == ')': ## look for bifurcations or clade ends
             i+=1 ## advance in tree string
-            ll.cur_node=ll.cur_node.parent
+            ll.currentNode=ll.currentNode.parent
 
         if data[i] == ';': ## look for string end
             return ll
             break ## end loop
 
-def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
+def make_treeJSON(JSONnode,JSONtranslationDict,ll=None,verbose=False):
     """
     Parse an auspice JSON tree and create a baltic tree object.
     
@@ -202,37 +202,39 @@ def make_treeJSON(JSONnode,json_translation,ll=None,verbose=False):
     
     Returns:
     tree: The tree object created from the parsed JSON.
+
+    TODO: verbose flag is never used
     
     Docstring generated with ChatGPT 4o.
     """
     if 'children' in JSONnode: ## only nodes have children
-        new_node=Node()
+        newNode=Node()
     else:
-        new_node=Leaf()
-        new_node.name=JSONnode[json_translation['name']] ## set leaf name to be the same
+        newNode=Leaf()
+        newNode.name=JSONnode[JSONtranslationDict['name']] ## set leaf name to be the same
 
     if ll is None:
         ll=Tree()
-        ll.root=new_node
+        ll.root=newNode
     if 'attr' in JSONnode:
         attr = JSONnode.pop('attr')
         JSONnode.update(attr)
 
-    new_node.parent=ll.cur_node ## set parent-child relationships
-    ll.cur_node.children.append(new_node)
-    new_node.index=JSONnode[json_translation['name']] ## indexing is based on name
-    new_node.traits={n:JSONnode[n] for n in list(JSONnode.keys()) if n!='children'} ## set traits to non-children attributes
-    ll.Objects.append(new_node)
-    ll.cur_node=new_node
+    newNode.parent=ll.currentNode ## set parent-child relationships
+    ll.currentNode.children.append(newNode)
+    newNode.index=JSONnode[JSONtranslationDict['name']] ## indexing is based on name
+    newNode.traits={n:JSONnode[n] for n in list(JSONnode.keys()) if n!='children'} ## set traits to non-children attributes
+    ll.Objects.append(newNode)
+    ll.currentNode=newNode
 
     if 'children' in JSONnode:
         for child in JSONnode['children']:
-            make_treeJSON(child,json_translation,ll)
-            ll.cur_node=ll.cur_node.parent
+            make_treeJSON(child,JSONtranslationDict,ll)
+            ll.currentNode=ll.currentNode.parent
     return ll
 
 if __name__ == '__main__':
     import sys
-    ll=make_tree(sys.argv[1],ll)
+    ll=make_tree(sys.argv[1],ll) #TODO this ll is undefined 
     ll.traverse_tree()
     sys.stdout.write('%s\n'%(ll.treeHeight))

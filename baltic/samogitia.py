@@ -159,7 +159,7 @@ for line in treefile: ## iterate through each line
                 tipDatesRaw=[dateCerberus.search(x).group(1) for x in tips.values()]
                 tipDates=[]
                 for tip_date in tipDatesRaw:
-                    tipDates.append(bt.decimalDate(tip_date,fmt=dformat,variable=True))
+                    tipDates.append(bt.calendar_to_decimal_date(tip_date,fmt=dformat,variable=True))
                 maxDate=max(tipDates) ## identify most recent tip
                 ll.setAbsoluteTime(maxDate)
             outfile.write('%s'%cerberus.group(1)) ## write MCMC state number to output log file
@@ -212,7 +212,7 @@ for line in treefile: ## iterate through each line
                         halfBranch=k.length*0.5
                         if isinstance(k,node):
                             all_leaves=[tips[lf] for lf in k.leaves]
-                            t=min(map(bt.decimalDate,[dateCerberus.search(x).group(1) for x in all_leaves]))-k.absoluteTime+halfBranch
+                            t=min(map(bt.calendar_to_decimal_date,[dateCerberus.search(x).group(1) for x in all_leaves]))-k.absoluteTime+halfBranch
                         else:
                             t=halfBranch
 
@@ -252,7 +252,7 @@ for line in treefile: ## iterate through each line
                             subtree_leaves=[x.name for x in subtree if isinstance(x,bt.leaf)]
 
                             if len(subtree_leaves)>0:
-                                mostRecentTip=max([bt.decimalDate(x.strip("'").split('|')[-1]) for x in subtree_leaves])
+                                mostRecentTip=max([bt.calendar_to_decimal_date(x.strip("'").split('|')[-1]) for x in subtree_leaves])
                                 while sum([len(nd.children)-sum([1 if ch in subtree else 0 for ch in nd.children]) for nd in subtree if isinstance(nd,bt.node) and nd.index!='Root'])>0: ## keep removing nodes as long as there are nodes with children that are not entirely within subtree
                                     for nd in sorted([q for q in subtree if isinstance(q,bt.node)],key=lambda x:(sum([1 if ch in subtree else 0 for ch in x.children]),x.height)): ## iterate over nodes in subtree, starting with ones that have fewest valid children and are more recent
 

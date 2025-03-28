@@ -1,6 +1,6 @@
 import re,json
 from .baltic import make_tree, make_treeJSON
-from .bt_utils import decimalDate
+from .bt_utils import calendar_to_decimal_date
 from .tree import Tree
 from .node import Node
 from .leaf import Leaf
@@ -52,7 +52,7 @@ def loadNewick(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-
             tip_names.append(k.name)
             match=re.search(tip_regex,k.name)
             if match:
-                tip_dates.append(decimalDate(match.group(1),fmt=date_fmt,variable=variableDate))
+                tip_dates.append(calendar_to_decimal_date(match.group(1),fmt=date_fmt,variable=variableDate))
         assert len(tip_dates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tip_names[0],tip_regex,date_fmt)
         ll.setAbsoluteTime(max(tip_dates))
 
@@ -133,7 +133,7 @@ def loadNexus(tree_path,tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',date_fmt='%Y-%m-%
             tip_names.append(k.name)
             match=re.search(tip_regex,k.name)
             if match:
-                tip_dates.append(decimalDate(match.group(1),fmt=date_fmt,variable=variableDate))
+                tip_dates.append(calendar_to_decimal_date(match.group(1),fmt=date_fmt,variable=variableDate))
 
         assert len(tip_dates)>0,'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: %s\nDate regex set to: %s\nExpected date format: %s'%(tip_names[0],tip_regex,date_fmt)
         ll.setAbsoluteTime(max(tip_dates))
@@ -228,11 +228,11 @@ def loadJSON(json_object,json_translation={'name':'name','absoluteTime':'num_dat
     if verbose==True: print('Traversing and drawing tree')
 
     ll.traverse_tree(verbose=verbose)
-    ll.drawTree()
+    ll.assign_tree_coordinates()
     if stats==True:
         ll.treeStats() ## initial traversal, checks for stats
     if sort==True:
-        ll.sortBranches() ## traverses tree, sorts branches, draws tree
+        ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     cmap={}
     for colouring in json_meta['colorings']:

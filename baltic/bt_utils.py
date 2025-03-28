@@ -1,8 +1,9 @@
 import re
 import datetime as dt
+import math
 import numpy as np
 
-def decimalDate(date,fmt="%Y-%m-%d",variable=False):
+def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
     """
     Converts calendar dates in specified format to decimal date. 
     
@@ -21,14 +22,14 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False):
     - For example, a date like "2023" will be interpreted as 2023 Jan 01, while "2023-05" will be interpreted as 2023 May 01.
     
     Examples:
-    >>> decimalDate("2023-05-23")
+    >>> calendar_to_decimal_date("2023-05-23")
     2023.3890410958904
-    >>> decimalDate("2023", fmt="%Y", variable=True)
+    >>> calendar_to_decimal_date("2023", fmt="%Y", variable=True)
     2023.0
 
     Docstring generated with ChatGPT 4o.
     """
-    if fmt == "":
+    if not fmt:
         return date
     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
     delimit=None
@@ -52,7 +53,7 @@ def decimalDate(date,fmt="%Y-%m-%d",variable=False):
     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
-def calendarDate(timepoint,fmt='%Y-%m-%d'):
+def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
     """
     Converts decimal dates to a specified calendar date format.
     
@@ -67,9 +68,9 @@ def calendarDate(timepoint,fmt='%Y-%m-%d'):
     str: The date in the specified calendar format.
     
     Examples:
-    >>> calendarDate(2023.3923497267758)
+    >>> decimal_to_calendar_date(2023.3923497267758)
     '2023-05-24'
-    >>> calendarDate(2023.0, fmt='%Y')
+    >>> decimal_to_calendar_date(2023.0, fmt='%Y')
     '2023'
     
     Docstring generated with ChatGPT 4o.
@@ -82,7 +83,7 @@ def calendarDate(timepoint,fmt='%Y-%m-%d'):
 
     return dt.datetime.strftime(result,fmt)
 
-def convertDate(date_string,start,end):
+def convert_date_format(dateString,startFormat,endFormat):
     """
     Converts calendar dates between given formats.
     
@@ -95,22 +96,22 @@ def convertDate(date_string,start,end):
     str: The date converted to the new format.
     
     Examples:
-    >>> convertDate('23-05-2023', '%d-%m-%Y', '%Y/%m/%d')
+    >>> convert_date_format('23-05-2023', '%d-%m-%Y', '%Y/%m/%d')
     '2023/05/23'
-    >>> convertDate('2023/05/23', '%Y/%m/%d', '%B %d, %Y')
+    >>> convert_date_format('2023/05/23', '%Y/%m/%d', '%B %d, %Y')
     'May 23, 2023'
     
     Docstring generated with ChatGPT 4o.
     """
-    return dt.datetime.strftime(dt.datetime.strptime(date_string,start),end)
-    try:
-        date_obj = dt.datetime.strptime(date_string, start)
-        return dt.datetime.strftime(date_obj, end)
+    return dt.datetime.strftime(dt.datetime.strptime(dateString,startFormat),endFormat)
+    try: #TODO deal with stuff that comes after the return statement
+        date_obj = dt.datetime.strptime(dateString, startFormat)
+        return dt.datetime.strftime(date_obj, endFormat)
     except ValueError as e:
-        raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(date_string, start, end, e))
+        raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
 
-def untangle(trees,cost_function=None,iterations=None,verbose=False):
+def untangle(trees,costFxn=None,iterations=None,verbose=False):
     """
     Minimise y-axis discrepancies between tips of trees in a list.
     Only the tangling of adjacent trees in the list is minimised, so the order of trees matters.
@@ -134,7 +135,7 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
     from itertools import permutations
 
     if iterations==None: iterations=3
-    if cost_function==None: cost_function=lambda pair: math.pow(abs(pair[0]-pair[1]),2)
+    if costFxn==None: costFxn=lambda pair: math.pow(abs(pair[0]-pair[1]),2)
 
     y_positions={T: {k.name: k.y for k in T.getExternal()} for T in trees} ## get y positions of all the tips in every tree
 
@@ -155,7 +156,7 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
                     clade_order=sum([[child.name] if child.is_leaf() else list(child.leaves) for child in permutation],[]) ## flat list of tip names as they would appear in permutation order
                     new_y_positions={clade_order[i]: clade_y_positions[i] for i in range(len(clade_y_positions))} ## assign available y positions in order
 
-                    tip_costs=list(map(cost_function,[(y_positions[tree1][tip],new_y_positions[tip]) for tip in clade_order if tip in y_positions[tree1]]))
+                    tip_costs=list(map(costFxn,[(y_positions[tree1][tip],new_y_positions[tip]) for tip in clade_order if tip in y_positions[tree1]]))
                     costs[permutation]=sum(tip_costs)/len(tip_costs) ## compute cost of this permutation in relation to next tree
 
                 best=sorted(costs.keys(),key=lambda w: -costs[w])[0] ## get tree with smallest cost
@@ -167,7 +168,7 @@ def untangle(trees,cost_function=None,iterations=None,verbose=False):
 
     return trees
 
-def _rtt(root_candidate, tip_dates, tip_heights, res, stat='r^2', force_positive=True, frac=None):
+def root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
     """
     Given tip dates and tip heights compute root-to-tip regression parameters, update res dict if better value found.
     Can force only positive rates.
@@ -175,31 +176,31 @@ def _rtt(root_candidate, tip_dates, tip_heights, res, stat='r^2', force_positive
     """
     from scipy.stats import linregress
     
-    slope,intercept,rval,pval,err = linregress(tip_dates,tip_heights) ## run linear regression
-    corr = np.corrcoef((tip_dates,tip_heights))[0,1] ## correlation coefficient
-    ssq = sum([(y-(slope*x+intercept))**2 for x,y in zip(tip_dates,tip_heights)]) ## sum of squares
+    slope,intercept,rval,_,_ = linregress(tipDates,tipHeights) ## run linear regression
+    corr = np.corrcoef((tipDates,tipHeights))[0,1] ## correlation coefficient
+    ssq = sum([(y-(slope*x+intercept))**2 for x,y in zip(tipDates,tipHeights)]) ## sum of squares
     
     if stat=='correlation': ## set stat to optimise
-        local_stat = corr
+        localStat = corr
     elif stat=='sum of squares':
-        local_stat = ssq
+        localStat = ssq
     elif stat=='r^2':
-        local_stat = rval
+        localStat = rval
     
-    opt_stat = res[stat] if stat in res else (np.inf if stat in ['sum of squares'] else -np.inf)
+    optStat = res[stat] if stat in res else (np.inf if stat in ['sum of squares'] else -np.inf)
     
-    if (local_stat < opt_stat if stat in ['sum of squares'] else local_stat > opt_stat): ## minimise sum of squares or maximise correlation/r^2
-        if force_positive and slope<0: ## force positive True and slope<0
+    if (localStat < optStat if stat in ['sum of squares'] else localStat > optStat): ## minimise sum of squares or maximise correlation/r^2
+        if forcePositive and slope<0: ## force positive True and slope<0
             pass ## if forcing positive root slope must be positive, do nothing
         else: ## force_positive is False or true and slope>0
-            opt_stat = local_stat ## better root found
+            optStat = localStat ## better root found
 #             new_root = [w for w in self.Objects if w.index==k.index][0]
             res['correlation']=corr
             res['sum of squares']=ssq
             res['slope']=slope
             res['intercept']=intercept
             res['r^2']=rval
-            res['root']=root_candidate
+            res['root']=rootCandidate
             if frac!=None: res['frac']=frac
         
     return res
