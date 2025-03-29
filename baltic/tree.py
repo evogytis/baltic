@@ -30,10 +30,10 @@ class Tree: ## tree class
         
         Docstring generated with ChatGPT 4o.
         """
-        self.currentNode=Node() ## current node is a new instance of a node class
-        self.currentNode.index='Root' ## first object in the tree is the root to which the rest gets attached
-        self.currentNode.length=0.0 ## startind node branch length is 0
-        self.currentNode.height=0.0 ## starting node height is 0
+        self.curNode=Node() ## current node is a new instance of a node class
+        self.curNode.index='Root' ## first object in the tree is the root to which the rest gets attached
+        self.curNode.length=0.0 ## startind node branch length is 0
+        self.curNode.height=0.0 ## starting node height is 0
         self.root=None #self.cur_node ## root of the tree is current node
         self.Objects=[] ## tree objects have a flat list of all branches in them
         self.tipMap=None
@@ -53,10 +53,10 @@ class Tree: ## tree class
         """
         ret=Reticulation(name)
         ret.index=name
-        ret.parent=self.currentNode
-        self.currentNode.children.append(ret)
+        ret.parent=self.curNode
+        self.curNode.children.append(ret)
         self.Objects.append(ret)
-        self.currentNode=ret
+        self.curNode=ret
 
     def add_node(self,i):
         """
@@ -76,11 +76,11 @@ class Tree: ## tree class
             self.root=newNode
             self.root.length=0.0
 
-        newNode.parent=self.currentNode ## new node's parent is current node
-        assert self.currentNode.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses or commas.'
-        self.currentNode.children.append(newNode) ## new node is a child of current node
-        self.currentNode=newNode ## current node is now new node
-        self.Objects.append(self.currentNode) ## add new node to list of objects in the tree
+        newNode.parent=self.curNode ## new node's parent is current node
+        assert self.curNode.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses or commas.'
+        self.curNode.children.append(newNode) ## new node is a child of current node
+        self.curNode=newNode ## current node is now new node
+        self.Objects.append(self.curNode) ## add new node to list of objects in the tree
 
     def add_leaf(self,i,name):
         """
@@ -96,12 +96,12 @@ class Tree: ## tree class
         newLeaf.index=i ## index is position along tree string
         if self.root is None: self.root=newLeaf
 
-        newLeaf.parent=self.currentNode ## leaf's parent is current node
-        assert self.currentNode.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
-        self.currentNode.children.append(newLeaf) ## assign leaf to parent's children
+        newLeaf.parent=self.curNode ## leaf's parent is current node
+        assert self.curNode.is_node(), 'Attempted to add a child to a non-node object. Check if tip names have illegal characters like parentheses.'
+        self.curNode.children.append(newLeaf) ## assign leaf to parent's children
         # new_leaf.name=name
-        self.currentNode=newLeaf ## current node is now new leaf
-        self.Objects.append(self.currentNode) ## add leaf to all objects in the tree
+        self.curNode=newLeaf ## current node is now new leaf
+        self.Objects.append(self.curNode) ## add leaf to all objects in the tree
 
     def subtree(self,startingNode=None,traverseCondition=None,stem=True):
         """
@@ -874,6 +874,7 @@ class Tree: ## tree class
 
     def collapse_branches(self,collapseIfFxn=lambda x:x.traits['posterior']<=0.5,designatedNodes=[],verbose=False):
         """
+        TODO: change desnignatedNode to None
         Collapse all branches that satisfy a function `collapseIf` (default is an anonymous function that returns true if posterior probability is <= 0.5).
         Alternatively, a list of nodes can be supplied to the script.
         A branch designated for deletion gets its descendants assigned to its parent with branch lengths adjusted accordingly before being pruned out of the tree.
@@ -1032,7 +1033,7 @@ class Tree: ## tree class
             if verbose==True: print('finished')
             return ''.join(stringFragment)
 
-    def get_all_TMRCAs(self):
+    def get_all_tip_TMRCAs(self):
         """
         Calculate the time to the most recent common ancestor (TMRCA) for all pairs of tips in the tree.
         
@@ -1204,6 +1205,7 @@ class Tree: ## tree class
                 print("Warning, no results found matching the specified condition. Returning empty list.")
                 return []
         elif len(select)==1: #TODO this if block should be removed because the function should always return something of type List, not sometimes a list and sometimes a branch
+            #TODO: remove this bit and add a get_branch() method
             return select[-1]
         else:
             return select
@@ -1263,20 +1265,20 @@ class Tree: ## tree class
                 node.parent.children.remove(node)
                 self.Objects.remove(node)
 
-    def plot_text_annotations(self,
-                                ax,
-                                target=lambda k: k.is_leaf(),
-                                xCoordinateFxn=None,
-                                yCoordinateFxn=None,
-                                textContentFxn=None,
-                                zorder=4,
-                                **kwargs):
+    def plot_text(self,
+                    ax,
+                    targetFxn=None,
+                    xCoordinateFxn=None,
+                    yCoordinateFxn=None,
+                    textContentFxn=None,
+                    zorder=4,
+                    **kwargs):
         """
         Add text annotations to the tree plot.
         
         Parameters:
         ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
-        target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
+        target (function): A function to select which branches to annotate. Default selects all `leaf` nodes.
         x_attr (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
         y_attr (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
         text (function or None): A function to determine the text content. Default is None, which uses the `leaf` name attribute.
@@ -1291,6 +1293,8 @@ class Tree: ## tree class
         
         Docstring generated with ChatGPT 4o.
         """
+        ### Set default values ###
+        if targetFxn is None: lambda k: k.is_leaf()
         if xCoordinateFxn==None: xCoordinateFxn=lambda k: k.x
         if yCoordinateFxn==None: yCoordinateFxn=lambda k: k.y
         if textContentFxn==None: textContentFxn=lambda k: k.name
@@ -1298,20 +1302,20 @@ class Tree: ## tree class
         localKwargs=dict(kwargs)
         if 'verticalalignment' not in localKwargs: localKwargs['verticalalignment']='center'
 
-        for k in filter(target,self.Objects):
+        for k in filter(targetFxn,self.Objects):
             x,y=xCoordinateFxn(k),yCoordinateFxn(k)
             z=zorder
             ax.text(x,y,textContentFxn(k),zorder=z,**localKwargs)
         return ax
 
-    def plot_text_annotations_unrooted(self,
-                                        ax,
-                                        targetFxn=None,
-                                        xCoordinateFxn=None,
-                                        yCoordinateFxn=None,
-                                        textContentFxn=None,
-                                        zorder=4,
-                                        **kwargs):
+    def plot_text_unrooted(self,
+                            ax,
+                            targetFxn=None,
+                            xCoordinateFxn=None,
+                            yCoordinateFxn=None,
+                            textContentFxn=None,
+                            zorder=4,
+                            **kwargs):
         """
         Add text annotations to an unrooted tree plot.
         

@@ -21,6 +21,7 @@ class BranchLike:
         """
         if path is None: path = []
 
+        #TODO: make this self.parent.parent or flag the superroot
         if self.parent is None: # the root doesn't have a parent, so just return the path including the root
             return path + [self]
         else: # if we aren't at the root, recurse
