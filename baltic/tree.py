@@ -9,27 +9,8 @@ from .reticulation import Reticulation
 from .bt_utils import root_to_tip
 
 class Tree: ## tree class
-    """
-    Represents a phylogenetic tree.
-    
-    Attributes:
-    cur_node (Node): The current node in the tree, initialized as a new instance of the node class when building the tree in `make_tree()`.
-    root (Node): The root of the tree.
-    Objects (list): A flat list of all branches (nodes, leaves, reticulations) in the tree.
-    tipMap (dict or None): A mapping of tip numbers to names used when importing trees in NEXUS format, assigned by `loadNexus()`.
-    treeHeight (float): The height of the tree, defined as the distance between the root and the most recent tip.
-    mostRecent (Node or None): The most recent node in the tree.
-    ySpan (float): The vertical span of the tree for plotting.
-    
-    Docstring generated with ChatGPT 4o.
-    """
 
     def __init__(self):
-        """
-        Initializes a new tree instance.
-        
-        Docstring generated with ChatGPT 4o.
-        """
         self.curNode=Node() ## current node is a new instance of a node class
         self.curNode.index='Root' ## first object in the tree is the root to which the rest gets attached
         self.curNode.length=0.0 ## startind node branch length is 0
@@ -43,14 +24,6 @@ class Tree: ## tree class
         self.treeType=None # indicates if the tree is a time or divergence tree
 
     def add_reticulation(self,name):
-        """
-        Adds a reticulate branch to the tree.
-        
-        Parameters:
-        name (str): The name of the reticulate branch.
-        
-        Docstring generated with ChatGPT 4o.
-        """
         ret=Reticulation(name)
         ret.index=name
         ret.parent=self.curNode
@@ -59,17 +32,6 @@ class Tree: ## tree class
         self.curNode=ret
 
     def add_node(self,i):
-        """
-        Attaches a new node to the current node.
-        
-        Parameters:
-        i (int): The index of the new node, representing its position along the tree string.
-        
-        Raises:
-        AssertionError: If the current node is not a node (i.e., if it is a leaf or another non-node object).
-        
-        Docstring generated with ChatGPT 4o.
-        """
         newNode=Node() ## new node instance
         newNode.index=i ## new node's index is the position along the tree string
         if self.root is None:
@@ -83,15 +45,6 @@ class Tree: ## tree class
         self.Objects.append(self.curNode) ## add new node to list of objects in the tree
 
     def add_leaf(self,i,name):
-        """
-        Attaches a new leaf (tip) to the current node.
-        
-        Parameters:
-        i (int): The index of the new leaf, representing its position along the tree string.
-        name (str): The name of the new leaf.
-
-        Docstring generated with ChatGPT 4o.
-        """
         newLeaf=Leaf(name) ## new instance of leaf object
         newLeaf.index=i ## index is position along tree string
         if self.root is None: self.root=newLeaf
@@ -104,29 +57,6 @@ class Tree: ## tree class
         self.Objects.append(self.curNode) ## add leaf to all objects in the tree
 
     def subtree(self,startingNode=None,traverseCondition=None,stem=True):
-        """
-        Generate a subtree (as a baltic tree object) from a tree traversal starting from a provided node.
-        
-        Parameters:
-        k (node or None): The starting branch for traversal. Default is None, which means the traversal starts from the root.
-        traverse_condition (function or None): A function that determines whether a child branch should be visited. 
-                                                Default is None, which means all branches are visited.
-        stem (bool): If True, includes the stem leading to the root of the subtree. Default is True.
-        
-        Returns:
-        tree or None: A new baltic tree instance representing the subtree. 
-                      Returns None if the subtree is empty or contains no leaves.
-        
-        Notes:
-        - Custom traversal functions can result in multitype trees. 
-          If this is undesired, call `singleType()` on the resulting subtree afterwards.
-        
-        Example:
-        >>> subtree = original_tree.subtree(k=some_node, traverse_condition=lambda node: node.traits['some_state'] == some_node.traits['some_state']) ## will only traverse through children in the same trait state as the starting node
-        
-        Docstring generated with ChatGPT 4o.
-        """
-        
         if startingNode is None: startingNode = self.root
         if traverseCondition is None: traverseCondition = lambda k: True
 
