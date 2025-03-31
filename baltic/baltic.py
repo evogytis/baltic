@@ -1,29 +1,31 @@
 __all__ = ['make_tree', 'make_treeJSON']
-
-import re,sys
+import re
+import sys
+import logging
 from .tree import Tree
 from .node import Node
 from .leaf import Leaf
 from .reticulation import Reticulation
 
+logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
 def make_tree(data,ll=None,verbose=False):
     """
     Parse a tree string and create a tree object.
-    
+
     Parameters:
     data (str): The tree string to be parsed.
     ll (tree or None): An instance of a tree object. If None, a new tree object is created. Default is None.
     verbose (bool): If True, prints verbose output during the process. Default is False.
-    
+
     Returns:
     tree: The tree object created from the parsed tree string.
-    
+
     Example:
     >>> tree_string = "(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);"
     >>> tree = make_tree(tree_string)
-    
+
     Docstring generated with ChatGPT 4o.
     """
     patterns = {
@@ -193,18 +195,18 @@ def make_tree(data,ll=None,verbose=False):
 def make_treeJSON(JSONnode,JSONtranslationDict,ll=None,verbose=False):
     """
     Parse an auspice JSON tree and create a baltic tree object.
-    
+
     Parameters:
     JSONnode (dict): The JSON node to be parsed.
     json_translation (dict): A dictionary for translating JSON keys to tree attributes.
     ll (tree or None): An instance of a tree object. If None, a new tree object is created. Default is None.
     verbose (bool): If True, prints verbose output during the process. Default is False.
-    
+
     Returns:
     tree: The tree object created from the parsed JSON.
 
     TODO: verbose flag is never used
-    
+
     Docstring generated with ChatGPT 4o.
     """
     if 'children' in JSONnode: ## only nodes have children
@@ -235,6 +237,6 @@ def make_treeJSON(JSONnode,JSONtranslationDict,ll=None,verbose=False):
 
 if __name__ == '__main__':
     import sys
-    ll=make_tree(sys.argv[1],ll) #TODO this ll is undefined 
+    ll=make_tree(sys.argv[1],ll) #TODO this ll is undefined
     ll.traverse_tree()
     sys.stdout.write('%s\n'%(ll.treeHeight))

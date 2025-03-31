@@ -16,9 +16,6 @@ class BranchLike:
         ## contains references to all tips of this node
 
     def get_path_to_root(self, path=None):
-        """
-        Retrieves the path from self node to root (including self and root).
-        """
         if path is None: path = []
 
         #TODO: make this self.parent.parent or flag the superroot
@@ -30,9 +27,9 @@ class BranchLike:
 
     def is_leaflike(self):
         return False
-    
+
     def is_leaf(self):
         return False
-    
+
     def is_node(self):
         return False
