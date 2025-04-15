@@ -170,7 +170,7 @@ def make_tree(data,ll=None,verbose=False):
             i+=len(match.group()) ## advance in tree string by however many characters it took to encode labels
 
         # match=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
-        match=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;|\[)',data[i:])## look for old school node labels
+        match=re.match(r'([A-Za-z\_\-0-9\.\/]+)(\:|\;|\[)',data[i:])## look for old school node labels
 
         if match:
             if verbose==True: print('old school comment found: %s'%(match.group(1)))
