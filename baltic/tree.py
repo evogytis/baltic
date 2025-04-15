@@ -372,7 +372,7 @@ class Tree:  ## tree class
                     tip1 = tip
                     tip2 = highestTip
                     maxDistance = newMax
-                    # print(f'setting {tip2.name} as current highest tip at height {max_distance}')
+                    # logger.info(f'setting {tip2.name} as current highest tip at height {max_distance}')
 
             # TODO: make sure that tip1 and tip2 always get assigned
             logger.debug(f"Midpoint rooting: Rooting on highest tip under current topology ({tip1.name}).")
@@ -388,12 +388,11 @@ class Tree:  ## tree class
 
             for node in path[::-1]:  ## iterate from old root to new
                 rootRemainder -= node.length
-                #             print(f'iterating over path: {node.index} root remainder: {root_remainder}')
+                #             logger.info(f'iterating over path: {node.index} root remainder: {root_remainder}')
                 if rootRemainder < 0:
                     outgroup_node = node
                     branchFrac = -rootRemainder / outgroup_node.length
                     break
-            #         print('rerooting on %s with %s frac'%(node.index,branch_frac))
             logger.debug(f"Midpoint rooting: rooting on node {outgroup_node.index} halfway from previous highest tip and current highest tip {tip2.name}.")
             self.reroot(
                 branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons
@@ -401,8 +400,6 @@ class Tree:  ## tree class
             logger.debug("Finished midpoint rooting.")
             return self
 
-
-        # TODO: made is this far; resume from here
         ##############
         path = branch.get_path_to_root()[
             :-1
@@ -420,12 +417,11 @@ class Tree:  ## tree class
         randomString = "".join(random.choices(characters, k=10))
 
         newRoot = Node()  ## create new root
-        newRoot.index = "new_root_%s_%s_%s" % (branch.index, branchFrac, randomString)
+        newRoot.index = f"new_root_{branch.index}_{branchFrac}_{randomString}"
         newRoot.length = 0.0
         newRoot.children.append(branch)
 
-        if verbose:
-            print("Created new root %s" % (newRoot.index))
+        logger.debug(f"Created new root {newRoot.index}")
 
         ######################
         if (
@@ -457,8 +453,7 @@ class Tree:  ## tree class
             newParent = parent  ## move up to next node
         #################
 
-        if verbose:
-            print("Cleaning up old root")
+        logger.debug("Cleaning up old root")
 
         oldRoot = self.root  ## get old root
 
@@ -481,8 +476,7 @@ class Tree:  ## tree class
         oldRoot.parent = newParent  ## set parent as old root
         ########
 
-        if verbose:
-            print("Setting up root parent node (it's a baltic thing)")
+        logger.debug("Setting up root parent node (it's a baltic thing)")
         self.root = newRoot  ## set root to new root
 
         rootParent = (
@@ -501,9 +495,8 @@ class Tree:  ## tree class
         if (
             fixSingletons
         ):  ## fixing singleton nodes (node's with 1 child, i.e. old root)
-            if verbose:
-                print("Fixing singletons")
-            self.make_single_type(verbose=verbose)  ## tree class can handle it
+            logger.debug("Fixing singletons")
+            self.make_single_type()  ## tree class can handle it
 
         ############
         newTreeLength = sum(
@@ -511,23 +504,17 @@ class Tree:  ## tree class
         )  ## get new tree length
         assert math.isclose(
             oldTreeLength, newTreeLength
-        ), "Tree length changed after rerooting - was %s, now %s" % (
-            oldTreeLength,
-            newTreeLength,
-        )  ## check if tree length hasn't changed after rerooting
+        ), f"Tree length changed after rerooting - was {oldTreeLength}, now {newTreeLength}"  ## check if tree length hasn't changed after rerooting
 
         self.traverse_tree()
 
         return self
 
-    def root_by_regression(self, stat="r^2", forcePositive=True, verbose=False):
+    def root_by_regression(self, stat="r^2", forcePositive=True):
         validRootingMethods = ["r^2", "correlation", "sum of squares"]
         assert (
             stat in validRootingMethods
-        ), "Invalid option for root-to-tip regression: %s (options are %s)" % (
-            stat,
-            validRootingMethods,
-        )
+        ),f"Invalid option for root-to-tip regression: {stat} (options are {validRootingMethods})"
 
         cll = copy.deepcopy(self)  ## deepcopy entire tree
 
@@ -536,7 +523,6 @@ class Tree:  ## tree class
             cll = cll.reroot(
                 [w for w in cll.Objects if w.index == k.index][0],
                 fixSingletons=False,
-                verbose=verbose,
             )  ## reroot on branch provided
             tips = cll.get_external()  ## get all tips
 
@@ -547,20 +533,17 @@ class Tree:  ## tree class
                 k, xs, ys, res, stat=stat, forcePositive=forcePositive
             )  ## check root-to-tip regression, update res if better
         ##############
-        if verbose:
-            print(
-                "Rooting tree first time at node %s with regression: %s"
-                % (res["root"], res)
+        logger.debug(
+                f"Rooting tree first time at node {res['root']} with regression: {res}"
             )
         self = self.reroot(
-            res["root"], verbose=verbose
+            res["root"]
         )  ## reroot on branch optimising stat
         ############
         if (
             len(self.root.children) == 2
         ):  ## if root is strictly bifurcating - also optimise branch fraction
-            if verbose:
-                print("Bifurcating root, finding more precise rooting along new root")
+            logger.debug("Bifurcating root, finding more precise rooting along new root")
             res["frac"] = 0.0  ## add frac argument
             left, right = self.root.children  ## get left and right children
 
@@ -599,19 +582,14 @@ class Tree:  ## tree class
                 )  ## check regression
 
             self = self.reroot(
-                branch=res["root"], branchFrac=res["frac"], verbose=verbose
+                branch=res["root"], branchFrac=res["frac"]
             )  ## reroot on branch optimising stat
         #############
-        print(
-            "Correlation coefficient: %s\nSum of squares: %s\nEvolutionary rate: %s\nIntercept (TMRCA): %s\nr^2: %s"
-            % (
-                res["correlation"],
-                res["sum of squares"],
-                res["slope"],
-                max(xs) - res["intercept"],
-                res["r^2"],
-            )
-        )
+        logger.info(f"Correlation coefficient: {res['correlation']}")
+        logger.info(f"Sum of squares: {res['sum of squares']}")
+        logger.info(f"Evolutionary rate: {res['slope']}")
+        logger.info(f"Intercept (TMRCA): {max(xs) - res['intercept']}")
+        logger.info(f"r^2: {res['r^2']}")
 
         return self
 
@@ -643,25 +621,22 @@ class Tree:  ## tree class
         self.assign_tree_coordinates()  ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def assign_tree_coordinates(
-        self, order=None, widthFxn=None, padNodes=None, verbose=False
+        self, order=None, widthFxn=None, padNodes=None
     ):
+        """ formerly drawTree()
+        """
         if order is None:
             order = self.traverse_tree(
                 includeCondition=lambda k: k.is_leaflike()
             )  ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
-            if verbose == True:
-                print("Drawing tree in pre-order")
+            logger.debug("Drawing tree in pre-order")
         else:
-            if verbose == True:
-                print("Drawing tree with provided order")
+            logger.debug("Drawing tree with provided order")
 
         nameOrder = {x.name: i for i, x in enumerate(order)}
         assert len(nameOrder) == len(order), "Non-unique names present in tree"
         if widthFxn is None:
-            if verbose == True:
-                print(
-                    "Drawing tree with default widths (1 unit for leaf objects, width+1 for clades)"
-                )
+            logger.debug("Drawing tree with default widths (1 unit for leaf objects, width+1 for clades)")
             skips = [1 if isinstance(x, Leaf) else x.width + 1 for x in order]
         else:
             skips = list(map(widthFxn, order))
@@ -712,16 +687,14 @@ class Tree:  ## tree class
         while len(drawn) != len(
             self.Objects
         ):  # keep drawing the tree until everything is drawn
-            if verbose == True:
-                print("Drawing iteration %d" % (len(drawn)))
+            logger.debug("Drawing iteration %d" % (len(drawn)))
             for k in filter(
                 lambda w: w.index not in drawn, self.get_internal()
             ):  ## iterate through internal nodes that have not been drawn
                 if len([q.y for q in k.children if q.y is not None]) == len(
                     k.children
                 ):  ## all y coordinates of children known
-                    if verbose == True:
-                        print("Setting node %s coordinates to" % (k.index)),
+                    logger.debug(f"Setting node {k.index} coordinates to"),
                     x = k.height  ## x position is height
                     childrenYCoords = [
                         q.y for q in k.children if q.y is not None
@@ -732,8 +705,7 @@ class Tree:  ## tree class
                     k.x = x
                     k.y = y
                     drawn[k.index] = None  ## remember that this objects has been drawn
-                    if verbose == True:
-                        print("%s (%s branches drawn)" % (k.y, len(drawn)))
+                    logger.debug(f"{k.y} ({len(drawn)} branches drawn)")
                     minYRange = min(
                         [
                             min(child.yRange) if child.is_node() else child.y
@@ -831,7 +803,7 @@ class Tree:  ## tree class
         ]  ## return the most recent branch that is shared across all paths to root
 
     def collapse_subtree_to_clade(
-        self, cl, givenName, verbose=False, widthFunction=lambda k: len(k.leaves)
+        self, cl, givenName, widthFunction=lambda k: len(k.leaves)
     ):
         assert cl.is_node(), "Cannot collapse non-node class"
         collapsedClade = Clade(givenName)
@@ -844,11 +816,7 @@ class Tree:  ## tree class
         collapsedClade.traits = cl.traits
         collapsedClade.width = widthFunction(cl)
 
-        if verbose == True:
-            print(
-                "Replacing node %s (parent %s) with a clade class"
-                % (cl.index, cl.parent.index)
-            )
+        logger.debug(f"Replacing node {cl.index} (parent {cl.parent.index}) with a clade class")
         parent = cl.parent
 
         removeFromTree = self.traverse_tree(cl, includeCondition=lambda k: True)
@@ -894,7 +862,6 @@ class Tree:  ## tree class
         self,
         collapseIfFxn=lambda x: x.traits["posterior"] <= 0.5,
         designatedNodes=[],
-        verbose=False,
     ):
         """
         TODO: change desnignatedNode to None
@@ -925,11 +892,7 @@ class Tree:  ## tree class
                     newTree.Objects,
                 )
             )  ## need to look up nodes designated for deletion by their indices, since the tree has been copied and nodes will have new memory addresses
-        if verbose == True:
-            print(
-                "%s nodes set for collapsing: %s"
-                % (len(nodesToDelete), [w.index for w in nodesToDelete])
-            )
+        logger.debug(f"{len(nodesToDelete)} nodes set for collapsing: {[w.index for w in nodesToDelete]}")
         assert (
             len(nodesToDelete) < len(newTree.get_internal()) - 1
         ), "Chosen cutoff would remove all branches"
@@ -937,8 +900,7 @@ class Tree:  ## tree class
             len(nodesToDelete) > 0
         ):  ## as long as there are branches to be collapsed - keep reducing the tree
 
-            if verbose == True:
-                print("Continuing collapse cycle, %s nodes left" % (len(nodesToDelete)))
+            logger.debug(f"Continuing collapse cycle, {len(nodesToDelete)} nodes left")
             for k in sorted(
                 nodesToDelete, key=lambda x: -x.height
             ):  ## start with branches near the tips
@@ -950,15 +912,7 @@ class Tree:  ## tree class
                 )  ## once node is deleted, the parent to all their children will be the parent of the deleted node
                 if newParent is None:
                     newParent = self.root
-                if verbose == True:
-                    print(
-                        "Removing node %s, attaching children %s to node %s"
-                        % (
-                            oldParent.index,
-                            [w.index for w in k.children],
-                            newParent.index,
-                        )
-                    )
+                logger.debug(f"Removing node {oldParent.index}, attaching children {[w.index for w in k.children]} to node {newParent.index}")
                 for (
                     w
                 ) in (
@@ -967,8 +921,7 @@ class Tree:  ## tree class
                     if w.parent == oldParent:
                         w.parent = newParent
                         w.length += oldParent.length
-                        if verbose == True:
-                            print("Fixing branch length for node %s" % (w.index))
+                        logger.debug(f"Fixing branch length for node {w.index}")
                 k.parent.children.remove(
                     k
                 )  ## remove traces of deleted node - it doesn't exist as a child, doesn't exist in the tree and doesn't exist in the nodes list
@@ -998,8 +951,7 @@ class Tree:  ## tree class
                         if w.index in [q.index for q in designatedNodes]
                     ]
 
-                if verbose == True:
-                    print("Removing references to node %s" % (k.index))
+                logger.debug(f"Removing references to node {k.index}")
         newTree.sort_branches()  ## sort the tree to traverse, draw and sort tree to adjust y coordinates
         return newTree  ## return collapsed tree
 
@@ -1007,7 +959,6 @@ class Tree:  ## tree class
         self,
         curNode=None,
         traits=None,
-        verbose=False,
         nexus=False,
         stringFragment=None,
         traverseCondition=None,
@@ -1025,8 +976,7 @@ class Tree:  ## tree class
             stringFragment = []
             if nexus:
                 assert not json, "Nexus format not a valid option for JSON output"
-                if verbose == True:
-                    print("Exporting to NEXUS format")
+                logger.debug("Exporting to NEXUS format")
                 stringFragment.append("#NEXUS\nBegin trees;\ntree TREE1 = [&R] ")
         if traverseCondition is None:
             traverseCondition = lambda k: True
@@ -1035,67 +985,47 @@ class Tree:  ## tree class
         if len(traits) > 0:  ## non-empty list of traits to output
             for tr in traits:  ## iterate through keys
                 if tr in curNode.traits:  ## if key is available
-                    if verbose == True:
-                        print(
-                            "trait %s available for %s (%s) type: %s"
-                            % (
-                                tr,
-                                curNode.index,
-                                curNode.branchType,
-                                type(curNode.traits[tr]),
-                            )
-                        )
+                    logger.debug(f"trait {tr} available for {curNode.index} ({curNode.branchType}) type: {type(curNode.traits[tr])}")
                     if isinstance(curNode.traits[tr], str):  ## string value
-                        comment.append('%s="%s"' % (tr, curNode.traits[tr]))
-                        if verbose == True:
-                            print("adding string comment %s" % (comment[-1]))
+                        comment.append(f'{tr}="{curNode.traits[tr]}"')
+                        logger.debug(f"adding string comment {comment[-1]}")
                     elif isinstance(curNode.traits[tr], float) or isinstance(
                         curNode.traits[tr], int
                     ):  ## float or integer
-                        comment.append("%s=%s" % (tr, curNode.traits[tr]))
-                        if verbose == True:
-                            print("adding numeric comment %s" % (comment[-1]))
+                        comment.append(f"{tr}={curNode.traits[tr]}")
+                        logger.debug(f"adding numeric comment {comment[-1]}")
                     elif isinstance(curNode.traits[tr], list):  ## lists
                         rangeComment = []
                         for val in curNode.traits[tr]:
                             if isinstance(val, str):  ## string
-                                rangeComment.append('"%s"' % (val))
+                                rangeComment.append(f'"{val}"')
                             elif isinstance(val, float) or isinstance(
                                 val, int
                             ):  ## float or integer
-                                rangeComment.append("%s" % (val))
+                                rangeComment.append(f"{val}")
                             elif isinstance(
                                 val, list
                             ):  ## list of lists, example complete history annotated on tree
                                 rangeComment.append("{{{}}}".format(",".join(val)))
-                        comment.append("%s={%s}" % (tr, ",".join(rangeComment)))
-                        if verbose == True:
-                            print("adding range comment %s" % (comment[-1]))
-                elif verbose == True:
-                    print(
-                        "trait %s unavailable for %s (%s)"
-                        % (tr, curNode.index, curNode.branchType)
-                    )
+                        comment.append(f"{tr}={','.join(rangeComment)}")
+                        logger.debug(f"adding range comment {comment[-1]}")
+                else:
+                    logger.debug(f"trait {tr} unavailable for {curNode.index} ({curNode.branchType})")
 
         if curNode.is_node():
-            if verbose == True:
-                print("node: %s" % (curNode.index))
+            logger.debug(f"node: {curNode.index}")
             stringFragment.append("(")
             traverseChildren = list(filter(traverseCondition, curNode.children))
             assert (
                 len(traverseChildren) > 0
-            ), "Node %s does not have traversable children" % (curNode.index)
+            ), f"Node {curNode.index} does not have traversable children"
             for c, child in enumerate(
                 traverseChildren
             ):  ## iterate through children of node if they satisfy traverse condition
-                if verbose == True:
-                    print(
-                        "moving to child %s of node %s" % (child.index, curNode.index)
-                    )
-                self.toString(
+                logger.debug(f"moving to child {child.index} of node {curNode.index}")
+                self.to_string(
                     curNode=child,
                     traits=traits,
-                    verbose=verbose,
                     nexus=nexus,
                     stringFragment=stringFragment,
                     traverseCondition=traverseCondition,
@@ -1115,22 +1045,19 @@ class Tree:  ## tree class
                 assert isinstance(rename, dict), 'Variable "rename" is not a dictionary'
                 assert (
                     curNode.name in rename
-                ), "Tip name %s not in rename dictionary" % (curNode.name)
+                ), f"Tip name {curNode.name} not in rename dictionary"
                 treeName = rename[curNode.name]
 
-            if verbose == True:
-                print("leaf: %s (%s)" % (curNode.index, treeName))
-            stringFragment.append("%s%s%s" % (quoteCharacter, treeName, quoteCharacter))
+            logger.debug(f"leaf: {curNode.index} ({treeName})")
+            stringFragment.append(f"{quoteCharacter}{treeName}{quoteCharacter}")
 
         if len(comment) > 0:
-            if verbose == True:
-                print("adding comment to %s" % (curNode.index))
+            logger.debug(f"adding comment to {curNode.index}")
             comment = ",".join(comment)
             comment = "[&" + comment + "]"
-            stringFragment.append("%s" % (comment))  ## end of node, add annotations
+            stringFragment.append(f"{comment}")  ## end of node, add annotations
 
-        if verbose == True:
-            print("adding branch length to %s" % (curNode.index))
+        logger.debug(f"adding branch length to {curNode.index}")
         stringFragment.append(
             ":%8f" % (curNode.length)
         )  ## end of node, add branch length
@@ -1139,8 +1066,7 @@ class Tree:  ## tree class
             stringFragment.append(";")
             if nexus == True:
                 stringFragment.append("\nEnd;")
-            if verbose == True:
-                print("finished")
+            logger.debug("finished")
             return "".join(stringFragment)
 
     def get_all_tip_TMRCAs(self):
@@ -1166,50 +1092,34 @@ class Tree:  ## tree class
                         tmrcaMatrix[tipB][tipA] = k.absoluteTime
         return tmrcaMatrix
 
-    def reduce_tree(self, tipsToKeep, verbose=False):
+    def reduce_tree(self, tipsToKeep):
         assert len(tipsToKeep) > 0, "No tips given to reduce the tree to."
         assert (
             len([k for k in tipsToKeep if not k.is_leaflike()]) == 0
         ), "Embedding contains %d branches that are not leaf-like." % (
             len([k for k in tipsToKeep if k.is_leaflike() == False])
         )
-        if verbose == True:
-            print("Preparing branch hash for keeping %d branches" % (len(tipsToKeep)))
+        logger.debug("Preparing branch hash for keeping %d branches" % (len(tipsToKeep)))
         branchHash = {k.index: k for k in tipsToKeep}
         embedding = []
-        if verbose == True:
-            print("Deep copying tree")
+        logger.debug("Deep copying tree")
         reducedTree = copy.deepcopy(self)  ## new tree object
         for k in reducedTree.Objects:  ## deep copy branches from current tree
             if k.index in branchHash:  ## if branch is designated as one to keep
                 currentBranch = k
-                if verbose == True:
-                    print("Traversing to root from %s" % (currentBranch.index))
+                logger.debug(f"Traversing to root from {currentBranch.index}")
                 while currentBranch != reducedTree.root:  ## descend to root
-                    if verbose == True:
-                        print(
-                            "at %s root: %s"
-                            % (currentBranch.index, currentBranch == reducedTree.root)
-                        )
+                    logger.debug(f"at {currentBranch.index} root: {currentBranch == reducedTree.root}")
                     embedding.append(currentBranch)  ## keep track of the path to root
                     currentBranch = currentBranch.parent
         embedding.append(reducedTree.root)  ## add root to embedding
-        if verbose == True:
-            print(
-                "Finished extracting embedding with %s branches (%s tips, %s nodes)"
-                % (
-                    len(embedding),
-                    len([w for w in embedding if w.is_leaf()]),
-                    len([w for w in embedding if w.is_node()]),
-                )
-            )
+        logger.debug(f"Finished extracting embedding with {len(embedding)} branches ({len([w for w in embedding if w.is_leaf()])} tips, {len([w for w in embedding if w.is_node()])} nodes)")
         embedding = set(embedding)  ## prune down to only unique branches
 
         reducedTree.Objects = sorted(
             list(embedding), key=lambda x: x.height
         )  ## assign branches that are kept to new tree's Objects
-        if verbose == True:
-            print("Pruning untraversed lineages")
+        logger.debug("Pruning untraversed lineages")
         for k in reducedTree.get_internal():  ## iterate through reduced tree
             k.children = [
                 c for c in k.children if c in embedding
@@ -1220,8 +1130,7 @@ class Tree:  ## tree class
 
         reducedTree.fix_hanging_nodes()
 
-        if verbose == True:
-            print("Last traversal and branch sorting")
+        logger.debug("Last traversal and branch sorting")
         reducedTree.traverse_tree()  ## traverse
         reducedTree.sort_branches()  ## sort
 
@@ -1265,15 +1174,14 @@ class Tree:  ## tree class
                     "No branches satisfying function were found amongst branches"
                 )
             else:
-                print(
-                    "Warning, no results found matching the specified condition. Returning empty list."
+                logger.warning(
+                    "No results found matching the specified condition. Returning empty list."
                 )
                 return []
-        elif (
-            len(select) == 1
-        ):  # TODO this if block should be removed because the function should always return something of type List, not sometimes a list and sometimes a branch
-            # TODO: remove this bit and add a get_branch() method
-            return select[-1]
+        # elif (
+        #     len(select) == 1
+        #     # TODO: dd a get_branch() method that returns a single branch (not a list of one)
+        #     return select[-1]
         else:
             return select
 
@@ -1302,6 +1210,11 @@ class Tree:  ## tree class
                 node.parent.children.remove(node)
                 self.Objects.remove(node)
 
+
+
+    ############################################
+    ##########   PLOTTING FUNCTIONS   ##########
+    ############################################
     def plot_text(
         self,
         ax,
@@ -1342,6 +1255,7 @@ class Tree:  ## tree class
         zorder=4,
         **kwargs,
     ):
+        ### Set default values ###
         if targetFxn is None:
             targetFxn = lambda k: k.is_leaf()
         if xCoordinateFxn is None:
@@ -1457,40 +1371,64 @@ class Tree:  ## tree class
     def plot_points(
         self,
         ax,
-        x_attr=None,
-        y_attr=None,
-        target=None,
+        targetFxn=None,
+        xCoordinateFxn=None,
+        yCoordinateFxn=None,
         pointSize=None,
         pointSizeFxn=None,
         colour=None,
-        zorder=None,
+        colourFxn=None,
         outline=None,
-        outline_size=None,
-        outline_colour=None,
+        outlineSize=None,
+        outlineSizeFxn=None,
+        outlineColour=None,
+        outlineColourFxn=None,
+        zorder=3,
         **kwargs,
     ):
-        """
-        TODO: Fix this fxn with size/sizeFxn inputs
-        """
-        if target is None:
-            target = lambda k: k.is_leaf()
-        if x_attr is None:
-            x_attr = lambda k: k.x
-        if y_attr is None:
-            y_attr = lambda k: k.y
-        if size is None:
-            size = 40
-        if colour is None:
-            colour = lambda f: "k"
-        if zorder is None:
-            zorder = 3
-
-        if outline is None:
-            outline = True
-        if outline_size is None:
-            outline_size = lambda k: size(k) * 2 if callable(size) else size * 2
-        if outline_colour is None:
-            outline_colour = "k"
+        ### Set default values ###
+        if targetFxn is None:
+            targetFxn = lambda k: k.is_leaf()
+        if xCoordinateFxn is None:
+            xCoordinateFxn = lambda k: k.x
+        if yCoordinateFxn is None:
+            yCoordinateFxn = lambda k: k.y
+        # Point size logic
+        if pointSize is not None and pointSizeFxn is not None:
+            raise ValueError(
+                "Cannot specify both pointSize and pointSizeFxn. Please use only one."
+            )
+        if pointSize is None and pointSizeFxn is None:
+            pointSize = lambda k: 40
+        else:
+            pointSize = pointSize if pointSize is not None else pointSizeFxn
+        # Outline size logic
+        if outlineSize is not None and outlineSizeFxn is not None:
+            raise ValueError(
+                "Cannot specify both outlineSize and outlineSizeFxn. Please use only one."
+            )
+        if outlineSize is None and outlineSizeFxn is None:
+            outlineSize = lambda k: pointSize(k) * 2
+        else:
+            outlineSize = outlineSize if outlineSize is not None else outlineSizeFxn
+        # Colour logic
+        if colour is not None and colourFxn is not None:
+            raise ValueError(
+                "Cannot specify both colour and colourFxn. Please use only one."
+            )
+        if colour is None and colourFxn is None:
+            colour = lambda k: "k"
+        else:
+            colour = colour if colour is not None else colourFxn
+        # Outline colour logic
+        if outlineColour is not None and outlineColourFxn is not None:
+            raise ValueError(
+                "Cannot specify both outlineColour and outlineColourFxn. Please use only one."
+            )
+        if outlineColour is None and outlineColourFxn is None:
+            outlineColour = lambda k: "k"
+        else:
+            outlineColour = outlineColour if outlineColour is not None else outlineColourFxn
 
         xs = []
         ys = []
@@ -1501,25 +1439,17 @@ class Tree:  ## tree class
         outline_ys = []
         outline_colours = []
         outline_sizes = []
-        for k in filter(target, self.Objects):
-            xs.append(x_attr(k))
-            ys.append(y_attr(k))
-            colours.append(colour(k)) if callable(colour) else colours.append(colour)
-            sizes.append(size(k)) if callable(size) else sizes.append(size)
+        for k in filter(targetFxn, self.Objects):
+            xs.append(xCoordinateFxn(k))
+            ys.append(yCoordinateFxn(k))
+            colours.append(colour(k)) #  if callable(colour) else colours.append(colour)
+            sizes.append(pointSize(k)) #  if callable(size) else sizes.append(size)
 
             if outline:
                 outline_xs.append(xs[-1])
                 outline_ys.append(ys[-1])
-                (
-                    outline_colours.append(outline_colour(k))
-                    if callable(outline_colour)
-                    else outline_colours.append(outline_colour)
-                )
-                (
-                    outline_sizes.append(outline_size(k))
-                    if callable(outline_size)
-                    else outline_sizes.append(outline_size)
-                )
+                outline_colours.append(outlineColour(k)) #  if callable(outlineColour) else outline_colours.append(outlineColour)
+                outline_sizes.append(outlineSize(k)) #  if callable(outlineSize) else outline_sizes.append(outlineSize)
 
         ax.scatter(
             xs,
@@ -1543,61 +1473,74 @@ class Tree:  ## tree class
 
         return ax
 
-    def plotTree(
+    def plot_tree(
         self,
         ax,
-        connection_type=None,
-        target=None,
-        x_attr=None,
-        y_attr=None,
+        targetFxn=None,
+        xCoordinateFxn=None,
+        yCoordinateFxn=None,
         width=None,
+        widthFxn=None,
         colour=None,
+        colourFxn=None,
+        connection_type=None,
         **kwargs,
     ):
-        if target is None:
-            target = lambda k: True
-        if x_attr is None:
-            x_attr = lambda k: k.x
-        if y_attr is None:
-            y_attr = lambda k: k.y
-        if width is None:
-            width = 2
-        if colour is None:
-            colour = "k"
+        ### Set default values ###
+        if targetFxn is None:
+            targetFxn = lambda k: True
+        if xCoordinateFxn is None:
+            xCoordinateFxn = lambda k: k.x
+        if yCoordinateFxn is None:
+            yCoordinateFxn = lambda k: k.y
+        # Width logic
+        if width is not None and widthFxn is not None:
+            raise ValueError(
+                "Cannot specify both width and widthFxn. Please use only one."
+            )
+        if width is None and widthFxn is None:
+            width = lambda k: 2
+        else:
+            width = width if width is not None else widthFxn
+        # Colour logic
+        if colour is not None and colourFxn is not None:
+            raise ValueError(
+                "Cannot specify both colour and colourFxn. Please use only one."
+            )
+        if colour is None and colourFxn is None:
+            colour = lambda k: "k"
+        else:
+            colour = colour if colour is not None else colourFxn
         if connection_type is None:
             connection_type = "baltic"
         assert connection_type in [
             "baltic",
             "direct",
             "elbow",
-        ], 'Unrecognised drawing type "%s"' % (tree_type)
+        ], f'Unrecognised drawing type \"{connection_type}\"'
 
         branches = []
         colours = []
         linewidths = []
-        for k in filter(target, self.Objects):  ## iterate over branches
-            x = x_attr(k)  ## get branch x position
-            xp = x_attr(k.parent) if k.parent else x  ## get parent x position
-            y = y_attr(k)  ## get y position
+        for k in filter(targetFxn, self.Objects):  ## iterate over branches
+            x = xCoordinateFxn(k)  ## get branch x position
+            xp = xCoordinateFxn(k.parent) if k.parent else x  ## get parent x position
+            y = yCoordinateFxn(k)  ## get y position
 
             try:
-                (
-                    colours.append(colour(k))
-                    if callable(colour)
-                    else colours.append(colour)
-                )
+                colours.append(colour(k)) # if callable(colour) else colours.append(colour)
             except KeyError:
                 colours.append(
                     (0.7, 0.7, 0.7)
                 )  ## in case no colour available for branch set it to grey
-            linewidths.append(width(k)) if callable(width) else linewidths.append(width)
+            linewidths.append(width(k)) #  if callable(width) else linewidths.append(width)
 
             if (
                 connection_type == "baltic"
             ):  ## each node has a single vertical line to which descendant branches are connected
                 branches.append(((xp, y), (x, y)))
                 if k.is_node():
-                    yl, yr = y_attr(k.children[0]), y_attr(
+                    yl, yr = yCoordinateFxn(k.children[0]), yCoordinateFxn(
                         k.children[-1]
                     )  ## y positions of first and last child
                     branches.append(((x, yl), (x, yr)))
@@ -1606,12 +1549,12 @@ class Tree:  ## tree class
             elif (
                 connection_type == "elbow"
             ):  ## more standard connection where each branch connects to its parent via a right-angled line
-                yp = y_attr(k.parent) if k.parent else y  ## get parent x position
+                yp = yCoordinateFxn(k.parent) if k.parent else y  ## get parent x position
                 branches.append(((xp, yp), (xp, y), (x, y)))
             elif (
                 connection_type == "direct"
             ):  ## this gives triangular looking trees where descendants connect directly to their parents
-                yp = y_attr(k.parent)  ## get y position
+                yp = yCoordinateFxn(k.parent)  ## get y position
                 branches.append(((xp, yp), (x, y)))
             else:
                 pass  ## for now
@@ -1622,14 +1565,16 @@ class Tree:  ## tree class
         ax.add_collection(line_segments)
         return ax
 
-    def plotCircularTree(
+    def plot_circular_tree(
         self,
         ax,
-        target=None,
-        x_attr=None,
-        y_attr=None,
+        targetFxn=None,
+        xCoordinateFxn=None,
+        yCoordinateFxn=None,
         width=None,
+        widthFxn=None,
         colour=None,
+        colourFxn=None,
         circStart=0.0,
         circFrac=1.0,
         inwardSpace=0.0,
@@ -1637,16 +1582,31 @@ class Tree:  ## tree class
         precision=15,
         **kwargs,
     ):
-        if target is None:
-            target = lambda k: True
-        if x_attr is None:
-            x_attr = lambda k: k.x
-        if y_attr is None:
-            y_attr = lambda k: k.y
-        if colour is None:
-            colour = "k"
-        if width is None:
-            width = 2
+        ### Set default values ###
+        if targetFxn is None:
+            targetFxn = lambda k: True
+        if xCoordinateFxn is None:
+            xCoordinateFxn = lambda k: k.x
+        if yCoordinateFxn is None:
+            yCoordinateFxn = lambda k: k.y
+        # Width logic
+        if width is not None and widthFxn is not None:
+            raise ValueError(
+                "Cannot specify both width and widthFxn. Please use only one."
+            )
+        if width is None and widthFxn is None:
+            width = lambda k: 2
+        else:
+            width = width if width is not None else widthFxn
+        # Colour logic
+        if colour is not None and colourFxn is not None:
+            raise ValueError(
+                "Cannot specify both colour and colourFxn. Please use only one."
+            )
+        if colour is None and colourFxn is None:
+            colour = lambda k: "k"
+        else:
+            colour = colour if colour is not None else colourFxn
 
         if inwardSpace < 0:
             inwardSpace -= self.treeHeight
@@ -1658,7 +1618,7 @@ class Tree:  ## tree class
         circ_s = circStart * math.pi * 2
         circ = circFrac * math.pi * 2
 
-        allXs = list(map(x_attr, self.Objects))
+        allXs = list(map(xCoordinateFxn, self.Objects))
         if normaliseHeight is None:
             normaliseHeight = lambda value: (value - min(allXs)) / (
                 max(allXs) - min(allXs)
@@ -1669,14 +1629,14 @@ class Tree:  ## tree class
             else stop
         )
 
-        for k in filter(target, self.Objects):  ## iterate over branches
-            x = normaliseHeight(x_attr(k) + inwardSpace)  ## get branch x position
+        for k in filter(targetFxn, self.Objects):  ## iterate over branches
+            x = normaliseHeight(xCoordinateFxn(k) + inwardSpace)  ## get branch x position
             xp = (
-                normaliseHeight(x_attr(k.parent) + inwardSpace)
+                normaliseHeight(xCoordinateFxn(k.parent) + inwardSpace)
                 if k.parent.parent
                 else x
             )  ## get parent x position
-            y = y_attr(k)  ## get y position
+            y = yCoordinateFxn(k)  ## get y position
 
             try:
                 (
@@ -1686,7 +1646,7 @@ class Tree:  ## tree class
                 )
             except KeyError:
                 colours.append((0.7, 0.7, 0.7))
-            linewidths.append(width(k)) if callable(width) else linewidths.append(width)
+            linewidths.append(width(k)) #  if callable(width) else linewidths.append(width)
 
             y = circ_s + circ * y / self.ySpan
             X = math.sin(y)
@@ -1694,7 +1654,7 @@ class Tree:  ## tree class
             branches.append(((X * xp, Y * xp), (X * x, Y * x)))
 
             if k.is_node():
-                yl, yr = y_attr(k.children[0]), y_attr(
+                yl, yr = yCoordinateFxn(k.children[0]), yCoordinateFxn(
                     k.children[-1]
                 )  ## get leftmost and rightmost children's y coordinates
                 yl = (
@@ -1730,43 +1690,70 @@ class Tree:  ## tree class
         ax.add_collection(line_segments)  ## add collection to axes
         return ax
 
-    def plotCircularPoints(
+    def plot_circular_points(
         self,
         ax,
-        x_attr=None,
-        y_attr=None,
-        target=None,
-        size=None,
+        targetFxn=None,
+        xCoordinateFxn=None,
+        yCoordinateFxn=None,
+        pointSize=None,
+        pointSizeFxn=None,
         colour=None,
+        colourFxn=None,
         circStart=0.0,
         circFrac=1.0,
         inwardSpace=0.0,
         normaliseHeight=None,
-        zorder=None,
-        outline=None,
-        outline_size=None,
-        outline_colour=None,
+        outlineColour=None,
+        outlineColourFxn=None,
+        outlineSize=None,
+        outlineSizeFxn=None,
+        zorder=3,
         **kwargs,
     ):
-        if target is None:
-            target = lambda k: k.is_leaf()
-        if x_attr is None:
-            x_attr = lambda k: k.x
-        if y_attr is None:
-            y_attr = lambda k: k.y
-        if size is None:
-            size = 40
-        if colour is None:
-            colour = "k"
-        if zorder is None:
-            zorder = 3
-
-        if outline is None:
-            outline = True
-        if outline_size is None:
-            outline_size = lambda k: size(k) * 2 if callable(size) else size * 2
-        if outline_colour is None:
-            outline_colour = lambda k: "k"
+        ### Set default values ###
+        if targetFxn is None:
+            targetFxn = lambda k: k.is_leaf()
+        if xCoordinateFxn is None:
+            xCoordinateFxn = lambda k: k.x
+        if yCoordinateFxn is None:
+            yCoordinateFxn = lambda k: k.y
+        # Point size logic
+        if pointSize is not None and pointSizeFxn is not None:
+            raise ValueError(
+                "Cannot specify both pointSize and pointSizeFxn. Please use only one."
+            )
+        if pointSize is None and pointSizeFxn is None:
+            pointSize = lambda k: 40
+        else:
+            pointSize = pointSize if pointSize is not None else pointSizeFxn
+        # Outline size logic
+        if outlineSize is not None and outlineSizeFxn is not None:
+            raise ValueError(
+                "Cannot specify both outlineSize and outlineSizeFxn. Please use only one."
+            )
+        if outlineSize is None and outlineSizeFxn is None:
+            outlineSize = lambda k: pointSize(k) * 2
+        else:
+            outlineSize = outlineSize if outlineSize is not None else outlineSizeFxn
+        # Colour logic
+        if colour is not None and colourFxn is not None:
+            raise ValueError(
+                "Cannot specify both colour and colourFxn. Please use only one."
+            )
+        if colour is None and colourFxn is None:
+            colour = lambda k: "k"
+        else:
+            colour = colour if colour is not None else colourFxn
+        # Outline colour logic
+        if outlineColour is not None and outlineColourFxn is not None:
+            raise ValueError(
+                "Cannot specify both outlineColour and outlineColourFxn. Please use only one."
+            )
+        if outlineColour is None and outlineColourFxn is None:
+            outlineColour = lambda k: "k"
+        else:
+            outlineColour = outlineColour if outlineColour is not None else outlineColourFxn
 
         if inwardSpace < 0:
             inwardSpace -= self.treeHeight
@@ -1774,12 +1761,12 @@ class Tree:  ## tree class
         circ_s = circStart * math.pi * 2
         circ = circFrac * math.pi * 2
 
-        allXs = list(map(x_attr, self.Objects))
+        allXs = list(map(xCoordinateFxn, self.Objects))
         if normaliseHeight is None:
             normaliseHeight = lambda value: (value - min(allXs)) / (
                 max(allXs) - min(allXs)
             )
-        linspace = lambda start, stop, n: (
+        linspace = lambda start, stop, n: (  # ToDo: this never gets used
             list(start + ((stop - start) / (n - 1)) * i for i in range(n))
             if n > 1
             else stop
@@ -1794,34 +1781,26 @@ class Tree:  ## tree class
         outline_ys = []
         outline_colours = []
         outline_sizes = []
-        for k in filter(target, self.Objects):
+        for k in filter(targetFxn, self.Objects):
             x = normaliseHeight(
-                x_attr(k) + inwardSpace
+                xCoordinateFxn(k) + inwardSpace
             )  ## find normalised x position along circle's radius
             y = (
-                circ_s + circ * y_attr(k) / self.ySpan
+                circ_s + circ * yCoordinateFxn(k) / self.ySpan
             )  ## get y position along circle's perimeter
             X = math.sin(y) * x  ## transform
             Y = math.cos(y) * x  ## transform
 
             xs.append(X)
             ys.append(Y)
-            colours.append(colour(k)) if callable(colour) else colours.append(colour)
-            sizes.append(size(k)) if callable(size) else sizes.append(size)
+            colours.append(colour(k)) #  if callable(colour) else colours.append(colour)
+            sizes.append(pointSize(k)) #  if callable(pointSize) else sizes.append(pointSize)
 
-            if outline:
+            if outlineColour:
                 outline_xs.append(xs[-1])
                 outline_ys.append(ys[-1])
-                (
-                    outline_colours.append(outline_colour(k))
-                    if callable(outline_colour)
-                    else outline_colours.append(outline_colour)
-                )
-                (
-                    outline_sizes.append(outline_size(k))
-                    if callable(outline_size)
-                    else outline_sizes.append(outline_size)
-                )
+                outline_colours.append(outlineSizeFxn(k)) #  if callable(outlineSizeFxn else outline_colours.append(outlineSizeFxn)
+                outline_sizes.append(outlineSize(k)) #  if callable(outlineSize) else outline_sizes.append(outlineSize)
 
         ax.scatter(
             xs,
@@ -1832,7 +1811,7 @@ class Tree:  ## tree class
             zorder=zorder,
             **kwargs,
         )  ## put a circle at each tip
-        if outline:
+        if outlineColour:
             ax.scatter(
                 outline_xs,
                 outline_ys,

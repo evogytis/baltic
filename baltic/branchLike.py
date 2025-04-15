@@ -1,7 +1,9 @@
+import logging
+
+logger = logging.getLogger("baltic.BranchLike")
+
+
 class BranchLike:
-    """
-    Class representing generic branch-like structure in a phylogenetic tree (generic of Leaf, Node, etc)
-    """
 
     def __init__(self):
         self.branchType=None
