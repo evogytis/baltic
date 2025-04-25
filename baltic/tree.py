@@ -15,22 +15,22 @@ from baltic.bt_utils import root_to_tip
 logger = logging.getLogger("baltic.Tree")
 
 
-class Tree:  ## tree class
+class Tree:
 
-    def __init__(self):
-        self.curNode = Node()  ## current node is a new instance of a node class
-        self.curNode.index = "Root"  ## first object in the tree is the root
-        self.curNode.length = 0.0  ## startind node branch length is 0
-        self.curNode.height = 0.0  ## starting node height is 0
-        self.root = None  # self.cur_node ## root of the tree is current node
-        self.Objects = []  ## tree objects have a flat list of all branches in them
+    def __init__(self, treeType):
+        ## initial current node is a new instance of a node class which needs to be initialized
+        self.curNode = Node()
+        self.curNode.index = "Root"
+        self.curNode.length = 0.0
+        self.curNode.height = 0.0
+        ##
+        self.root = None
+        self.Objects = []
         self.tipMap = None
-        self.treeHeight = (
-            0  ## tree height is the distance between the root and the most recent tip
-        )
+        self.treeHeight = 0
         self.mostRecent = None
         self.ySpan = 0.0
-        self.treeType = None  # indicates if the tree is a time or divergence tree
+        self.treeType = None
 
     def add_reticulation(self, name):
         logger.info(f"Creating new reticulation: {name}.")
@@ -42,45 +42,49 @@ class Tree:  ## tree class
         self.curNode = ret
 
     def add_node(self, i):
+        """Create a new internal node with appropriate parent-child links; add it to the tree.
+        """
         logger.info(f"Creating new node: {i}.")
-        newNode = Node()  ## new node instance
-        newNode.index = i  ## new node's index is the position along the tree string
+        newNode = Node()
+        newNode.index = i
         if self.root is None:
             self.root = newNode
             self.root.length = 0.0
 
-        newNode.parent = self.curNode  ## new node's parent is current node
+        newNode.parent = self.curNode
         if not self.curNode.is_node():
             logger.error("Attempted to add a child to a non-node object.")
             logger.error(
                 "Check if tip names have illegal characters like parentheses or commas."
             )
             raise TypeError()
-        self.curNode.children.append(newNode)  ## new node is a child of current node
-        self.curNode = newNode  ## current node is now new node
-        self.Objects.append(
-            self.curNode
-        )  ## add new node to list of objects in the tree
+        self.curNode.children.append(newNode)
+        self.curNode = newNode
+        self.Objects.append(self.curNode)
 
     def add_leaf(self, i, name):
+        """Create a new leaf with appropriate parent-child links; add it to the tree.
+        """
         logger.info(f"Creating new leaf: {name}.")
-        newLeaf = Leaf(name)  ## new instance of leaf object
-        newLeaf.index = i  ## index is position along tree string
+        newLeaf = Leaf(name)
+        newLeaf.index = i
         if self.root is None:
             self.root = newLeaf
 
-        newLeaf.parent = self.curNode  ## leaf's parent is current node
+        newLeaf.parent = self.curNode
         if not self.curNode.is_node():
             logger.error("Attempted to add a child to a non-node object.")
             logger.error(
                 "Check if tip names have illegal characters like parentheses or commas."
             )
             raise TypeError()
-        self.curNode.children.append(newLeaf)  ## assign leaf to parent's children
-        self.curNode = newLeaf  ## current node is now new leaf
-        self.Objects.append(self.curNode)  ## add leaf to all objects in the tree
+        self.curNode.children.append(newLeaf)
+        self.curNode = newLeaf
+        self.Objects.append(self.curNode)
 
     def subtree(self, startingNode=None, traverseCondition=None, stem=True):
+        """Generate a new subtree starting from a given root node according to a certain condition.
+        """
         logger.info("Generating subtree.")
         if startingNode is None:
             logger.debug("No startingNode given, using root as default.")
@@ -89,9 +93,11 @@ class Tree:  ## tree class
             logger.debug("No traverseCondition given, using all branches.")
             traverseCondition = lambda k: True
 
-        node = (
-            startingNode.parent if stem else startingNode
-        )  ## move up a node if we want the stem
+        # move up a node if we include the stem
+        if stem:
+            node = startingNode.parent
+        else:
+            node = startingNode
 
         subtreeBranches = self.traverse_tree(
             node, includeCondition=lambda k: True, traverseCondition=traverseCondition
@@ -100,51 +106,46 @@ class Tree:  ## tree class
 
         logger.debug("Using stem.")
         if stem:  ## using stem - need to prune subtrees from root now
+            ## add all branches resulting from traversals of unwanted siblings
             unwantedBranches = []
-            for child in node.children:  ## iterate over parent's children
-                if (
-                    child.index != startingNode.index
-                ):  ## not at focal branch (unwanted sibling)
-                    unwantedBranches += self.traverse_tree(
-                        child, includeCondition=lambda w: True
-                    )  ## add all branches resulting from traversals of unwanted siblings
+            for child in node.children:
+                if child.index != startingNode.index:
+                    unwantedBranches.extend(self.traverse_tree(child, includeCondition=lambda w: True))
 
             ## iterate over subtree branches, remember those that belong to unwanted subtrees
             remove = []
             for k in subtreeBranches:
                 if k.index in [ub.index for ub in unwantedBranches]:
                     remove.append(k)
-            for r in remove:  ## iterate over branches belong to unwanted subtrees
-                subtreeBranches.remove(r)  ## remove from list
+            for r in remove:
+                subtreeBranches.remove(r)
 
         ## nothing found or no leaf objects in traversal
-        if subtreeBranches is None or not any(
-            node.is_leaf() for node in subtreeBranches
-        ):
+        if subtreeBranches is None or not any(node.is_leaf() for node in subtreeBranches):
             logger.error("No branches found in subtree traversal. Exiting.")
             return None
 
+        ### Initialize the new tree
         logger.debug("Creting new Tree object for subtree and assigning new branches.")
-        localTree = Tree()  ## create a new tree object where the subtree will be
-        localTree.Objects = subtreeBranches  ## assign branches to new tree object
-        localTree.root = subtreeBranches[0]  ## root is the beginning of the traversal
-        localTree.root.parent = None  ## tree begins strictly at node
+        localTree = Tree(self.treeType)
+        localTree.Objects = subtreeBranches
+        localTree.root = subtreeBranches[0]
+        localTree.root.parent = None
 
-        subtreeSet = set(
-            subtreeBranches
-        )  ## turn branches into set for quicker look up later
+        ## turn branches into set for quicker look up later
+        subtreeSet = set(subtreeBranches)
 
-        logger.debug("Didn't use default traversal. ")
-        ## didn't use default traverse condition,
-        ## might need to deal with hanging nodes and prune children
         if traverseCondition is not None:
-            for nd in localTree.get_internal():  ## iterate over nodes
+            logger.debug("Didn't use default traversal.")
+            ## didn't use default traverse condition,
+            ## might need to deal with hanging nodes and prune children
+            for nd in localTree.get_internal():
                 ## only keep children seen in traversal
                 nd.children = [child for child in nd.children if child in subtreeSet]
             localTree.fix_hanging_nodes()
 
-        logger.debug("Copying tipMap from original tree to subtree.")
-        if self.tipMap:  ## if original tree has a tipMap dictionary
+        if self.tipMap:
+            logger.debug("Copying tipMap from original tree to subtree.")
             localTipMap = {}
             ## copy over the relevant tip translations
             for tipNum in self.tipMap:
@@ -693,14 +694,14 @@ class Tree:  ## tree class
         while len(drawn) != len(
             self.Objects
         ):  # keep drawing the tree until everything is drawn
-            logger.debug("Drawing iteration %d" % (len(drawn)))
+            logger.debug(f"Drawing iteration {len(drawn)}")
             for k in filter(
                 lambda w: w.index not in drawn, self.get_internal()
             ):  ## iterate through internal nodes that have not been drawn
                 if len([q.y for q in k.children if q.y is not None]) == len(
                     k.children
                 ):  ## all y coordinates of children known
-                    logger.debug(f"Setting node {k.index} coordinates to"),
+                    logger.debug(f"Setting node {k.index} coordinates to XXX")  # TODO: XXX=k.x? {k.x}?
                     x = k.height  ## x position is height
                     childrenYCoords = [
                         q.y for q in k.children if q.y is not None
@@ -762,11 +763,10 @@ class Tree:  ## tree class
                 k.x = 0.0
                 k.y = 0.0
 
-        w = (
-            2 * math.pi * 1.0 / float(total)
-            if n.is_leaf()
-            else 2 * math.pi * len(n.leaves) / float(total)
-        )
+        if n.is_leaf():
+            w = 2 * math.pi * 1.0 / float(total)
+        else:
+            w =2 * math.pi * len(n.leaves) / float(total)
 
         if n.parent.x is None:
             n.parent.x = 0.0
@@ -778,11 +778,10 @@ class Tree:  ## tree class
 
         if n.is_node():
             for ch in n.children:
-                w = (
-                    2 * math.pi * 1.0 / float(total)
-                    if ch.is_leaf()
-                    else 2 * math.pi * len(ch.leaves) / float(total)
-                )
+                if ch.is_leaf():
+                    w = 2 * math.pi * 1.0 / float(total)
+                else:
+                    w = 2 * math.pi * len(ch.leaves) / float(total)
 
                 ch._tau = eta
                 eta += w
@@ -801,16 +800,13 @@ class Tree:  ## tree class
         #         pathsToRoot[k.index].add(curNode) ## remember every node visited along the way
         #         curNode=curNode.parent ## descend
 
-        return sorted(
-            reduce(set.intersection, pathsToRoot.values()),
-            key=lambda k: (-len(k.leaves), k.height),
-        )[
-            -1
-        ]  ## return the most recent branch that is shared across all paths to root
+        # return the most recent branch that is shared across all paths to root
+        return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
 
-    def collapse_subtree_to_clade(
-        self, cl, givenName, widthFunction=lambda k: len(k.leaves)
-    ):
+    def collapse_subtree_to_clade(self,
+                                    cl,
+                                    givenName,
+                                    widthFunction=lambda k: len(k.leaves)):
         assert cl.is_node(), "Cannot collapse non-node class"
         collapsedClade = Clade(givenName)
         collapsedClade.index = cl.index
