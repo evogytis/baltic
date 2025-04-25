@@ -122,7 +122,7 @@ class Tree:  ## tree class
             node.is_leaf() for node in subtreeBranches
         ):
             logger.error("No branches found in subtree traversal. Exiting.")
-            return
+            return None
 
         logger.debug("Creting new Tree object for subtree and assigning new branches.")
         localTree = Tree()  ## create a new tree object where the subtree will be
@@ -879,7 +879,7 @@ class Tree:  ## tree class
             nodesToDelete = list(
                 filter(
                     lambda n: n.is_node()
-                    and collapseIfFxn(n) == True
+                    and bool(collapseIfFxn(n))
                     and n != newTree.root,
                     newTree.Objects,
                 )
@@ -939,7 +939,7 @@ class Tree:  ## tree class
                     nodesToDelete == list(
                         filter(
                             lambda n: n.is_node()
-                            and collapseIfFxn(n) == True
+                            and bool(collapseIfFxn(n))
                             and n != newTree.root,
                             newTree.Objects,
                         )
@@ -1070,7 +1070,7 @@ class Tree:  ## tree class
 
         if curNode == self.root:  # .children[-1]:
             stringFragment.append(";")
-            if nexus == True:
+            if bool(nexus):
                 stringFragment.append("\nEnd;")
             logger.debug("finished")
             return "".join(stringFragment)
@@ -1103,7 +1103,7 @@ class Tree:  ## tree class
         assert (
             len([k for k in tipsToKeep if not k.is_leaflike()]) == 0
         ), "Embedding contains %d branches that are not leaf-like." % (
-            len([k for k in tipsToKeep if k.is_leaflike() == False])
+            len([k for k in tipsToKeep if not k.is_leaflike()])
         )
         logger.debug("Preparing branch hash for keeping %d branches" % (len(tipsToKeep)))
         branchHash = {k.index: k for k in tipsToKeep}
