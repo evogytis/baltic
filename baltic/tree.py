@@ -168,20 +168,15 @@ class Tree:
 
             for k in sorted(multitypeNodes, key=lambda x: -x.height):
 
-                child = k.children[0]  ## fetch child
-                grandparent = (
-                    k.parent if k.parent.index else self.root
-                )  ## fetch grandparent
-                logger.debug(
-                    f"At multitype node {k.index} with child {child.index} and grandparent {grandparent.index}"
-                )
-                child.parent = grandparent  ## child's parent is now grandparent
-                grandparent.children.append(
-                    child
-                )  ## add child to grandparent's children
-                grandparent.children.remove(
-                    k
-                )  ## remove old parent from grandparent's children
+                child = k.children[0]
+                if k.parent.index:
+                    grandparent = k.parent
+                else:
+                    grandparent = self.root
+                logger.debug(f"At multitype node {k.index} with child {child.index} and grandparent {grandparent.index}")
+                child.parent = grandparent
+                grandparent.children.append(child)
+                grandparent.children.remove(k)
                 grandparent.children = list(set(grandparent.children))
 
                 child.length += k.length  ## adjust child length
@@ -603,13 +598,19 @@ class Tree:
     def sort_branches(self, descending=True, sortFxn=None, sortByHeight=True):
         mod = -1 if descending else 1
         if sortFxn is None:
+            logger.debug("Using default sort function.")
+            # TODO This is really hard to parse. It is a variable mapped to a lambda function
+            # that sometimes returns a 2-tuple and sometimes returns a 3-tuple, depending on
+            # whether the argument to the function is a node or not
+            # This should be rewritten as a normal function, and we should make sure
+            # the different lengths of the tuple get handled sensibly downstream
             sortFxn = lambda k: (
                 (k.is_node(), -len(k.leaves) * mod, k.length * mod)
                 if k.is_node()
                 else (k.is_node(), k.length * mod)
             )
         if sortByHeight:  # Sort nodes by height and group nodes and leaves together
-            """Sort descendants of each node."""
+            ## Sort descendants of each node.
 
             for k in self.get_internal():  ## iterate over nodes
                 k.children = sorted(k.children, key=sortFxn)
@@ -627,15 +628,13 @@ class Tree:
                 k.children = children
         self.assign_tree_coordinates()  ## update x and y positions of each branch, since y positions will have changed because of sorting
 
-    def assign_tree_coordinates(
-        self, order=None, widthFxn=None, padNodes=None
-    ):
+    def assign_tree_coordinates(self, order=None, widthFxn=None, padNodes=None):
         """ formerly drawTree()
         """
         if order is None:
-            order = self.traverse_tree(
-                includeCondition=lambda k: k.is_leaflike()
-            )  ## order is a list of tips recovered from a tree traversal to make sure they're plotted in the correct order along the vertical tree dimension
+            ## order is a list of tips recovered from a tree traversal
+            # to make sure they're plotted in the correct order along the primary dimension
+            order = self.traverse_tree(includeCondition=lambda k: k.is_leaflike())
             logger.debug("Drawing tree in pre-order")
         else:
             logger.debug("Drawing tree with provided order")
