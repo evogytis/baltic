@@ -6,11 +6,11 @@ import string
 from functools import reduce
 import numpy as np
 from matplotlib.collections import LineCollection
-from .node import Node
-from .leaf import Leaf
-from .clade import Clade
-from .reticulation import Reticulation
-from .bt_utils import root_to_tip
+from baltic.node import Node
+from baltic.leaf import Leaf
+from baltic.clade import Clade
+from baltic.reticulation import Reticulation
+from baltic.bt_utils import root_to_tip
 
 logger = logging.getLogger("baltic.Tree")
 

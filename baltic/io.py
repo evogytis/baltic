@@ -3,8 +3,8 @@ import json
 from io import BytesIO as csio
 import logging
 import requests
-from .baltic import make_tree, make_tree_JSON
-from .bt_utils import calendar_to_decimal_date
+from baltic.baltic import make_tree, make_tree_JSON
+from baltic.bt_utils import calendar_to_decimal_date
 
 logger = logging.getLogger("baltic.io")
 

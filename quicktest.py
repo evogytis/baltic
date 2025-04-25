@@ -14,7 +14,7 @@ print("\n\n")
 
 print('Testing BEAST v1 trait parsing')
 
-ll=bt.io.loadNexus('./tests/data/miniFluB.mcc.tree',tip_regex='_([0-9-]+)')
+ll=bt.io.load_nexus('./tests/data/miniFluB.mcc.tree',tip_regex='_([0-9-]+)')
 
 ll.traverse_tree()
 print('Test if branches have correct number of traits')

@@ -1,5 +1,5 @@
 import logging
-from .branchLike import BranchLike
+from baltic.branchLike import BranchLike
 
 logger = logging.getLogger("baltic.Leaf")
 

@@ -2,10 +2,10 @@ __all__ = ['make_tree', 'make_tree_JSON']
 import re
 import sys
 import logging
-from .tree import Tree
-from .node import Node
-from .leaf import Leaf
-from .reticulation import Reticulation
+from baltic.tree import Tree
+from baltic.node import Node
+from baltic.leaf import Leaf
+from baltic.reticulation import Reticulation
 
 logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
