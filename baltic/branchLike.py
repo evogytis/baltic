@@ -27,6 +27,21 @@ class BranchLike:
             newPath = path + [self]
             return self.parent.get_path_to_root(newPath)
 
+    def get_siblings(self, include_self=False):
+        if self.parent is None:
+            logger.warning("Attempted to find siblings of root node. Returning empty list.")
+            return []
+
+        sibs = self.parent.children
+
+        if include_self:
+            return sibs
+
+        sib_set = set(sibs)
+        sib_set.remove(self)
+        sibs = list(sib_set)
+        return sibs
+
     def is_leaflike(self):
         return False
 
