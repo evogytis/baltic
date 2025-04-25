@@ -10,7 +10,7 @@ from baltic.reticulation import Reticulation
 logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
-def make_tree(data,tre=None):
+def make_tree(data, treeType, tre=None):
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
         'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
@@ -23,7 +23,7 @@ def make_tree(data,tre=None):
     assert data.count("(")==data.count(")"), "Improperly formatted string: must have matching parentheses"
 
     if tre is None: ## calling without providing a tree object - create one
-        tre=Tree()
+        tre=Tree(treeType)
     i=0 ## is an adjustable index along the tree string, it is incremented to advance through the string
     storedI=None ## store the i at the end of the loop, to make sure we haven't gotten stuck somewhere in an infinite loop
 
@@ -174,14 +174,14 @@ def make_tree(data,tre=None):
         if data[i] == ';': ## look for string end
             return tre
 
-def make_tree_JSON(jsonNode,jsonTranslationDict,tre=None,):
+def make_tree_JSON(jsonNode,jsonTranslationDict,treeType,tre=None,):
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
     else:
         newNode=Leaf(name=jsonNode[jsonTranslationDict['name']])
 
     if tre is None:
-        tre=Tree()
+        tre=Tree(treeType)
         tre.root=newNode
     if 'attr' in jsonNode:
         attr = jsonNode.pop('attr')
@@ -201,7 +201,8 @@ def make_tree_JSON(jsonNode,jsonTranslationDict,tre=None,):
     return tre
 
 if __name__ == '__main__':
-    import sys
-    ll=make_tree(sys.argv[1],ll) #TODO this ll is undefined
-    ll.traverse_tree()
-    sys.stdout.write(f'{ll.treeHeight}\n')
+    pass
+    # import sys
+    # ll=make_tree(sys.argv[1],ll) #TODO this ll is undefined
+    # ll.traverse_tree()
+    # sys.stdout.write(f'{ll.treeHeight}\n')

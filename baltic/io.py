@@ -9,7 +9,9 @@ from baltic.bt_utils import calendar_to_decimal_date
 logger = logging.getLogger("baltic.io")
 
 
-def load_newick(treePath,tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
+def load_newick(treePath,
+                treeType,
+                tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
                 dateFmt='%Y-%m-%d',
                 variableDate=True,
                 absoluteTime=False,
@@ -22,7 +24,7 @@ def load_newick(treePath,tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
         l=line.strip('\n')
         if '(' in l:
             treeStringStart=l.index('(')
-            ll=make_tree(l[treeStringStart:]) ## send tree string to make_tree function
+            ll=make_tree(l[treeStringStart:],treeType) ## send tree string to make_tree function
             logger.debug('Identified tree string')
 
     assert ll,'Regular expression failed to find tree string'
@@ -45,10 +47,11 @@ def load_newick(treePath,tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
         handle.close()
     return ll
 
-def load_nexus(tree_path,
-                tip_regex='\|([0-9]+\-[0-9]+\-[0-9]+)',
-                date_fmt='%Y-%m-%d',
-                treestring_regex='tree [A-Za-z\_]+([0-9]+)',
+def load_nexus(treePath,
+                treeType,
+                tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
+                dateFmt='%Y-%m-%d',
+                treestringRegex='tree [A-Za-z\_]+([0-9]+)',
                 variableDate=True,
                 absoluteTime=True,
                 sortBranches=True):
@@ -57,7 +60,7 @@ def load_nexus(tree_path,
     tip_num=0
     ll=None
 
-    handle = open(tree_path, 'r') if isinstance(tree_path, str) else tree_path
+    handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
 
     for line in handle:
         l=line.strip('\n')
@@ -67,10 +70,10 @@ def load_nexus(tree_path,
             tip_num=int(match.group(1))
             logger.debug(f'File should contain {tip_num} taxa')
 
-        match=re.search(treestring_regex,l)
+        match=re.search(treestringRegex,l)
         if match:
             treeString_start=l.index('(')
-            ll=make_tree(l[treeString_start:]) ## send tree string to make_tree function
+            ll=make_tree(l[treeString_start:],treeType) ## send tree string to make_tree function
             logger.debug('Identified tree string')
 
         if tip_flag:
@@ -98,18 +101,19 @@ def load_nexus(tree_path,
         tip_names=[]
         for k in ll.get_external():
             tip_names.append(k.name)
-            match=re.search(tip_regex,k.name)
+            match=re.search(tipRegex,k.name)
             if match:
-                tip_dates.append(calendar_to_decimal_date(match.group(1),fmt=date_fmt,variable=variableDate))
+                tip_dates.append(calendar_to_decimal_date(match.group(1),fmt=dateFmt,variable=variableDate))
 
-        assert len(tip_dates)>0,f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tip_regex}\nExpected date format: {date_fmt}'
+        assert len(tip_dates)>0,f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
         ll.set_absolute_time(max(tip_dates))
 
-    if isinstance(tree_path,str):
+    if isinstance(treePath,str):
         handle.close()
     return ll
 
 def load_JSON(jsonObject,
+                treeType,
                 jsonTranslation=None,
                 sort=True,
                 stats=True):
@@ -137,7 +141,7 @@ def load_JSON(jsonObject,
 
     json_meta=auspice_json['meta']
     json_tree=auspice_json['tree']
-    ll=make_tree_JSON(json_tree,jsonTranslation)
+    ll=make_tree_JSON(json_tree,jsonTranslation,treeType=treeType)
 
     assert ('absoluteTime' in jsonTranslation and ('length' not in jsonTranslation or 'height' not in jsonTranslation)) or ('absoluteTime' not in jsonTranslation and ('length' in jsonTranslation or 'height' in jsonTranslation)),'Cannot use both absolute time and branch length, include only one in json_translation dictionary.'
 
