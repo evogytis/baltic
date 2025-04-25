@@ -197,6 +197,12 @@ class Tree:  ## tree class
             )  ## heights are in units of time from the root
         self.mostRecent = max(k.absoluteTime for k in self.Objects)
 
+    def rescale(self, factor):
+        logger.debug(f"Rescaling tree by factor of {factor}.")
+        for k in self.Objects:
+            k.length = k.length * factor
+        self.traverse_tree()
+
     def treeStats(self):
         stats = self._calculate_tree_stats()
         print(
