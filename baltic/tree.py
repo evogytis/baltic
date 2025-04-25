@@ -30,7 +30,8 @@ class Tree:
         self.treeHeight = 0
         self.mostRecent = None
         self.ySpan = 0.0
-        self.treeType = None
+        assert treeType in ["divergence", "time"], f"Failed to initialize tree with treeType {treeType}."
+        self.treeType = treeType
 
     def add_reticulation(self, name):
         logger.info(f"Creating new reticulation: {name}.")
