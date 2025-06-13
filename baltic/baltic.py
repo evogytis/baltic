@@ -202,7 +202,3 @@ def make_tree_JSON(jsonNode,jsonTranslationDict,treeType,tre=None,):
 
 if __name__ == '__main__':
     pass
-    # import sys
-    # ll=make_tree(sys.argv[1],ll) #TODO this ll is undefined
-    # ll.traverse_tree()
-    # sys.stdout.write(f'{ll.treeHeight}\n')

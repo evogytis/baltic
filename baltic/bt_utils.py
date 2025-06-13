@@ -8,7 +8,6 @@ from scipy.stats import linregress
 
 logger = logging.getLogger("baltic.bt_utils")
 
-
 def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
     if not fmt:
         return date
@@ -52,6 +51,7 @@ def convert_date_format(dateString,startFormat,endFormat):
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
 
+
 def untangle(trees,costFxn=None,iterations=None):
     if iterations is None: iterations=3
     if costFxn is None: costFxn=lambda pair: math.pow(abs(pair[0]-pair[1]),2)
@@ -87,7 +87,7 @@ def untangle(trees,costFxn=None,iterations=None):
 
     return trees
 
-def root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
+def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
     slope,intercept,rval,_,_ = linregress(tipDates,tipHeights) ## run linear regression
     corr = np.corrcoef((tipDates,tipHeights))[0,1] ## correlation coefficient
     ssq = sum([(y-(slope*x+intercept))**2 for x,y in zip(tipDates,tipHeights)]) ## sum of squares
@@ -118,3 +118,22 @@ def root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosit
             if frac is None: res['frac']=frac
 
     return res
+
+def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
+
+    circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
+    circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
+    
+    rads = circle_start_radians + (circle_fraction_radians * y / yRange) ## compute position along circle
+
+    tx = math.sin(rads) * x ## convert to polar x coordinate, adjust radius by rectangular tree x coordinate
+    ty = math.cos(rads) * x
+
+    return (tx,ty)
+
+def project_polar_vector(x,y,radians,length):
+
+    new_x = x + length * math.cos(radians)
+    new_y = y + length * math.sin(radians)
+
+    return (new_x,new_y)

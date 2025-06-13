@@ -16,6 +16,31 @@ class BranchLike:
         self.x=None ## X and Y coordinates of this node, once drawTree() is called
         self.y=None
         ## contains references to all tips of this node
+        
+    def get_path_to_root(self, path=None):
+        if path is None: path = []
+
+        #TODO: make this self.parent.parent or flag the superroot
+        if self.parent is None: # the root doesn't have a parent, so just return the path including the root
+            return path + [self]
+        else: # if we aren't at the root, recurse
+            newPath = path + [self]
+            return self.parent.get_path_to_root(newPath)
+
+    def get_siblings(self, include_self=False):
+        if self.parent is None:
+            logger.warning("Attempted to find siblings of root node. Returning empty list.")
+            return []
+
+        sibs = self.parent.children
+
+        if include_self:
+            return sibs
+
+        sib_set = set(sibs)
+        sib_set.remove(self)
+        sibs = list(sib_set)
+        return sibs
 
     def get_path_to_root(self, path=None):
         if path is None: path = []
