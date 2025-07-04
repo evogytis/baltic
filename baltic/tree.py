@@ -87,7 +87,7 @@ class Tree: ## tree class
         self.curNode = new_leaf ## current node is now new leaf
         self.Objects.append(self.curNode) ## add leaf to all objects in the tree
 
-    def subtree(self,starting_node=None,traverse_condition=None,stem=True):
+    def subtree(self,startingNode=None,traverseCondition=None,stem=True):
         """Generate a new subtree starting from a given root node according to a certain condition.
         """
         logger.info("Generating subtree.")
@@ -99,31 +99,39 @@ class Tree: ## tree class
             traverseCondition = lambda k: True
 
                 # move up a node if we include the stem
-        if stem:
-            node = startingNode.parent
-        else:
-            node = startingNode
+        # if stem and startingNode != self.root:
+        #     node = startingNode.parent
+        # else:
+        node = startingNode
 
         subtreeBranches = self.traverse_tree(
             node, includeCondition=lambda k: True, traverseCondition=traverseCondition
         )
         subtreeBranches = copy.deepcopy(subtreeBranches)
 
-        logger.debug("Using stem.")
-        if stem:  ## using stem - need to prune subtrees from root now
-            ## add all branches resulting from traversals of unwanted siblings
-            unwantedBranches = []
-            for child in node.children:
-                if child.index != startingNode.index:
-                    unwantedBranches.extend(self.traverse_tree(child, includeCondition=lambda w: True))
+        if stem and startingNode != self.root:  ## using stem - need to prune subtrees from root now
+            logger.debug("Using stem.")
+            stem_branch = copy.deepcopy([branch.parent for branch in subtreeBranches if branch.parent.index == startingNode.parent.index][-1]) ## identify parent of starting node
+            stem_branch.children = [ch for ch in stem_branch.children if ch.index == startingNode.index] ## reduce children to just the node of interest
+            stem_branch.children = [subtreeBranches[0]] ## stem has a single child
+            subtreeBranches[0].parent = stem_branch ## assign stem as parent
+            subtreeBranches.insert(0, stem_branch) ## add to list of subtree branches
 
-            ## iterate over subtree branches, remember those that belong to unwanted subtrees
-            remove = []
-            for k in subtreeBranches:
-                if k.index in [ub.index for ub in unwantedBranches]:
-                    remove.append(k)
-            for r in remove:
-                subtreeBranches.remove(r)
+            # ## add all branches resulting from traversals of unwanted siblings
+            # unwantedBranches = []
+            # for child in node.children:
+            #     if child.index != startingNode.index:
+            #         unwantedBranches.extend(self.traverse_tree(child, includeCondition=lambda w: True))
+
+            # ## iterate over subtree branches, remember those that belong to unwanted subtrees
+            # remove = []
+            # for k in subtreeBranches:
+            #     if k.index in [ub.index for ub in unwantedBranches]:
+            #         remove.append(k)
+            
+            # print(len(subtreeBranches),len(unwantedBranches),len(remove))
+            # for r in remove:
+            #     subtreeBranches.remove(r)
 
         ## nothing found or no leaf objects in traversal
         if subtreeBranches is None or not any(node.is_leaf() for node in subtreeBranches):
@@ -131,11 +139,17 @@ class Tree: ## tree class
             return None
 
         ### Initialize the new tree
-        logger.debug("Creting new Tree object for subtree and assigning new branches.")
+        logger.debug("Creating new Tree object for subtree and assigning new branches.")
         localTree = Tree(self.treeType)
         localTree.Objects = subtreeBranches
         localTree.root = subtreeBranches[0]
-        localTree.root.parent = None
+
+        superRoot = Node()
+        superRoot.index = 'Root'
+        superRoot.length = 0.0
+        superRoot.height = 0.0
+        superRoot.children.append(localTree.root)
+        localTree.root.parent = superRoot
 
         ## turn branches into set for quicker look up later
         subtreeSet = set(subtreeBranches)
@@ -147,6 +161,7 @@ class Tree: ## tree class
             for nd in localTree.get_internal():
                 ## only keep children seen in traversal
                 nd.children = [child for child in nd.children if child in subtreeSet]
+            logger.debug("Removing (hanging) nodes without children.")
             localTree.fix_hanging_nodes()
 
         if self.tipMap:
@@ -159,6 +174,8 @@ class Tree: ## tree class
             localTree.tipMap = localTipMap
             # TODO: Make sure I broke this down correctly
             # localTree.tipMap={tipNum: self.tipMap[tipNum] for tipNum in self.tipMap if self.tipMap[tipNum] in [w.name for w in localTree.get_external()]}
+
+        localTree.traverse_tree()
 
         return localTree
 
@@ -609,23 +626,6 @@ class Tree: ## tree class
         logger.info(f"r^2: {res['r^2']}")
 
         return self
-
-    def sort_branches(self, descending=True, sortFxn=None, sortByHeight=True):
-        mod = -1 if descending else 1
-        if sortFxn is None:
-            logger.debug("Using default sort function.")
-            # TODO This is really hard to parse. It is a variable mapped to a lambda function
-            # that sometimes returns a 2-tuple and sometimes returns a 3-tuple, depending on
-            # whether the argument to the function is a node or not
-            # This should be rewritten as a normal function, and we should make sure
-            # the different lengths of the tuple get handled sensibly downstream
-            sortFxn = lambda k: (
-                (k.is_node(), -len(k.leaves) * mod, k.length * mod)
-                if k.is_node()
-                else (k.is_node(), k.length * mod)
-            )
-        if sortByHeight:  # Sort nodes by height and group nodes and leaves together
-            ## Sort descendants of each node.
 
     def sort_branches(self, descending=True, sortFxn=None, sortByHeight=True):
         mod = -1 if descending else 1
@@ -1278,6 +1278,33 @@ class Tree: ## tree class
                 node.parent.children.remove(node)
                 self.Objects.remove(node)
 
+    def explode_tree(self,trait=None,customFxn=None,stem=True):
+        
+        if trait is not None and customFxn is not None:
+            raise ValueError(
+                "Cannot specify both a trait and a custom function to split the tree by. Please use only one."
+            )
+        elif trait is None and customFxn is None:
+            raise ValueError(
+                "Must specify either a trait or a custom function to split the tree by."
+            )
+        if trait is not None:
+            traceFunction = lambda k: k == self.root or k.traits[trait] != k.parent.traits[trait] ## current branch trait not the same as parent or at root
+        elif customFxn:
+            traceFunction = customFxn
+        
+        subtrees=[]
+        
+        for k in self.Objects: ## iterate over every branch
+            if traceFunction(k): ## check if branch satisfies splitting function
+                subtree = self.subtree(startingNode = k,traverseCondition = lambda ch: not traceFunction(ch),stem=stem) ## extract subtree
+                if subtree:
+                    subtrees.append(subtree)
+                else:
+                    logger.error(f"Failed to extract valid subtree at branch {k.index}.")
+                
+        return subtrees
+
     ############################################
     ##########   PLOTTING FUNCTIONS   ##########
     ############################################
@@ -1298,7 +1325,7 @@ class Tree: ## tree class
         # if pad_nodes is None: pad_nodes = {}
         # if colour==None: colour=lambda k:(0.7,0.7,0.7) ## grey if nothing given
         
-        local_kwargs=dict(kwargs)
+        localKwargs=dict(kwargs)
         #########################
         # self._drawTree(pad_node=pad_nodes)
         total_y=self.ySpan
@@ -1335,11 +1362,11 @@ class Tree: ## tree class
             fc=colour(k) if callable(colour) else colour
             ec='k'
 
-            if 'zorder' not in local_kwargs: local_kwargs['zorder']=100
-            if 'capstyle' not in local_kwargs: local_kwargs['capstyle']='round'
-            if 'edgecolor' not in local_kwargs: local_kwargs['edgecolor']=ec
-            if 'facecolor' not in local_kwargs: local_kwargs['facecolor']=fc
-            poly=Polygon(coords,**local_kwargs)
+            if 'zorder' not in localKwargs: localKwargs['zorder']=100
+            if 'capstyle' not in localKwargs: localKwargs['capstyle']='round'
+            if 'edgecolor' not in localKwargs: localKwargs['edgecolor']=ec
+            if 'facecolor' not in localKwargs: localKwargs['facecolor']=fc
+            poly=Polygon(coords,**localKwargs)
             ax.add_patch(poly)
         
         return ax
@@ -1351,32 +1378,84 @@ class Tree: ## tree class
         xCoordinateFxn=None,
         yCoordinateFxn=None,
         textContentFxn=None,
+        colour=None,
+        colourFxn=None,
+        treeType='rectangular',
         orientation='vertical',
+        padNodes=None,
+        circStart=0.0,
+        circFrac=1.0,
+        inwardSpace=0.0,
+        normaliseHeight=None,
+        cladeEndAttrFxn=None,
         **kwargs,
     ):
-        ### Set default values ###
-        if targetFxn is None:
-            lambda k: k.is_leaf()
+        valid_treeTypes = ['rectangular','circular','unrooted']
+        assert treeType in valid_treeTypes, f"Tree type {treeType} not recognised. Options are {valid_treeTypes}"
+
+        valid_orientations = ['vertical','horizontal']
+        assert orientation in valid_orientations, f"Tree orientation {orientation} not recognised. Options are {valid_orientations}"
+        
+        ## set defaults
+
+        if targetFxn is None: 
+            targetFxn = lambda k: k.is_leaf()
         if xCoordinateFxn is None:
             xCoordinateFxn = lambda k: k.height if self.treeType=='divergence' else k.absoluteTime
         if yCoordinateFxn is None:
             yCoordinateFxn = lambda k: k.y
         if textContentFxn is None:
             textContentFxn = lambda k: k.name
+        if padNodes is None:
+            padNodes = {}
+        if cladeEndAttrFxn is None:
+            cladeEndAttrFxn = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
 
-        localKwargs = dict(kwargs)
-        if orientation == 'vertical':
-            if "verticalalignment" not in localKwargs:
-                localKwargs["verticalalignment"] = "center"
+        self._assign_tree_coordinates(padNodes=padNodes)
+
+        if treeType == 'rectangular':
+            ax = self._plot_rectangular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,orientation=orientation,cladeEndAttrFxn=cladeEndAttrFxn,**kwargs)
+
+        elif treeType == 'circular':
+            if inwardSpace<0: inwardSpace-=self.treeHeight
+
+            allXs = list(map(xCoordinateFxn, self.Objects))
+            if normaliseHeight is None:
+                normaliseHeight = lambda value: (value - min(allXs)) / (
+                    max(allXs) - min(allXs)
+                )
+
+            ax = self._plot_circular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,circStart=circStart,circFrac=circFrac,inwardSpace=inwardSpace,normaliseHeight=normaliseHeight,cladeEndAttrFxn=cladeEndAttrFxn,**kwargs)
         
-        elif orientation == 'horizontal':
-            if 'verticalalignment' not in localKwargs:
-                localKwargs['verticalalignment']='center'
-            if 'horizontalalignment' not in localKwargs:
-                localKwargs['horizontalalignment']='left'
+        elif treeType == 'unrooted':
+            self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes) ## compute unrooted coordinates
+            xCoordinateFxn = lambda k: k.x ## use projected x coordinate now
+
+            ax = self._plot_unrooted_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,cladeEndAttrFxn=cladeEndAttrFxn,**kwargs)
+
+        return ax
+
+    def _plot_rectangular_text(
+        self,
+        ax,
+        targetFxn,
+        xCoordinateFxn,
+        yCoordinateFxn,
+        textContentFxn,
+        orientation,
+        cladeEndAttrFxn,
+        **kwargs,
+    ):
+        localKwargs = dict(kwargs)
+
+        if orientation == 'horizontal':
             if 'rotation' not in localKwargs:
                 localKwargs['rotation']=90
 
+        if 'verticalalignment' not in localKwargs:
+                localKwargs['verticalalignment']='center'
+        if 'horizontalalignment' not in localKwargs:
+            localKwargs['horizontalalignment']='left'
         if 'rotation_mode' not in localKwargs:
             localKwargs['rotation_mode']='anchor'
         if 'zorder' not in localKwargs:
@@ -1437,57 +1516,43 @@ class Tree: ## tree class
     #         ax.text(x,y,text(k),**local_kwargs)
     #     return ax
 
-    def plot_text_unrooted(
+    def _plot_unrooted_text(
         self,
         ax,
-        targetFxn=None,
-        xCoordinateFxn=None,
-        yCoordinateFxn=None,
-        textContentFxn=None,
+        targetFxn,
+        xCoordinateFxn,
+        yCoordinateFxn,
+        textContentFxn,
+        cladeEndAttrFxn,
         **kwargs,
     ):
-        ### Set default values ###
-        if targetFxn is None:
-            targetFxn = lambda k: k.is_leaf()
-        if xCoordinateFxn is None:
-            xCoordinateFxn = lambda k: k.x
-        if yCoordinateFxn is None:
-            yCoordinateFxn = lambda k: k.y
-        if textContentFxn is None:
-            textContentFxn = lambda k: k.name
+        localKwargs = dict(kwargs)
 
-        for k in filter(targetFxn, self.Objects):
-            localKwargs = dict(kwargs)
+        if "verticalalignment" not in localKwargs:
+            localKwargs["verticalalignment"] = "center"
+        if 'rotation_mode' not in localKwargs:
+            localKwargs['rotation_mode']='anchor'
+        if "zorder" not in localKwargs:
+            localKwargs["zorder"] = 4
+
+        for k in filter(targetFxn, self.Objects):    
 
             x, y = xCoordinateFxn(k), yCoordinateFxn(k)
-            z = zorder
 
             assert (
                 hasattr(k,"_tau")
             ), "Branch does not have angle _tau computed by _assign_unrooted_tree_coordinates()."
 
-            rot = math.degrees(k._tau) % 360
-
-            if "horizontalalignment" not in localKwargs:
-                localKwargs["horizontalalignment"] = (
-                    "right" if 90 < rot < 270 else "left"
-                )
-            if "verticalalignment" not in localKwargs:
-                localKwargs["verticalalignment"] = "center"
-
-            if 'rotation_mode' not in localKwargs:
-                localKwargs['rotation_mode']='anchor'
-
-            if "zorder" not in localKwargs:
-                localKwargs["zorder"] = 4
-
-            rot = rot + 180 if 90 < rot < 270 else rot
+            textRotation = math.degrees(k._tau) % 360
+            ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
+            textRotation = (textRotation - 180)%360 if 90 <= textRotation%360 <= 270 else textRotation
 
             ax.text(
                 x,
                 y,
                 textContentFxn(k),
-                rotation=rot,
+                rotation=textRotation,
+                ha=ha,
                 **localKwargs,
             )
 
@@ -1540,86 +1605,55 @@ class Tree: ## tree class
             
     #     return ax
 
-    def plot_text_circular(
+    def _plot_circular_text(
         self,
         ax,
-        targetFxn=None,
-        textContentFxn=None,
-        xCoordinateFxn=None,
-        yCoordinateFxn=None,
-        circStart=0.0,
-        circFrac=1.0,
-        inwardSpace=0.0,
-        normaliseHeight=None,
-        padNodes=None,
-        cladeEndAttr=None,
+        targetFxn,
+        textContentFxn,
+        xCoordinateFxn,
+        yCoordinateFxn,
+        circStart,
+        circFrac,
+        inwardSpace,
+        normaliseHeight,
+        cladeEndAttrFxn,
         **kwargs,
     ):
-        if targetFxn is None:
-            targetFxn = lambda k: k.is_leaf()
-        if xCoordinateFxn is None:
-            xCoordinateFxn = lambda k: k.height if self.treeType=='divergence' else k.absoluteTime
-        if yCoordinateFxn is None:
-            yCoordinateFxn = lambda k: k.y
-        if textContentFxn is None:
-            textContentFxn = lambda k: k.name
-        if padNodes is None:
-            padNodes = {}
+        assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
 
         localKwargs = dict(kwargs)  ## copy global kwargs into a local version
 
-        if cladeEndAttr is None: cladeEndAttr = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
+        # if cladeEndAttrFxn is None: cladeEndAttrFxn = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
 
-        if inwardSpace<0: inwardSpace-=self.treeHeight
+        # self._assign_tree_coordinates(padNodes=padNodes) ## computes y coordinates with padding
+        total_y = self.ySpan ## plot_text already made a call to compute coordinates
 
-        local_kwargs=dict(kwargs) ## copy global kwargs into a local version
-        
-        self._assign_tree_coordinates(padNodes=padNodes) ## computes y coordinates with padding
-        total_y = self.ySpan
-
-        allXs = list(map(xCoordinateFxn, self.Objects))
-        if normaliseHeight is None:
-            normaliseHeight = lambda value: (value - min(allXs)) / (
-                max(allXs) - min(allXs)
-            )
-
-        ## Set local keyword arguments that get passed on to ax.text()
-        if "horizontalalignment" not in localKwargs:
-            if 180 < rot < 360:
-                localKwargs["horizontalalignment"] = "right"
-            else:
-                localKwargs["horizontalalignment"] = "left"
         if "verticalalignment" not in localKwargs:
             localKwargs["verticalalignment"] = "center"
         if 'rotation_mode' not in localKwargs:
-            localKwargs['rotation_mode']='anchor'
+            localKwargs['rotation_mode'] = 'anchor'
         if 'zorder' not in localKwargs:
             localKwargs['zorder'] = 4
 
         for k in filter(targetFxn, self.Objects):  ## iterate over branches
-            
-
             x = normaliseHeight(
                 xCoordinateFxn(k) + inwardSpace
             )  ## get branch x position
             y = yCoordinateFxn(k)  ## get y position
 
-            # y = circS + circ * y / self.ySpan
-            # X = math.sin(y)
-            # Y = math.cos(y)
-            x,y=project_to_polar(x=x,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac)
+            rotationRadians = (circStart + (circFrac * y/total_y)) * 2*math.pi
+            textRotation = (90 - math.degrees(rotationRadians))%360
+            ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
+            textRotation = (textRotation - 180)%360 if 90 <= textRotation%360 <= 270 else textRotation
 
-            rot=math.degrees((circStart + (circFrac * y/total_y)) * 2*math.pi)%360
-            
-            if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 180<rot<360 else 'left' ## rotate labels to aid readability
-            
-            rot=360-rot-90 if 180<rot<360 else 360-rot+90
+            x,y = project_to_polar(x=x,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac)
 
             ax.text(
                 x,
                 y,
                 textContentFxn(k),
-                rotation=rot,
+                rotation=textRotation,
+                ha=ha,
                 **localKwargs,
             )
 
@@ -1702,7 +1736,7 @@ class Tree: ## tree class
         pointSizeFxn=None,
         colour=None,
         colourFxn=None,
-        outline=None,
+        outline=True,
         outlineSize=None,
         outlineSizeFxn=None,
         outlineColour=None,
@@ -1730,8 +1764,8 @@ class Tree: ## tree class
             )
         if pointSize is None and pointSizeFxn is None:
             pointSizeFxn = lambda k: 40
-        else:
-            pointSizeFxn = lambda k: pointSize if pointSize is not None else pointSizeFxn
+        elif pointSizeFxn is None:
+            pointSizeFxn = lambda k: pointSize
         # Outline size logic
         if outlineSize is not None and outlineSizeFxn is not None:
             raise ValueError(
@@ -1739,8 +1773,8 @@ class Tree: ## tree class
             )
         if outlineSize is None and outlineSizeFxn is None:
             outlineSizeFxn = lambda k: ((2+math.sqrt(pointSizeFxn(k)/math.pi))**2)*math.pi
-        else:
-            outlineSizeFxn = outlineSize if outlineSize is not None else outlineSizeFxn
+        elif outlineSizeFxn is None:
+            outlineSizeFxn = lambda k: outlineSize
         # Colour logic
         if colour is not None and colourFxn is not None:
             raise ValueError(
@@ -1748,17 +1782,17 @@ class Tree: ## tree class
             ) ## should be a warning, since this eventuality is handled in the next line
         if colour is None and colourFxn is None:
             colourFxn = lambda k: "k"
-        else:
-            colourFxn = lambda k: colour if colour is not None else colourFxn
+        elif colourFxn is None:
+            colourFxn = lambda k: colour
         # Outline colour logic
         if outlineColour is not None and outlineColourFxn is not None:
             raise ValueError(
                 "Cannot specify both outlineColour and outlineColourFxn. Please use only one."
             )
         if outlineColour is None and outlineColourFxn is None:
-            outlineColour = lambda k: "k"
-        else:
-            outlineColourFxn = outlineColour if outlineColour is not None else outlineColourFxn
+            outlineColourFxn = lambda k: "k"
+        elif outlineColourFxn is None:
+            outlineColourFxn = lambda k: outlineColour
 
         if padNodes is None:
             padNodes = {}
@@ -1996,7 +2030,7 @@ class Tree: ## tree class
             
         return ax
 
-    def _plot_rectangular_tree(self,ax,connectionType,xCoordinateFxn,yCoordinateFxn,targetFxn,widthFxn,colour,orientation, 
+    def _plot_rectangular_tree(self,ax,connectionType,xCoordinateFxn,yCoordinateFxn,targetFxn,widthFxn,colourFxn,orientation, 
                                 plotClades,cladeColour,cladeEndAttrFxn,cladeStyle,cladeBaseWidth,**kwargs):
 
 
@@ -2007,14 +2041,15 @@ class Tree: ## tree class
         linewidths=[]
 
         for k in filter(targetFxn,self.Objects): ## iterate over branches
-            x=xCoordinateFxn(k) ## get branch x position
-            xp=xCoordinateFxn(k.parent) if k.parent else x ## get parent x position
-            y=yCoordinateFxn(k) ## get y position
+            x = xCoordinateFxn(k) ## get branch x position
+            xp = xCoordinateFxn(k.parent) if k.parent.parent else x ## get parent x position
+            y = yCoordinateFxn(k) ## get y position
 
             try:
-                colours.append(colour(k)) # if callable(colour) else colours.append(colour)
-            except KeyError:
+                colours.append(colourFxn(k)) # if callable(colour) else colours.append(colour)
+            except KeyError: ## not guaranteed to be a KeyError
                 colours.append((0.7,0.7,0.7)) ## in case no colour available for branch set it to grey
+            
             linewidths.append(widthFxn(k)) if callable(widthFxn) else linewidths.append(widthFxn)
 
             coords=[]
@@ -2028,12 +2063,12 @@ class Tree: ## tree class
                     colours.append(colours[-1])
             
             elif connectionType=='elbow': ## more standard connection where each branch connects to its parent via a right-angled line
-                yp=yCoordinateFxn(k.parent) if k.parent else y ## get parent x position
+                yp = yCoordinateFxn(k.parent) if k.parent.parent else y ## get parent x position
             
                 coords.append([(xp,yp),(xp,y),(x,y)])
             
             elif connectionType=='direct': ## this gives triangular looking trees where descendants connect directly to their parents
-                yp=yCoordinateFxn(k.parent) ## get y position
+                yp = yCoordinateFxn(k.parent) if k.parent.parent else y ## get y position
             
                 coords.append([(xp,yp),(x,y)])
             
@@ -2074,7 +2109,7 @@ class Tree: ## tree class
         assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
         # if inwardSpace<0: inwardSpace-=self.treeHeight
 
-        local_kwargs=dict(kwargs)
+        localKwargs=dict(kwargs)
         
         # self._drawTree(pad_nodes=pad_nodes) ## computes y coordinates with padding
         total_y = self.ySpan
@@ -2089,10 +2124,10 @@ class Tree: ## tree class
 
         for k in filter(targetFxn,self.Objects): ## iterate over branches
 
-            x=normaliseHeight(xCoordinateFxn(k)+inwardSpace) ## get branch x position
-            xp=normaliseHeight(xCoordinateFxn(k.parent)+inwardSpace) if k.parent.parent else x ## get parent x position
-            y=yCoordinateFxn(k) ## get y position
-            yp=yCoordinateFxn(k.parent) if k.parent.parent else y ## get parent y position
+            x = normaliseHeight(xCoordinateFxn(k)+inwardSpace) ## get branch x position
+            xp = normaliseHeight(xCoordinateFxn(k.parent)+inwardSpace) if k.parent.parent else x ## get parent x position
+            y = yCoordinateFxn(k) ## get y position
+            yp = yCoordinateFxn(k.parent) if k.parent.parent else y ## get parent y position
 
 
             try:
@@ -2140,11 +2175,11 @@ class Tree: ## tree class
                 # self,ax,xCoordinateFxn=None,yCoordinateFxn=None,end_attr=None,width=None,target=None,colour=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,precision=15, 
         # clade_shape='triangle',style='equal',trapezoid_base=0.003,pad_nodes=None,**kwargs
                 ax = self._plot_circular_clades(ax,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,endAttrFxn=cladeEndAttrFxn,targetFxn=targetFxn,colour=cladeColour,widthFxn=widthFxn,circStart=circStart,circFrac=circFrac, 
-                                                inwardSpace=inwardSpace,normaliseHeight=normaliseHeight,precision=precision,shape=cladeShape,style=cladeStyle,cladeBaseWidth=cladeBaseWidth,**local_kwargs)
+                                                inwardSpace=inwardSpace,normaliseHeight=normaliseHeight,precision=precision,shape=cladeShape,style=cladeStyle,cladeBaseWidth=cladeBaseWidth,**localKwargs)
 
-        if 'capstyle' not in local_kwargs: local_kwargs['capstyle'] = 'projecting'
-        if 'zorder' not in local_kwargs: local_kwargs['zorder'] = 1
-        line_segments = LineCollection(branches,lw=linewidths,color=colours,**local_kwargs) ## create line segments
+        if 'capstyle' not in localKwargs: localKwargs['capstyle'] = 'projecting'
+        if 'zorder' not in localKwargs: localKwargs['zorder'] = 1
+        line_segments = LineCollection(branches,lw=linewidths,color=colours,**localKwargs) ## create line segments
         ax.add_collection(line_segments) ## add collection to axes
         return ax
 
@@ -2170,9 +2205,9 @@ class Tree: ## tree class
                 "Cannot specify both width and widthFxn. Please use only one."
             )
         if width is None and widthFxn is None:
-            width = lambda k: 2
-        else:
-            width = width if width is not None else widthFxn
+            widthFxn = lambda k: 2
+        elif widthFxn is None:
+            widthFxn = lambda k: width
         
         # Colour logic
         if colour is not None and colourFxn is not None:
@@ -2180,9 +2215,9 @@ class Tree: ## tree class
                 "Cannot specify both colour and colourFxn. Please use only one."
             )
         if colour is None and colourFxn is None:
-            colour = lambda k: "k"
-        else:
-            colour = colour if colour is not None else colourFxn
+            colourFxn = lambda k: "k"
+        elif colourFxn is None:
+            colourFxn = lambda k: colour
 
         if cladeColour is None: cladeColour=(0.7,0.7,0.7) ## calling with defaults, clade colour will be light gray
         if cladeEndAttrFxn is None: cladeEndAttrFxn = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
@@ -2193,19 +2228,20 @@ class Tree: ## tree class
             'unrooted'
         ], f'Unrecognised tree type: "%s"'%(treeType)
         
-        local_kwargs = dict(kwargs)
+        localKwargs = dict(kwargs)
 
         self._assign_tree_coordinates(padNodes=padNodes)
 
-        if treeType != 'unrooted' and connectionType is not None:
+        if treeType != 'unrooted':
+            if connectionType is None:
+                connectionType = 'baltic'
+
             assert connectionType in [
                     'baltic', 
                     'direct', 
                     'elbow'
             ], f'Unrecognised drawing type "%s"'%(connectionType)
-            if connectionType is None:
-                connectionType = 'batlic'
-
+        
         ################################
         if treeType=='rectangular':
             if orientation is None:
@@ -2216,7 +2252,6 @@ class Tree: ## tree class
                     'vertical'
                 ], f'Unrecognised tree orientation "%s"'%(orientation)
 
-
             if precision is not None: warnings.warn('Rectangular trees do not have a precision parameter, ignoring')
             if circStart is not None: warnings.warn('Rectangular trees do not have a circStart parameter, ignoring')
             if circFrac is not None: warnings.warn('Rectangular trees do not have a circFrac parameter, ignoring')
@@ -2225,9 +2260,9 @@ class Tree: ## tree class
             if cladeShape is not None: warnings.warn('Rectangular trees do not support alternative clade shapes, ignoring') ## does this make sense?
 
             ax = self._plot_rectangular_tree(ax=ax,connectionType=connectionType,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,targetFxn=targetFxn,
-                                                widthFxn=width, colour=colour,orientation=orientation,
+                                                widthFxn=widthFxn, colourFxn=colourFxn,orientation=orientation,
                                                 cladeColour=cladeColour,cladeEndAttrFxn=cladeEndAttrFxn,plotClades=plotClades, 
-                                                cladeStyle=cladeStyle,cladeBaseWidth=cladeBaseWidth,**local_kwargs)
+                                                cladeStyle=cladeStyle,cladeBaseWidth=cladeBaseWidth,**localKwargs)
             
         ###############################
         elif treeType=='circular':
@@ -2240,10 +2275,10 @@ class Tree: ## tree class
             if precision is None: precision = 15
             if orientation is not None: warnings.warn('Circular trees do not have an orientation parameter, ignoring')
 
-            ax = self._plot_circular_tree(ax=ax,connectionType=connectionType,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,targetFxn=targetFxn,widthFxn=width, colour=colour, 
+            ax = self._plot_circular_tree(ax=ax,connectionType=connectionType,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,targetFxn=targetFxn,widthFxn=widthFxn, colourFxn=colourFxn, 
                                             circStart=circStart, circFrac=circFrac, inwardSpace=inwardSpace, normaliseHeight=normaliseHeight, precision=precision, 
                                             padNodes=padNodes, plotClades=plotClades,
-                                            cladeColour=cladeColour, cladeEndAttrFxn=cladeEndAttrFxn,cladeStyle=cladeStyle,cladeShape=cladeShape,cladeBaseWidth=cladeBaseWidth,**local_kwargs)
+                                            cladeColour=cladeColour, cladeEndAttrFxn=cladeEndAttrFxn,cladeStyle=cladeStyle,cladeShape=cladeShape,cladeBaseWidth=cladeBaseWidth,**localKwargs)
 
             ax.set_aspect(1)
         ###########################
@@ -2271,13 +2306,149 @@ class Tree: ## tree class
             xCoordinateFxn = lambda k: k.x ## using projected x coordinate now
 
             ax = self._plot_rectangular_tree(ax=ax,connectionType='direct',xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,targetFxn=targetFxn,orientation=None, ## only allow .x and .y here?
-                                                widthFxn=width, colour=colour,
-                                                cladeColour=cladeColour,cladeEndAttrFxn=cladeEndAttrFxn,cladeBaseWidth=cladeBaseWidth,cladeStyle=cladeStyle,plotClades=False,**local_kwargs)
+                                                widthFxn=widthFxn, colourFxn=colourFxn,
+                                                cladeColour=cladeColour,cladeEndAttrFxn=cladeEndAttrFxn,cladeBaseWidth=cladeBaseWidth,cladeStyle=cladeStyle,plotClades=False,**localKwargs)
 
             if plotClades==True:
-                ax = self._plot_unrooted_clades(ax=ax,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,endAttrFxn=cladeEndAttrFxn,targetFxn=targetFxn,colour=cladeColour,precision=precision,style=cladeStyle,cladeBaseWidth=cladeBaseWidth,**local_kwargs)
+                ax = self._plot_unrooted_clades(ax=ax,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,endAttrFxn=cladeEndAttrFxn,targetFxn=targetFxn,colour=cladeColour,precision=precision,style=cladeStyle,cladeBaseWidth=cladeBaseWidth,**localKwargs)
 
             ax.set_aspect(1)
 
         ax.autoscale() ## makes sure plot limits are auto-adjusted to include collections
+        return ax
+
+    def plot_exploded_tree(self,ax,trait=None,customFxn=None,stem=True,subtreeSortFxn=None,
+                       targetFxn=None,
+                       xCoordinateFxn=None,colour=None,colourFxn=None,tipPoints=True,originPoint=True,
+                       verticalSpace=2,
+                       width=None,widthFxn=None,
+                       pointSize=None,pointSizeFxn=None,
+                       outline=True,outlineSize=None,outlineSizeFxn=None,
+                       outlineColour=None,outlineColourFxn=None,
+                       padNodes=None,orientation='vertical',connectionType='baltic',**kwargs):
+        #### TODO: support for collapsed clades
+        
+        ### Set default values ###
+        if targetFxn is None:
+            targetFxn = lambda k: True
+        if xCoordinateFxn is None:
+            xCoordinateFxn = lambda k: k.height if self.treeType == 'divergence' else k.absoluteTime
+
+        # Width logic
+        if width is not None and widthFxn is not None:
+            raise ValueError(
+                "Cannot specify both width and widthFxn. Please use only one."
+            )
+        if width is None and widthFxn is None:
+            widthFxn = lambda k: 2
+        elif widthFxn is None:
+            widthFxn = lambda k: width
+        
+        # Point size logic
+        if pointSize is not None and pointSizeFxn is not None:
+            raise ValueError(
+                "Cannot specify both pointSize and pointSizeFxn. Please use only one."
+            )
+        if pointSize is None and pointSizeFxn is None:
+            pointSizeFxn = lambda k: 40
+        elif pointSizeFxn is None:
+            pointSizeFxn = lambda k: pointSize
+        # Outline size logic
+        if outlineSize is not None and outlineSizeFxn is not None:
+            raise ValueError(
+                "Cannot specify both outlineSize and outlineSizeFxn. Please use only one."
+            )
+        if outlineSize is None and outlineSizeFxn is None:
+            outlineSizeFxn = lambda k: ((2+math.sqrt(pointSizeFxn(k)/math.pi))**2)*math.pi
+        elif outlineSizeFxn is None:
+            outlineSizeFxn = lambda k: outlineSize
+        # Colour logic
+        if colour is not None and colourFxn is not None:
+            raise ValueError(
+                "Cannot specify both colour and colourFxn. Please use only one."
+            ) ## should be a warning, since this eventuality is handled in the next line
+        if colour is None and colourFxn is None:
+            colourFxn = lambda k: "k"
+            warnings.warn('Without an explicitly specified colourFxn each exploded subtree will be shown in the same colour.')
+        elif colourFxn is None:
+            colourFxn = lambda k: colour
+            warnings.warn('Without an explicitly specified colourFxn each exploded subtree will be shown in the specified colour.')
+        # Outline colour logic
+        if outlineColour is not None and outlineColourFxn is not None:
+            raise ValueError(
+                "Cannot specify both outlineColour and outlineColourFxn. Please use only one."
+            )
+        if outlineColour is None and outlineColourFxn is None:
+            outlineColourFxn = lambda k: "k"
+        elif outlineColourFxn is None:
+            outlineColourFxn = lambda k: outlineColour
+
+        if padNodes is None:
+            padNodes = {}
+        
+        assert orientation in [
+            'horizontal', 
+            'vertical'
+        ], f"Unrecognised orientation {orientation}"
+        
+        assert connectionType in [
+                'baltic', 
+                'direct', 
+                'elbow'
+        ], f'Unrecognised drawing type "%s"'%(connectionType)
+        
+        if trait is not None and customFxn is not None:
+            raise ValueError(
+                "Cannot specify both a trait and a custom function to split the tree by. Please use only one."
+            )
+        elif trait is None and customFxn is None:
+            raise ValueError(
+                "Must specify either a trait or a custom function to split the tree by."
+            )
+        if trait is not None:
+            traceFunction = lambda k: k == self.root or k.traits[trait] != k.parent.traits[trait] ## current branch trait not the same as parent or at root
+        elif customFxn:
+            traceFunction = customFxn
+
+        localKwargs=dict(kwargs)
+            
+        treeList = self.explode_tree(customFxn = traceFunction, stem=stem)
+        
+        ######### plotting
+        cumulative_y = 0
+
+        if subtreeSortFxn is None:
+            subtreeSortFxn = lambda subtree: -subtree.root.absoluteTime if subtree.treeType == 'time' else -subtree.root.height ## sort trees by their root time
+
+        yCoordinateFxn = lambda k: k.y + cumulative_y
+
+        if orientation == 'horizontal':
+            xCoordinateFxn, yCoordinateFxn = yCoordinateFxn, xCoordinateFxn
+        
+        for subtree in sorted(treeList, key = subtreeSortFxn):
+            subtree.plot_tree(ax,targetFxn=targetFxn,
+                              xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,
+                              widthFxn=widthFxn,connectionType=connectionType,colourFxn=colourFxn,orientation=orientation,padNodes=padNodes)
+            if tipPoints:
+                subtree.plot_points(ax,targetFxn = lambda k: k.is_leaf(),
+                                    xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,
+                                    colourFxn=colourFxn,
+                                    pointSizeFxn=pointSizeFxn,
+                                    outline=outline,
+                                    outlineSizeFxn=outlineSizeFxn,
+                                    outlineColourFxn=outlineColourFxn,
+                                    padNodes=padNodes,orientation=orientation)
+            if originPoint:
+                subtree.plot_points(ax,targetFxn = lambda k: k == subtree.root,
+                                    xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,
+                                    colourFxn=colourFxn,
+                                    pointSizeFxn=pointSizeFxn,
+                                    outline=outline,
+                                    outlineSizeFxn=outlineSizeFxn,
+                                    outlineColourFxn=outlineColourFxn,
+                                    padNodes=padNodes,orientation=orientation)
+            
+            cumulative_y += subtree.ySpan + verticalSpace
+
+        ax.autoscale()
         return ax

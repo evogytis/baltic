@@ -94,7 +94,7 @@ def load_nexus(treePath,
     if sortBranches:
         ll.sort_branches() ## traverses tree, sorts branches, draws tree
     if len(tips)>0:
-        ll.renameTips(tips) ## renames tips from numbers to actual names
+        ll.rename_tips(tips) ## renames tips from numbers to actual names
         ll.tipMap=tips
     if absoluteTime:
         tip_dates=[]

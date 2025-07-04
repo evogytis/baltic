@@ -121,10 +121,11 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
 
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
-    circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
-    circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
+    # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
+    # circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
     
-    rads = circle_start_radians + (circle_fraction_radians * y / yRange) ## compute position along circle
+    # rads = circle_start_radians + (circle_fraction_radians * y / yRange) ## compute position along circle
+    rads = (circleStart + (circleFraction * y / yRange)) * 2*math.pi ## compute position along circle
 
     tx = math.sin(rads) * x ## convert to polar x coordinate, adjust radius by rectangular tree x coordinate
     ty = math.cos(rads) * x
@@ -137,3 +138,4 @@ def project_polar_vector(x,y,radians,length):
     new_y = y + length * math.sin(radians)
 
     return (new_x,new_y)
+
