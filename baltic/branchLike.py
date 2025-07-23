@@ -16,7 +16,7 @@ class BranchLike:
         self.x=None ## X and Y coordinates of this node, once drawTree() is called
         self.y=None
         ## contains references to all tips of this node
-        
+
     def get_path_to_root(self, path=None):
         if path is None: path = []
 
@@ -42,11 +42,11 @@ class BranchLike:
         sibs = list(sib_set)
         return sibs
 
-    def is_leaflike(self):
+    def is_leaflike(self) -> bool:
         return False
 
-    def is_leaf(self):
+    def is_leaf(self) -> bool:
         return False
 
-    def is_node(self):
+    def is_node(self) -> bool:
         return False
