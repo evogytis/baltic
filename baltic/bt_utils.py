@@ -1,6 +1,8 @@
 import re
 import logging
 import datetime as dt
+import calendar
+import warnings
 import math
 import numpy as np
 from itertools import permutations
@@ -50,7 +52,119 @@ def convert_date_format(dateString,startFormat,endFormat):
     except ValueError as e:
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
+def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
+    assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
 
+    timeline = []
+    startTime = dt.datetime.strptime(startDateStr, dateFmt)
+    endTime = dt.datetime.strptime(endDateStr, dateFmt)
+
+    if roundDates: ## rounding dates - additional breaks will be generated in the timeline to correspond with beginnings of months or years
+        currentTime = dt.datetime(startTime.year, 1, 1) ## start from beginning of the year
+        if spacing == 'yearly':
+            timeline.append(dt.datetime.strftime(currentTime, dateFmt))
+        elif isinstance(spacing,int):
+            warnings.warn(f"Calendar timeline spacing defined as int (set to {spacing}) so roundDates (True by default) parameter ignored.")
+    else: ## no rounding - timeline starts at the specified start date and is incremented at specified intervals
+        currentTime = startTime
+        dateStr = dt.datetime.strftime(currentTime, dateFmt)
+        timeline.append(dateStr)
+    
+    while currentTime < endTime:
+
+        if startTime < currentTime:
+            dateStr = dt.datetime.strftime(currentTime, dateFmt)
+            timeline.append(dateStr)
+
+        if isinstance(spacing,int):
+            skip = dt.timedelta(days = spacing)
+        
+        elif spacing == 'weekly':
+            skip = dt.timedelta(days = 7)
+            if currentTime.month != (currentTime + skip).month: ## next month starts in a week
+                daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
+                lastDateOfMonth = dt.datetime(currentTime.year, currentTime.month, daysInMonth)
+                dateStr = dt.datetime.strftime(lastDateOfMonth,dateFmt)
+                if startTime < currentTime and currentTime != lastDateOfMonth and roundDates == True:
+                    timeline.append(dateStr)
+            
+        if spacing == 'monthly':
+            daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
+            skip = dt.timedelta(days = daysInMonth)
+
+        if spacing == 'yearly':
+            skip = dt.timedelta(365 + calendar.isleap(currentTime.year))
+    
+        currentTime += skip
+
+    dateStr = dt.datetime.strftime(currentTime,dateFmt)
+    timeline.append(dateStr)
+    
+    return timeline
+
+def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
+
+    if colour is not None and colourFxn is not None:
+        raise ValueError(
+            "Cannot specify both colour and colourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if colour is None and colourFxn is None:
+        colourFxn = lambda k: "k"
+    elif colourFxn is None:
+        colourFxn = lambda k: colour
+
+    if edgeColour is not None and edgeColourFxn is not None:
+        raise ValueError(
+            "Cannot specify both edgeColour and edgeColourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if edgeColour is None and edgeColourFxn is None:
+        edgeColourFxn = lambda k: "none"
+    elif edgeColourFxn is None:
+        edgeColourFxn = lambda k: edgeColour
+
+    localKwargs = dict(kwargs)
+    if 'alpha' not in localKwargs: localKwargs['alpha'] = 0.08
+    
+    if isinstance(timeline,list):
+        try:
+            timeline = [bt_utils.calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to 
+        except:
+            warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+    else:
+        assert isinstance(timeline,range), f"timeline is neither a list nor a range."
+
+    if axis == 'x':
+        [ax.axvspan(timeline[t], timeline[t+1], fc=colourFxn(t), ec=edgeColourFxn(t), **localKwargs) for t in range(0,len(timeline)-1,2)]
+    elif axis == 'y':
+        [ax.axhspan(timeline[t], timeline[t+1], fc=colourFxn(t), ec=edgeColourFxn(t), **localKwargs) for t in range(0,len(timeline)-1,2)]
+    return ax
+
+def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, labelPosition='mid', axis='x', **kwargs):
+    assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
+    assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
+    
+    if outputFmtFxn is None:
+        outputFmtFxn = lambda date: bt_utils.convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if bt_utils.convert_date_format(date, '%Y-%m-%d', '%m') == '01' else bt_utils.convert_date_format(date, '%Y-%m-%d', '%b')
+
+    localKwargs = dict(kwargs)
+
+    if axis == 'x':
+        if labelPosition == 'left':
+            ax.set_xticks([bt_utils.calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_xticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
+        elif labelPosition == 'mid':
+            ax.set_xticks([np.mean([bt_utils.calendar_to_decimal_date(timeline[t], inputDateFmt), bt_utils.calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_xticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
+    elif axis == 'y':
+        if labelPosition == 'left':
+            ax.set_yticks([bt_utils.calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_yticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
+        elif labelPosition == 'mid':
+            ax.set_yticks([np.mean([bt_utils.calendar_to_decimal_date(timeline[t], inputDateFmt), bt_utils.calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_yticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
+
+    ax.tick_params(axis=axis, size=0)
+    return ax
 
 def untangle(trees,costFxn=None,iterations=None):
     if iterations is None: iterations=3
