@@ -2098,13 +2098,19 @@ class Tree: ## tree class
                             circStart,circFrac,inwardSpace,normaliseHeight,connectionType,padNodes,precision,plotClades,cladeColour, 
                             cladeEndAttrFxn,cladeStyle,cladeShape,cladeBaseWidth,**kwargs):
         if cladeColour is None: cladeColour = (0.7,0.7,0.7)
+        if cladeShape is None: cladeShape = 'triangle'
         if cladeEndAttrFxn is None: cladeEndAttrFxn = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
 
         assert connectionType in [
             'baltic', 
             'direct', 
             'elbow'
-        ], f'Unrecognised connection type "%s"'%(connectionType)
+        ], f'Unrecognised connection type "{connectionType}"'
+
+        assert cladeShape in [
+            'triangle',
+            'square'
+        ], f'Unrecognised clade shape "{cladeShape}"'
 
         assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
         # if inwardSpace<0: inwardSpace-=self.treeHeight
@@ -2187,7 +2193,7 @@ class Tree: ## tree class
                 xCoordinateFxn=None,yCoordinateFxn=None,width=None,widthFxn=None,connectionType=None,
                 colour=None,colourFxn=None,orientation=None,padNodes=None,treeType='rectangular', 
                 circStart=None,circFrac=None,inwardSpace=None,normaliseHeight=None,precision=None, 
-                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape='triangle',cladeBaseWidth=0.003,**kwargs):
+                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.003,**kwargs):
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
@@ -2285,16 +2291,11 @@ class Tree: ## tree class
         elif treeType=='unrooted':
             if circStart is None: circStart = 0.0
             
-            if orientation is not None:
-                warnings.warn('Unrooted trees do not have an orientation parameter, ignoring')
-            if circFrac is not None:
-                warnings.warn('Unrooted trees do not have a circFrac parameter, ignoring')
-            if inwardSpace is not None:
-                warnings.warn('Unrooted trees do not have a inwardSpace parameter, ignoring')
-            if normaliseHeight is not None:
-                warnings.warn('Unrooted trees do not have a normaliseHeight parameter, ignoring')
-            if cladeShape is not None:
-                warnings.warn('Unrooted trees do not support alternative clade shapes, ignoring')
+            if orientation is not None: warnings.warn('Unrooted trees do not have an orientation parameter, ignoring')
+            if circFrac is not None: warnings.warn('Unrooted trees do not have a circFrac parameter, ignoring')
+            if inwardSpace is not None: warnings.warn('Unrooted trees do not have a inwardSpace parameter, ignoring')
+            if normaliseHeight is not None: warnings.warn('Unrooted trees do not have a normaliseHeight parameter, ignoring')
+            if cladeShape is not None: warnings.warn('Unrooted trees do not support alternative clade shapes, ignoring')
 
             if connectionType is None:
                 connectionType = 'direct'

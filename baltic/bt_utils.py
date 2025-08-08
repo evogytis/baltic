@@ -7,6 +7,8 @@ import math
 import numpy as np
 from itertools import permutations
 from scipy.stats import linregress
+import matplotlib as mpl
+from matplotlib.collections import LineCollection
 
 logger = logging.getLogger("baltic.bt_utils")
 
@@ -101,6 +103,87 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
     timeline.append(dateStr)
     
     return timeline
+
+def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
+    localKwargs = dict(kwargs)
+    localTreeKwargs = dict(treeKwargs)
+    localPointKwargs = dict(pointKwargs)
+
+    if treeSpace is not None and treeSpaceFxn is not None: ## treeSpace is how much space is left between consecutive trees, takes current tree if specified as a function
+        raise ValueError(
+            "Cannot specify both treeSpace and treeSpaceFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if treeSpace is None and treeSpaceFxn is None:
+        treeSpaceFxn = lambda k: treeList[0].treeHeight * 0.20 ## 20% of first tree height is space between all trees
+    elif treeSpaceFxn is None:
+        treeSpaceFxn = lambda k: treeSpace
+
+    if padding is None: ## padding is proportion of treeSpace protrudes beyond previous tree and before next tree (0 == line finishes at last tip of current tree and goes to root of next, 0.5 == line goes to middle between consecutive trees and switches abruptly)
+        padding = 0.1
+    else:
+        assert 0.0 <= padding <= 0.5, f"Padding (given as {padding}) should be a float between 0 and 0.5."
+
+    if colourMap is None: ## colourMap is dict that assigns colours to tips according to their y-axis order in first tree
+        colourMap = {}
+
+        cmap = mpl.cm.Spectral
+        firstTreeTips = treeList[0].get_external()
+
+        for i,k in enumerate(sorted(firstTreeTips, key = lambda q: q.y)):
+            colourMap[k.name] = cmap(i/(len(firstTreeTips)-1))
+
+    cumulativeX = 0 ## tracks x coordinate as we plot consecutive trees
+    if 'coordinateFxn' in localTreeKwargs: warnings.warn(f"Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
+    if 'xCoordinateFxn' not in localTreeKwargs: localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
+
+    if len(localPointKwargs)>0: ## tip points are required - override xCoordinateFxn, assign default colours if nothing specified
+        if 'xCoordinateFxn' in localPointKwargs: warnings.warn(f"Custom x coordinate function for points was specified but will be overriden for tangled chain visualisation.")
+        localPointKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
+        if 'colour' not in localPointKwargs and 'colourFxn' not in localPointKwargs:
+            warnings.warn(f"Point colours were not specified, defaulting to tangled chain colour defaults. This may cause issues if targetFxn is not set to identify tips.")
+            localPointKwargs['colourFxn'] = lambda k: colourMap[k.name]
+
+    connectionCoordinates = []
+    connectionColours = []
+
+    for curTree, nexTree in zip(treeList,treeList[1:]): ## iterate over pairs of consecutive trees
+        curTree.plot_tree(ax,**localTreeKwargs) ## plot current tree
+        if len(localPointKwargs)>0:
+            curTree.plot_points(ax,**localPointKwargs) ## add points if specified
+
+        spaceUnit = treeSpaceFxn(curTree)
+
+        for curTip in curTree.get_external(): ## iterate over tips in current tree
+            c = colourMap[curTip.name] if curTip.name in colourMap else 'lightgray'
+
+            nexTip = nexTree.get_external(filterFxn = lambda k: k.name == curTip.name) ## identify matching tip
+            if len(nexTip)>0:
+                nexTip = nexTip[0]
+                curX = localTreeKwargs['xCoordinateFxn'](curTip)
+                curY = curTip.y
+
+                lineAfterX = cumulativeX + curTree.treeHeight + spaceUnit*padding
+                lineBeforeX = cumulativeX + curTree.treeHeight + spaceUnit*(1-padding)
+
+                nexX = localTreeKwargs['xCoordinateFxn'](nexTip) + curTree.treeHeight + spaceUnit
+                nexY = nexTip.y
+
+                connectionCoordinates.append([(curX, curY),
+                                              (lineAfterX, curY),
+                                              (lineBeforeX, nexY),
+                                              (nexX, nexY)]) ## coordinates of tangled line
+                connectionColours.append(c) ## colour of tangled line
+
+        cumulativeX += curTree.treeHeight + spaceUnit ## increment x-axis
+
+    nexTree.plot_tree(ax,**localTreeKwargs) ## plot last tree
+    if len(localPointKwargs)>0:
+        nexTree.plot_points(ax,**localPointKwargs) ## plot its points
+
+    if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
+    ax.add_collection(LineCollection(connectionCoordinates,color=connectionColours,**localKwargs)) ## add tangled lines
+
+    return ax
 
 def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
 
