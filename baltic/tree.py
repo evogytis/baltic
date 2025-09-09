@@ -1376,7 +1376,9 @@ class Tree: ## tree class
         ax,
         targetFxn=None,
         xCoordinateFxn=None,
+        xSpace=0.005,
         yCoordinateFxn=None,
+        ySpace=0.0,
         textContentFxn=None,
         colour=None,
         colourFxn=None,
@@ -1397,13 +1399,16 @@ class Tree: ## tree class
         assert orientation in valid_orientations, f"Tree orientation {orientation} not recognised. Options are {valid_orientations}"
         
         ## set defaults
-
+        if colour is None and colourFxn is None:
+            colourFxn = lambda k: "k"
+        elif colourFxn is None:
+            colourFxn = lambda k: colour
         if targetFxn is None: 
             targetFxn = lambda k: k.is_leaf()
         if xCoordinateFxn is None:
-            xCoordinateFxn = lambda k: k.height if self.treeType=='divergence' else k.absoluteTime
+            xCoordinateFxn = lambda k: k.height + xSpace*self.treeHeight if self.treeType=='divergence' else k.absoluteTime + xSpace*self.treeHeight
         if yCoordinateFxn is None:
-            yCoordinateFxn = lambda k: k.y
+            yCoordinateFxn = lambda k: k.y + ySpace*self.treeHeight
         if textContentFxn is None:
             textContentFxn = lambda k: k.name
         if padNodes is None:
@@ -1414,7 +1419,7 @@ class Tree: ## tree class
         self._assign_tree_coordinates(padNodes=padNodes)
 
         if treeType == 'rectangular':
-            ax = self._plot_rectangular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,orientation=orientation,cladeEndAttrFxn=cladeEndAttrFxn,**kwargs)
+            ax = self._plot_rectangular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,orientation=orientation,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
 
         elif treeType == 'circular':
             if inwardSpace<0: inwardSpace-=self.treeHeight
@@ -1425,13 +1430,13 @@ class Tree: ## tree class
                     max(allXs) - min(allXs)
                 )
 
-            ax = self._plot_circular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,circStart=circStart,circFrac=circFrac,inwardSpace=inwardSpace,normaliseHeight=normaliseHeight,cladeEndAttrFxn=cladeEndAttrFxn,**kwargs)
+            ax = self._plot_circular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,circStart=circStart,circFrac=circFrac,inwardSpace=inwardSpace,normaliseHeight=normaliseHeight,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
         
         elif treeType == 'unrooted':
             self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes) ## compute unrooted coordinates
             xCoordinateFxn = lambda k: k.x ## use projected x coordinate now
 
-            ax = self._plot_unrooted_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,cladeEndAttrFxn=cladeEndAttrFxn,**kwargs)
+            ax = self._plot_unrooted_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
 
         return ax
 
@@ -1444,6 +1449,7 @@ class Tree: ## tree class
         textContentFxn,
         orientation,
         cladeEndAttrFxn,
+        colourFxn,
         **kwargs,
     ):
         localKwargs = dict(kwargs)
@@ -1466,8 +1472,9 @@ class Tree: ## tree class
             x, y = xCoordinateFxn(k), yCoordinateFxn(k)
             if orientation == 'horizontal':
                 x, y = y, x
+            colour = colourFxn(k)
 
-            ax.text(x, y, textContentFxn(k), **localKwargs)
+            ax.text(x, y, textContentFxn(k), color=colour, **localKwargs)
         return ax
 
     # def add_text(self,ax,target=None,xCoordinateFxn=None,yCoordinateFxn=None,text=None,orientation='vertical',**kwargs):
@@ -1524,6 +1531,7 @@ class Tree: ## tree class
         yCoordinateFxn,
         textContentFxn,
         cladeEndAttrFxn,
+        colourFxn,
         **kwargs,
     ):
         localKwargs = dict(kwargs)
@@ -1546,6 +1554,7 @@ class Tree: ## tree class
             textRotation = math.degrees(k._tau) % 360
             ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
             textRotation = (textRotation - 180)%360 if 90 <= textRotation%360 <= 270 else textRotation
+            colour = colourFxn(k)
 
             ax.text(
                 x,
@@ -1553,6 +1562,7 @@ class Tree: ## tree class
                 textContentFxn(k),
                 rotation=textRotation,
                 ha=ha,
+                color=colour,
                 **localKwargs,
             )
 
@@ -1617,6 +1627,7 @@ class Tree: ## tree class
         inwardSpace,
         normaliseHeight,
         cladeEndAttrFxn,
+        colourFxn,
         **kwargs,
     ):
         assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
@@ -1646,6 +1657,8 @@ class Tree: ## tree class
             ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
             textRotation = (textRotation - 180)%360 if 90 <= textRotation%360 <= 270 else textRotation
 
+            colour = colourFxn(k)
+
             x,y = project_to_polar(x=x,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac)
 
             ax.text(
@@ -1654,6 +1667,7 @@ class Tree: ## tree class
                 textContentFxn(k),
                 rotation=textRotation,
                 ha=ha,
+                color=colour,
                 **localKwargs,
             )
 
@@ -1725,6 +1739,66 @@ class Tree: ## tree class
         
     #     return ax
 
+    def plot_aligned_tip_labels(self, ax, xSpace=0.005, connectingLines=True, **kwargs):
+
+        localKwargs=dict(kwargs)
+        if 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': warnings.warn("Unrooted tree layout cannot accommodate aligned text labels, ignoring and plotting tip labels at the tips.")
+        if 'xCoordinateFxn' in localKwargs:
+            warnings.warn("xCoordinateFxn provided but needs to be reassigned for aligned text, ignoring.")
+            del localKwargs['xCoordinateFxn']
+        if 'normaliseHeight' in localKwargs:
+            warnings.warn("normaliseHeight provided but needs to be reassigned for aligned text, ignoring.")
+            del localKwargs['normaliseHeight']
+
+        ## xSpace is fraction of tree height after which tip labels are put (0 == all tip labels are placed at exactly the x coordinate of the last tip, 1 == all tip labels are placed a full tree height away from the last tip)
+        xCoordinateFxn = lambda k: self.treeHeight * (1 + xSpace) if self.treeType == 'divergence' else self.root.absoluteTime + self.treeHeight * (1 + xSpace)
+        
+        ## this is for handling circular layouts (prevents automatic normaliseHeight from doing division by 0 because xCoordinateFxn returns a constant value)
+        allXs = self.get_parameter_list('absoluteTime') if self.treeType == 'time' else self.get_parameter_list('height')
+        normaliseHeight = lambda value: (value - min(allXs)) / (max(allXs) - min(allXs))
+        
+        self.plot_text(ax, xCoordinateFxn=xCoordinateFxn, normaliseHeight=normaliseHeight, **localKwargs)
+
+        ## add connecting lines
+        if connectingLines:
+            lines = []
+            colours = []
+            
+            if 'colour' in localKwargs:
+                colourFxn = lambda k: localKwargs['colour']
+            elif 'colourFxn' in localKwargs:
+                colourFxn = localKwargs['colourFxn']
+            else:
+                colourFxn = lambda k: 'k'
+                
+            if 'treeType' in localKwargs and localKwargs['treeType'] == 'circular': ## set defaults for circular layout if they haven't been set before
+                circStart = localKwargs['circStart'] if 'circStart' in localKwargs else 0.0
+                circFrac = localKwargs['circFrac'] if 'circFrac' in localKwargs else 1.0
+                inwardSpace = localKwargs['inwardSpace'] if 'inwardSpace' in localKwargs else 0.0
+                if inwardSpace < 0: inwardSpace-=self.treeHeight
+            elif 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': ## ignore when dealing with unrooted trees, but warn
+                warnings.warn("Unrooted tree layout cannot accommodate aligned text labels, ignoring and not plotting connecting lines.")
+
+            ## iterate over tips, add lines
+            for k in self.get_external():
+                x = k.height if self.treeType == 'divergence' else k.absoluteTime
+                
+                if 'treeType' in localKwargs and localKwargs['treeType'] == 'circular': ## circular layout
+                    x1, y1 = project_to_polar(normaliseHeight(x+inwardSpace), k.y, self.ySpan, circleStart=circStart, circleFraction=circFrac)
+                    x2, y2 = project_to_polar(normaliseHeight(xCoordinateFxn(k)+inwardSpace), k.y, self.ySpan, circleStart=circStart, circleFraction=circFrac)
+                elif 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': ## ignore when dealing with unrooted trees
+                    pass
+                else: ## rectangular layout
+                    x1, y1 = x, k.y
+                    x2, y2 = xCoordinateFxn(k), k.y
+                
+                lines.append([(x1, y1), 
+                              (x2, y2)])
+                colours.append(colourFxn(k))
+
+            lines = LineCollection(lines, lw=1, ls=':', colors=colours, clip_on=False)
+            ax.add_collection(lines)
+        return ax
 
     def plot_points(
         self,
@@ -2094,7 +2168,7 @@ class Tree: ## tree class
 
     
 
-    def _plot_circular_tree(self,ax,targetFxn,xCoordinateFxn,yCoordinateFxn,widthFxn,colour,
+    def _plot_circular_tree(self,ax,targetFxn,xCoordinateFxn,yCoordinateFxn,widthFxn,colourFxn,
                             circStart,circFrac,inwardSpace,normaliseHeight,connectionType,padNodes,precision,plotClades,cladeColour, 
                             cladeEndAttrFxn,cladeStyle,cladeShape,cladeBaseWidth,**kwargs):
         if cladeColour is None: cladeColour = (0.7,0.7,0.7)
@@ -2137,11 +2211,7 @@ class Tree: ## tree class
 
 
             try:
-                (
-                    colours.append(colour(k))
-                    if callable(colour)
-                    else colours.append(colour)
-                )
+                colours.append(colourFxn(k))
             except KeyError:
                 colours.append((0.7,0.7,0.7))
             linewidths.append(widthFxn(k)) if callable (widthFxn) else linewidths.append(widthFxn)
