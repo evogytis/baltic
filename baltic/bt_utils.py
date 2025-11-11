@@ -284,6 +284,25 @@ def untangle(trees,costFxn=None,iterations=None):
 
     return trees
 
+def unnest(nodeList,towardsRoot=True):
+    assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f'nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node()==False and k.is_leaflike()==False])}'
+    
+    while any([A.leaves.isdisjoint(B.leaves)==False for A in nodeList for B in nodeList if A!=B]): ## continue looping for as long as any pair of nodes are nested
+        remove=set() ## store nodes for removal
+        for A in nodeList: ## iterate over nodes once (A variable)
+            for B in nodeList: ## iterate over nodes twice (B variable)
+                if A!=B and A.leaves.isdisjoint(B.leaves)==False: ## if descendant tips overlap between the two nodes
+                    if towardsRoot:
+                        remove.add(B if B.leaves.issubset(A.leaves) else A) ## keep nodes deeper in the tree - remove B if node B is subset of node A (remove nodes closer to tips)
+                        
+                    else:
+                        remove.add(A if B.leaves.issubset(A.leaves) else B) ## keep nodes closer to tips - remove A if node B is subset of node A (removing nodes deeper in the tree)
+                    
+        for r in remove:
+            nodeList.remove(r) ## remove designated nodes from list
+            
+    return nodeList ## when done return list of remaining nodes
+
 def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
     slope,intercept,rval,_,_ = linregress(tipDates,tipHeights) ## run linear regression
     corr = np.corrcoef((tipDates,tipHeights))[0,1] ## correlation coefficient
@@ -336,3 +355,57 @@ def project_polar_vector(x,y,radians,length):
 
     return (new_x,new_y)
 
+
+def desaturate(colour, desat = 0.65, out = "auto"):
+    if not (0 <= desat <= 1):
+        raise ValueError(f"invalid desat value: {desat}, must be within interval [0, 1].")
+
+    # Detect input kind for round-tripping
+    in_is_str = isinstance(colour, str)
+    in_is_tuple = isinstance(colour, (tuple, list)) and len(colour) in (3, 4)
+    if not (in_is_str or in_is_tuple):
+        raise TypeError(f"colour {colour} invalid, must be a name/hex string or RGB/RGBA tuple.")
+
+    # Remember tuple arity and whether hex originally had alpha
+    tuple_len = len(colour) if in_is_tuple else None
+    hex_had_alpha = False
+    if in_is_str and colour.strip().startswith("#"):
+        cs = colour.strip()
+        hex_had_alpha = len(cs) in (5, 9)  # #RGBA or #RRGGBBAA
+
+    # Convert to RGBA
+    rgba = np.array(mpl.colors.to_rgba(colour), dtype=float)
+
+    # Desaturate in HSV (scale S)
+    rgb = rgba[:3]
+    hsv = mpl.colors.rgb_to_hsv(rgb.reshape(1, 1, 3))
+    hsv[..., 1] *= desat
+    new_rgb = mpl.colors.hsv_to_rgb(hsv).reshape(3)
+    rgba[:3] = new_rgb
+
+    # Decide output format
+    if out == "auto":
+        if in_is_tuple:
+            return tuple(rgba[:tuple_len])  # keep RGB vs RGBA arity
+        else:
+            # strings round-trip to hex; include alpha if originally present or alpha<1
+            keep_alpha = hex_had_alpha or (rgba[3] < 1.0)
+            return mpl.colors.to_hex(rgba, keep_alpha=keep_alpha)
+    elif out == "hex":
+        # include alpha if <1
+        return mpl.colors.to_hex(rgba, keep_alpha=(rgba[3] < 1.0))
+    elif out == "rgb":
+        return tuple(rgba[:3])
+    elif out == "rgba":
+        return tuple(rgba)
+    else:
+        raise ValueError(f"out {out} invalid, must be one of {'auto','hex','rgb','rgba'}.")
+
+def desaturate_cmap(cmap, desat = 0.65):
+    from matplotlib.colors import ListedColormap
+
+    assert isinstance(cmap, mpl.colors.LinearSegmentedColormap) or isinstance(cmap, mpl.colors.ListedColormap), f"cmap type {type(cmap)} invalid, must be mpl.colors.LinearSegmentedColormap or mpl.colors.ListedColormap."
+    base_colours = [tuple(c) for c in cmap(np.linspace(0, 1, 256))]
+    desat_colours = [desaturate(c, desat = desat) for c in base_colours]
+
+    return ListedColormap(desat_colours)
