@@ -70,11 +70,11 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
     else: ## no rounding - timeline starts at the specified start date and is incremented at specified intervals
         currentTime = startTime
         dateStr = dt.datetime.strftime(currentTime, dateFmt)
-        timeline.append(dateStr)
+        # timeline.append(dateStr)
     
     while currentTime < endTime:
 
-        if startTime < currentTime:
+        if startTime <= currentTime:
             dateStr = dt.datetime.strftime(currentTime, dateFmt)
             timeline.append(dateStr)
 
@@ -210,7 +210,7 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     
     if isinstance(timeline,list):
         try:
-            timeline = [bt_utils.calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to 
+            timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to 
         except:
             warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
     else:
@@ -233,17 +233,17 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
 
     if axis == 'x':
         if labelPosition == 'left':
-            ax.set_xticks([bt_utils.calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_xticks([calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
             ax.set_xticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
         elif labelPosition == 'mid':
-            ax.set_xticks([np.mean([bt_utils.calendar_to_decimal_date(timeline[t], inputDateFmt), bt_utils.calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_xticks([np.mean([calendar_to_decimal_date(timeline[t], inputDateFmt), calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
             ax.set_xticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
     elif axis == 'y':
         if labelPosition == 'left':
-            ax.set_yticks([bt_utils.calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_yticks([calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
         elif labelPosition == 'mid':
-            ax.set_yticks([np.mean([bt_utils.calendar_to_decimal_date(timeline[t], inputDateFmt), bt_utils.calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_yticks([np.mean([calendar_to_decimal_date(timeline[t], inputDateFmt), calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
 
     ax.tick_params(axis=axis, size=0)
