@@ -284,17 +284,16 @@ def untangle(trees,costFxn=None,iterations=None):
 
     return trees
 
-def unnest(nodeList,towardsRoot=True):
-    assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f'nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node()==False and k.is_leaflike()==False])}'
+def unnest(nodeList, towardsRoot = True):
+    assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f'nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}'
     
-    while any([A.leaves.isdisjoint(B.leaves)==False for A in nodeList for B in nodeList if A!=B]): ## continue looping for as long as any pair of nodes are nested
-        remove=set() ## store nodes for removal
+    while any([A.leaves.isdisjoint(B.leaves) == False for A in nodeList for B in nodeList if A != B]): ## continue looping for as long as any pair of nodes are nested
+        remove = set() ## store nodes for removal
         for A in nodeList: ## iterate over nodes once (A variable)
             for B in nodeList: ## iterate over nodes twice (B variable)
-                if A!=B and A.leaves.isdisjoint(B.leaves)==False: ## if descendant tips overlap between the two nodes
+                if A != B and A.leaves.isdisjoint(B.leaves) == False: ## if descendant tips overlap between the two nodes
                     if towardsRoot:
                         remove.add(B if B.leaves.issubset(A.leaves) else A) ## keep nodes deeper in the tree - remove B if node B is subset of node A (remove nodes closer to tips)
-                        
                     else:
                         remove.add(A if B.leaves.issubset(A.leaves) else B) ## keep nodes closer to tips - remove A if node B is subset of node A (removing nodes deeper in the tree)
                     
