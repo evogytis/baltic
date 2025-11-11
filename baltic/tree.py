@@ -627,37 +627,38 @@ class Tree: ## tree class
 
         return self
 
-    def sort_branches(self, descending=True, sortFxn=None, sortByHeight=True):
-        mod = -1 if descending else 1
-        if sortFxn is None:
+    def sort_branches(self, descending=True, sortFxn=None, operationFxn=None):
+        mod = 1 if descending else -1
+        if sortFxn is None and operationFxn is None:
             logger.debug("Using default sort function.")
             # TODO This is really hard to parse. It is a variable mapped to a lambda function
             # that sometimes returns a 2-tuple and sometimes returns a 3-tuple, depending on
             # whether the argument to the function is a node or not
             # This should be rewritten as a normal function, and we should make sure
             # the different lengths of the tuple get handled sensibly downstream
-            sortFxn = lambda k: (
-                (k.is_node(), -len(k.leaves) * mod, k.length * mod)
-                if k.is_node()
-                else (k.is_node(), k.length * mod)
-            )
-        if sortByHeight:  # Sort nodes by height and group nodes and leaves together
-            ## Sort descendants of each node.
 
-            for k in self.get_internal():  ## iterate over nodes
-                k.children = sorted(k.children, key=sortFxn)
-        else:  # Do not sort by height. Retain leaves at original positions. Only sort nodes
+            def sortFxn(node):
+
+                if node.is_node():
+                    return (mod, len(node.leaves) * mod, node.length)
+
+                elif node.is_leaflike():
+                    if node.is_leaf() or isinstance(node, Reticulation):
+                        return (mod * -1, 1 * mod, node.length)
+                    elif isinstance(node, Clade):
+                        return (mod * -1, len(node.leaves) * mod, node.length)
+        elif sortFxn is not None and operationFxn is not None:
+            raise Exception(
+                    "Cannot specify both sortFxn and operationFxn, pick one."
+                )
+
+        if sortFxn:
             for k in self.get_internal():
-                leavesIdx = [
-                    (i, ctr) for ctr, i in enumerate(k.children) if i.is_leaflike()
-                ]  # Get original indices of leaves
-                nodes = sorted(
-                    [x for x in k.children if x.is_node()], key=sortFxn
-                )  # Sort nodes only by number of descendants
-                children = nodes
-                for i in leavesIdx:  # Insert leaves back into same positions
-                    children.insert(i[1], i[0])
-                k.children = children
+                k.children = sorted(k.children, key = sortFxn)
+        else:
+            for k in self.get_internal():
+                k.children = operationFxn(k.children)
+
         self._assign_tree_coordinates()  ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def _assign_tree_coordinates(self, order=None, padNodes=None):
