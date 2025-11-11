@@ -11,7 +11,7 @@ from baltic.node import Node
 from baltic.leaf import Leaf
 from baltic.clade import Clade
 from baltic.reticulation import Reticulation
-from baltic.bt_utils import _root_to_tip, project_to_polar, project_polar_vector
+from baltic.bt_utils import _root_to_tip, project_to_polar, project_polar_vector, unnest
 
 logger = logging.getLogger("baltic.Tree")
 
@@ -1306,6 +1306,26 @@ class Tree: ## tree class
                 
         return subtrees
 
+    def condense_tree(self, cutoffs = None, protectedTips = [], widthFxn = None):
+        ## cutoffs is a tuple of values that define the minimum and maximum sizes of clades designated for collapsing
+        ## protectedTips is a list of tips names as str that will remain uncollapsed
+        ## widthFxn will determine how much y-axis space collapsed clades will occupy (default is same amount the uncollapsed subtree would)
+        if cutoffs is None:
+            N = len(self.get_external())
+            minClade, maxClade = 3, int(N * 0.2) ## default is collapse any node with between 3 and up to 20% of the tree's leaves as descendants
+        else:
+            minClade, maxClade = cutoffs
+
+        if widthFxn is None:
+            widthFxn = lambda k: len(k.leaves)
+
+        collapseCandidates = self.get_internal(lambda k: len(k.leaves.intersection(set(protectedTips))) == 0 and (minClade <= len(k.leaves) <= maxClade))
+        nodesToCollapse = unnest(collapseCandidates, towardsRoot = True)
+
+        for i,node in enumerate(nodesToCollapse):
+            self.collapse_subtree_to_clade(node,f'collapsed clade {i}', widthFunction = widthFxn)
+
+        return self
     ############################################
     ##########   PLOTTING FUNCTIONS   ##########
     ############################################
