@@ -611,7 +611,7 @@ class Tree: ## tree class
                     k.height + adjustR for k in rightSubtree
                 ]  ## same for right #TODO: see above
 
-                res = root_to_tip(
+                res = _root_to_tip(
                     left, xs, ys, res, stat=stat, forcePositive=forcePositive, frac=f
                 )  ## check regression
 
@@ -675,7 +675,7 @@ class Tree: ## tree class
         assert len(nameOrder) == len(order), "Non-unique names present in tree"
 
         logger.debug("Drawing tree with default widths (1 unit for leaf objects, width+1 for clades)")
-        skips = [1 if isinstance(x, Leaf) else x.width for x in order]
+        skips = [1 if isinstance(x, Leaf) else x.width + 1 for x in order]
 
 
         for k in self.Objects:  ## reset coordinates for all objects
@@ -814,7 +814,7 @@ class Tree: ## tree class
                     w += 2*math.pi * (padNodes[desc]*2)/total
 
         elif isinstance(node,Clade): ## Clade - width is whatever was assigned during collapse
-            w = 2*math.pi * node.width/total
+            w = 2*math.pi * (node.width + 1)/total
         
 
         if node in padNodes: ## at a branch that's designated for additional padding
@@ -835,14 +835,14 @@ class Tree: ## tree class
 
                 elif ch.is_node():
                     descendants=self.traverse_tree(ch,includeCondition=lambda w: True)
-                    w = 2*math.pi * sum([1 if d.is_leaf() else d.width for d in descendants if d.is_leaflike()])/total
+                    w = 2*math.pi * sum([1 if d.is_leaf() else d.width + 1 for d in descendants if d.is_leaflike()])/total
 
                     for desc in descendants:
                         if desc in padNodes:
                             w += 2*math.pi * (padNodes[desc]*2)/total
                     
                 elif isinstance(ch,Clade):
-                    w = 2*math.pi * ch.width/total
+                    w = 2*math.pi * (ch.width + 1)/total
                 
 
                 if ch in padNodes:
@@ -998,7 +998,7 @@ class Tree: ## tree class
                 nodesToDelete.remove(k)  ## in fact, the node never existed
 
                 if len(designatedNodes) == 0:
-                    nodesToDelete == list(
+                    nodesToDelete = list(
                         filter(
                             lambda n: n.is_node()
                             and bool(collapseIfFxn(n))
@@ -2263,7 +2263,7 @@ class Tree: ## tree class
                 xCoordinateFxn=None,yCoordinateFxn=None,width=None,widthFxn=None,connectionType=None,
                 colour=None,colourFxn=None,orientation=None,padNodes=None,treeType='rectangular', 
                 circStart=None,circFrac=None,inwardSpace=None,normaliseHeight=None,precision=None, 
-                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.003,**kwargs):
+                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.001,**kwargs):
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
