@@ -11,105 +11,108 @@ logger = logging.getLogger("baltic.io")
 
 def load_newick(treePath,
                 treeType,
-                tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
+                tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)',
                 dateFmt='%Y-%m-%d',
                 variableDate=True,
                 absoluteTime=False,
                 sortBranches=True):
-    ll=None
+    ll = None
 
     handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
 
     for line in handle:
-        l=line.strip('\n')
+        l = line.strip('\n')
         if '(' in l:
-            treeStringStart=l.index('(')
-            ll=make_tree(l[treeStringStart:],treeType) ## send tree string to make_tree function
+            treeStringStart = l.index('(')
+            ll = make_tree(l[treeStringStart:],treeType) ## send tree string to make_tree function
             logger.debug('Identified tree string')
 
-    assert ll,'Regular expression failed to find tree string'
-    ll.traverse_tree() ## traverse tree
-
+    assert ll, 'Regular expression failed to find tree string'
+    
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime:
-        tip_dates=[]
-        tip_names=[]
+        tip_dates = []
+        tip_names = []
         for k in ll.get_external():
             tip_names.append(k.name)
-            match=re.search(tipRegex,k.name)
+            match = re.search(tipRegex, k.name)
             if match:
-                tip_dates.append(calendar_to_decimal_date(match.group(1),fmt=dateFmt,variable=variableDate))
-        assert len(tip_dates)>0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
+                tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate))
+        assert len(tip_dates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
         ll.set_absolute_time(max(tip_dates))
 
-    if isinstance(treePath,str):
+    if isinstance(treePath, str):
         handle.close()
+
+    ll.traverse_tree() ## traverse tree
     return ll
 
 def load_nexus(treePath,
                 treeType,
-                tipRegex='\|([0-9]+\-[0-9]+\-[0-9]+)',
+                tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)',
                 dateFmt='%Y-%m-%d',
-                treestringRegex='tree [A-Za-z\_]+([0-9]+)',
+                treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
                 variableDate=True,
                 absoluteTime=True,
                 sortBranches=True):
-    tip_flag=False
-    tips={}
-    tip_num=0
-    ll=None
+    tip_flag = False
+    tips = {}
+    tip_num = 0
+    ll = None
 
     handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
 
     for line in handle:
-        l=line.strip('\n')
+        l = line.strip('\n')
 
-        match=re.search('Dimensions ntax=([0-9]+);',l)
+        match = re.search('Dimensions ntax=([0-9]+);',l)
         if match:
-            tip_num=int(match.group(1))
+            tip_num = int(match.group(1))
             logger.debug(f'File should contain {tip_num} taxa')
 
-        match=re.search(treestringRegex,l)
+        match = re.search(treestringRegex,l)
         if match:
-            treeString_start=l.index('(')
-            ll=make_tree(l[treeString_start:],treeType) ## send tree string to make_tree function
+            treeString_start = l.index('(')
+            ll = make_tree(l[treeString_start:],treeType) ## send tree string to make_tree function
             logger.debug('Identified tree string')
 
         if tip_flag:
-            match=re.search('([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
+            match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
             if match:
-                tips[match.group(1)]=match.group(2).strip('"').strip("'")
+                tips[match.group(1)] = match.group(2).strip('"').strip("'")
                 logger.debug(f'Identified tip translation {match.group(1)}: {tips[match.group(1)]}')
             elif ';' not in l:
-                print('tip not captured by regex:',l.replace('\t',''))
+                print('tip not captured by regex:', l.replace('\t',''))
 
         if 'Translate' in l:
-            tip_flag=True
+            tip_flag = True
         if ';' in l:
-            tip_flag=False
+            tip_flag = False
 
     assert ll,'Failed to find tree string using regular expression'
-    ll.traverse_tree() ## traverse tree
-    if sortBranches:
-        ll.sort_branches() ## traverses tree, sorts branches, draws tree
-    if len(tips)>0:
+    
+    if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
+
+    if len(tips) > 0:
         ll.rename_tips(tips) ## renames tips from numbers to actual names
-        ll.tipMap=tips
+        ll.tipMap = tips
     if absoluteTime:
-        tip_dates=[]
-        tip_names=[]
+        tip_dates = []
+        tip_names = []
         for k in ll.get_external():
             tip_names.append(k.name)
-            match=re.search(tipRegex,k.name)
+            match = re.search(tipRegex, k.name)
             if match:
-                tip_dates.append(calendar_to_decimal_date(match.group(1),fmt=dateFmt,variable=variableDate))
+                tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate))
 
-        assert len(tip_dates)>0,f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
+        assert len(tip_dates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
         ll.set_absolute_time(max(tip_dates))
 
     if isinstance(treePath,str):
         handle.close()
+
+    ll.traverse_tree() ## traverse tree
     return ll
 
 def load_JSON(jsonObject,
