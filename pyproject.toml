@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools >= 77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "baltic"
+version = "0.4.0"
+dependencies = [
+    "numpy>=1.16",
+    "matplotlib>=2.0.0",
+    "requests", # for loadJSON
+    "typing-extensions" # TypeIs (py>=3.13)
+]
+description = "Lightweight package for analyzing, manipulating and visualizing annotated phylogenetic trees"
+requires-python = ">= 3.9"
+authors = [
+    {name = "Gytis Dudas", email = "gytisdudas@gmail.com"},
+]
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
+keywords = ["phylogeny", "visualization"]
+# classifiers = []
+
+[project.urls]
+Repository = "https://github.com/evogytis/baltic"
+Issues = "https://github.com/evogytis/baltic/issues"
+Documentation = "https://github.com/evogytis/baltic/wiki"
+Download = "https://github.com/evogytis/baltic/archive/v0.3.0.tar.gz"
