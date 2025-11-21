@@ -99,11 +99,11 @@ def make_tree(data, treeType, tre=None):
         if match:
             logger.debug(f'{i} comment: {match.group(2)}')
             comment=match.group(2)
-            numerics=re.findall('[,&][A-Za-z\_\.0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall('[,&][A-Za-z\_\.0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
-            treelist=re.findall('[,&][A-Za-z\_\.0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
-            sets=re.findall('[,&][A-Za-z\_\.0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
-            figtree=re.findall('\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
+            numerics=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
+            strings=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
+            treelist=re.findall(r'[,&][A-Za-z\_\.\-0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
+            sets=re.findall(r'[,&][A-Za-z\_\.\-0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
+            figtree=re.findall(r'\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
 
             for vals in strings:
                 tr,val=vals.split('=') # tr := trait; val := value
