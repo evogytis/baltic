@@ -1,327 +1,253 @@
-import argparse
 import re
-import datetime as dt
-import baltic as bt
-import sys
-import collections
+import logging
+import numpy as np
+from baltic.baltic import make_tree
+from baltic.bt_utils import calendar_to_decimal_date
 
-def overlap(a,b):
+logger = logging.getLogger("baltic.samogitia")
+
+def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRegex, dateFmt, treestringRegex):
     """
-    Return the elements shared by two lists in the following format:
-    [overlap],[list 1 remainder],[list 2 remainder]
+    Takes a treePath (path to .trees file), burnin, outputPath (output name), mostRecentDate (for most recent tip date), tipRegex (for figuring out collection dates), dateFmt (for parsing calendar dates), treestringRegex (for identifying lines with trees and their MCMC state number).
+    Parses .trees file, yields each treestring (and tip name map + most recent date) after burnin is passed.
+    Each treestring is passed onto a separate parallel worker elsewhere.
+    ### there might be ways to make this parsing more efficient and still need to fix identifying most recent tip dates and determine how dummy most recent dates are handled in the .trees file.
     """
-    a_multiset = collections.Counter(a)
-    b_multiset = collections.Counter(b)
+    tip_flag = False
+    tips = {}
+    tip_num = 0
+    treeCounter = 0
+    ############
+    handle = open(treesPath, 'r')
+    
+    for line in handle:
+        l = line.strip('\n')
+        
+        ############
+        match = re.search('Dimensions ntax=([0-9]+);',l)
+        if match:
+            tip_num = int(match.group(1))
+            logger.debug(f'File should contain {tip_num} taxa')
 
-    overlap = list((a_multiset & b_multiset).elements())
-    a_remainder = list((a_multiset - b_multiset).elements())
-    b_remainder = list((b_multiset - a_multiset).elements())
+        ###############
+        match = re.search(treestringRegex,l)
+        if match:
+            state = int(match.group(1))
+            
+            treeString_start = l.index('(')
 
-    return overlap, a_remainder, b_remainder
+            if state == 0: ## only need to get tip names on the first tree
+                ####
+                # do an assertion here that tipNames exist in tree
+                ####
+                tree = make_tree(l[treeString_start:], 'time')
+                tree.rename_tips(tips)
+                
+                tip_dates = []
+                tip_names = []
+                for k in tree.get_external():
+                    tip_names.append(k.name)
+                    match = re.search(tipRegex, k.name)
+                    if match:
+                        tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = True))
 
-############ arguments
-samogitia = argparse.ArgumentParser(description="samogitia.py analyses trees drawn from the posterior distribution by BEAST.\n")
+                maxDate = max(tip_dates)
+                
+            if state >= burnin:
 
-samogitia.add_argument('-b','--burnin', default=0, type=int, help="Number of states to remove as burnin (default 0).\n")
-samogitia.add_argument('-nc','--nocalibration', default=True, action='store_false', help="Use flag to prevent calibration of trees into absolute time (default True). Should be used if tip names do not contain information about *when* each sequence was collected.\n")
-samogitia.add_argument('-t','--treefile', type=open, required=True, help="File with trees sampled from the posterior distribution (usually with suffix .trees).\n")
-samogitia.add_argument('-a','--analyses', type=str, required=True, nargs='+', help="Analysis to be performed, can be a list separated by spaces.\n")
-samogitia.add_argument('-o','--output', type=argparse.FileType('w'), default='samogitia.out.txt', help="Output file name (default samogitia.out.txt).\n")
-samogitia.add_argument('-s','--states', type=str, default='0-inf', help="Define range of states for analysis.\n")
-samogitia.add_argument('-df','--date_format', type=str, default='%Y-%m-%d', help="Define date format encoded in tips (default \'%%Y-%%m-%%d\').\n")
-samogitia.add_argument('-tf','--tip_format', type=str, default='\|([0-9]+)\-*([0-9]+)*\-*([0-9]+)*$', help="Define regex for capturing dates encoded in tips (default \'\|([0-9]+)\-*([0-9]+)*\-*([0-9]+)*$\'.\n")
+                yield treeCounter, state, l[treeString_start:], tips, maxDate
+                treeCounter += 1
+                
+                logger.debug('Identified tree string')
+        ##############
+        if tip_flag:
+            match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
+            if match:
+                tips[match.group(1)] = match.group(2).strip('"').strip("'")
+                logger.debug(f'Identified tip translation {match.group(1)}: {tips[match.group(1)]}')
+            elif ';' not in l:
+                print('tip not captured by regex:', l.replace('\t',''))
 
-args = vars(samogitia.parse_args())
-burnin, treefile, analyses, outfile, calibration, states, dformat, tformat = args['burnin'], args['treefile'], args['analyses'], args['output'], args['nocalibration'], args['states'], args['date_format'], args['tip_format']
+        if 'Translate' in l:
+            tip_flag = True
+        if ';' in l:
+            tip_flag = False
+    
+    handle.close()
 
-lower,upper=states.split('-')
-lower=int(lower)
-if upper=='inf':
-    upper=float('inf')
-else:
-    upper=int(upper)
+def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, outputPath = 'processed-output.log.txt', mostRecentDate = None, tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)', dateFmt='%Y-%m-%d', treestringRegex=r'tree [A-Za-z\_]+([0-9]+)', **kwargs):
+    """
+    This is the generic function that gets called when processing posterior sets of trees.
+    At a minimum it takes a path to the .trees file (treesPath) and a worker function (processFxn).
+    It calls the `posterior_tree_iterator` which yields treestrings that are passed onto some number (equal to `workers`) of parallel worker functions that return processed results asynchronously.
+    Worker functions must have a `headerMode` parameter which when True returns the header of the output file (for future parsing or loading into Tracer).
 
-try:
-    for line in open('../docs/banner_samogitia.txt','r'):
-        sys.stderr.write('%s'%(line))
-except:
-    pass
+    Example:
 
-## keeps track of things in the tree file at the beginning
-plate=True
-taxonlist=False
-treecount=0 ## counts tree
-##
+    process_posterior_trees(inTree, 
+                            processFxn = tmrca_worker,
+                            tipNames = tipNames)
 
-tips={} ## remembers tip encodings
+    will call a tmrca_worker function on posterior set of trees in `inTree`
+    tmrca_worker takes a `tipNames` parameter which is passed to it via kwargs.
+    """
+    if burnin is None:
+        burnin = 0
+    
+    import heapq
+    from concurrent.futures import ProcessPoolExecutor, as_completed
 
-############################# progress bar stuff
-Ntrees=10000 ## assume 10 000 trees in posterior sample
-barLength=30
-progress_update=Ntrees/barLength ## update progress bar every time a tick has to be added
-threshold=progress_update ## threshold at which to update progress bar
-processingRate=[] ## remember how quickly script processes trees
-#############################
+    pq = []
+    next_to_write = 0   # index of next tree result to write
 
-available_analyses=['treeLength','RC','Sharp','tmrcas','transitions','subtrees'] ## analysis names that are possible
+    with ProcessPoolExecutor(max_workers = workers) as ex, open(outputPath, "w") as out:
+        futures = []
 
-assert analyses,'No analyses were selected.'
-for queued_analysis in analyses: ## for each queued analysis check if samogitia can do anything about them (i.e. whether they're known analysis types)
-    assert queued_analysis in available_analyses,'%s is not a known analysis type\n\nAvailable analysis types are: \n* %s\n'%(queued_analysis,'\n* '.join(available_analyses))
+        # submit each tree as we read it
+        for i, state, treeString, tipRenameDict, maxDate in posterior_tree_iterator(treesPath, burnin = burnin, outputPath = outputPath, mostRecentDate = mostRecentDate, tipRegex = tipRegex, dateFmt = dateFmt, treestringRegex = treestringRegex): ## posterior tree iterator returns the index of the tree, its MCMC state number, treestring itself, tip renaming dict and most recent tip date
+            
+            if i == 0: ## at first tree
+                _, _, header_val = processFxn(-1, state, treeString, tipRenameDict, maxDate, **kwargs, headerMode = True) ## call worker in header mode
+                out.write(f"state\t{'\t'.join(header_val)}\n") ## write header to output file
+                
+            fut = ex.submit(processFxn, i, state, treeString, tipRenameDict, maxDate, **kwargs, headerMode = False) ## process tree as usual - calling worker in headerMode = False
+            futures.append(fut)
 
-begin=dt.datetime.now() ## start timer
+        # process completed tasks
+        for fut in as_completed(futures):
+            try:
+                i, state, value = fut.result()
+            except Exception as e:
+                print("Worker crashed:", e)
+                raise
+            
+            # i, state, value = fut.result()
+            heapq.heappush(pq, (i, state, value))
 
-for line in treefile: ## iterate through each line
-    ###################################################################################
-    if plate==True and 'state' not in line.lower():
-        cerberus=re.search('Dimensions ntax\=([0-9]+)\;',line) ## Extract useful information from the bits preceding the actual trees.
-        if cerberus is not None:
-            tipNum=int(cerberus.group(1))
+            # write anything we can write now
+            while pq and pq[0][0] == next_to_write:
+                _, st, val = heapq.heappop(pq)
+                # print(state, '\t'.join(val))
+                out.write(f"{st}\t{'\t'.join(val)}\n") ## output to file
+                next_to_write += 1
 
-        if 'Translate' in line:
-            taxonlist=True ## taxon list to follow
 
-        if taxonlist==True and ';' not in line and 'Translate' not in line: ## remember tip encodings
-            cerberus=re.search('([0-9]+) ([\'\"A-Za-z0-9\?\|\-\_\.\/]+)',line)
-            tips[cerberus.group(1)]=cerberus.group(2).strip("'")
+def label_timepoints(times, edges, labels):
+    """
+    Assign string labels to times based on interval start times.
 
-    if 'tree STATE_' in line and plate==True: ## starting actual analysis
-        plate=False
-        assert (tipNum == len(tips)),'Expected number of tips: %s\nNumber of tips found: %s'%(tipNum,len(tips)) ## check that correct numbers of tips have been parsed
-    ################################################################################### start analysing trees
-    cerberus=re.match('tree\sSTATE\_([0-9]+).+\[\&R\]\s',line) ## search for crud at the beginning of the line that's not a tree string
+    Parameters
+    ----------
+    times : array-like
+        Time points to label (e.g. from np.linspace).
+    edges : array-like
+        Start times of intervals (unordered OK).
+        Label i applies on [edges[i], edges[i+1]),
+        up to the last edge.
+    labels : array-like
+        Label for each interval start (same length as edges).
 
-    if cerberus is not None: ## tree identified
-        ################################################################# at state 0 - create the header for the output file and read the tree (in case the output log file requires information encoded in the tree)
-        if treecount==0: ## At tree state 0 insert header into output file
-            ll=bt.tree() ## empty tree object
-            start=len(cerberus.group()) ## index of where tree string starts in the line
-            treestring=str(line[start:]) ## grab tree string
-            bt.make_tree(treestring,ll) ## read tree string
-            if lower==0 and upper==float('inf'): ## only add a header if not doing a chunk
-                outfile.write('state') ## begin the output log file
-                ########################################### add header to output log file
-                if 'treeLength' in analyses:
-                    outfile.write('\ttreeLength')
-                ###########################################
-                if 'RC' in analyses:
-                    outfile.write('\tN\tS\tuN\tuS\tdNdS')
-                ###########################################
-                if 'tmrcas' in analyses:
-                    tmrcas={'A':[],'B':[],'C':[]} ## dict of clade names
-                    ll.renameTips(tips)
-                    for k in ll.Objects: ## iterate over branches
-                        if isinstance(k,bt.leaf): ## only interested in tips
-                            if 'A' in k.name: ## if name of tip satisfies condition
-                                tmrcas['A'].append(k.numName) ## add the tip's numName to tmrca list - tips will be used to ID the common ancestor
-                            elif k.name in Conakry_tips:
-                                tmrcas['B'].append(k.numName)
-                            tmrcas['C'].append(k.numName)
+    Returns
+    -------
+    np.ndarray of object
+        Labels for each time; None if time is < min(edges)
+        or > max(edges).
+    """
+    times = np.asarray(times)
+    edges = np.asarray(edges)
+    labels = np.asarray(labels, dtype=object)
 
-                    outfile.write('\t%s'%('\t'.join(sorted(tmrcas.keys()))))
-                ###########################################
-                if 'transitions' in analyses:
-                    outfile.write('state\ttotalChangeCount\tcompleteHistory_1')
-                ###########################################
-                if 'subtrees' in analyses:
-                    import copy
-                ###########################################
-                ## your custom header making code goes here
-                ## if 'custom' in analyses:
-                ##     trait='yourTrait'
-                ##     trait_vals=[]
-                ##     for k in ll.Objects:
-                ##         if k.traits.has_key(trait):
-                ##             trait_vals.append(k.traits[trait])
-                ##     available_trait_values=sorted(bt.unique(trait_vals))
-                ##     for tr in available_trait_values:
-                ##         outfile.write('\t%s.time'%(tr))
-                ###########################################
-                treecount+1
-                outfile.write('\n') ## newline for first tree
-        #################################################################
-        if int(cerberus.group(1)) >= burnin and lower <= int(cerberus.group(1)) < upper: ## After burnin start processing
-            ll=bt.tree() ## ll is the tree object
-            start=len(cerberus.group()) ## find start of tree string in line
-            treestring=str(line[start:]) ## get tree string
-            bt.make_tree(treestring,ll) ## pass it to make_tree function
-            ll.traverse_tree() ## Traverse the tree - sets the height of each object in the tree
-            #### renaming tips
-            if len(tips)>0:
-                ll.renameTips(tips) ## Rename tips so their name refers to sequence name
-            else:
-                for k in ll.Objects:
-                    if isinstance(k,leaf):
-                        k.name=k.numName ## otherwise every tip gets a name that's the same as tree string names
-            #### calibration
-            dateCerberus=re.compile(tformat) ## search pattern + brackets on actual calendar date
-            if calibration==True: ## Calibrate tree so everything has a known position in actual time
-                tipDatesRaw=[dateCerberus.search(x).group(1) for x in tips.values()]
-                tipDates=[]
-                for tip_date in tipDatesRaw:
-                    tipDates.append(bt.calendar_to_decimal_date(tip_date,fmt=dformat,variable=True))
-                maxDate=max(tipDates) ## identify most recent tip
-                ll.setAbsoluteTime(maxDate)
-            outfile.write('%s'%cerberus.group(1)) ## write MCMC state number to output log file
-            ################################################################################
-            if 'treeLength' in analyses:
-                treeL=sum([k.length for k in ll.Objects]) ## do analysis
-                outfile.write('\t%s'%(treeL)) ## output to file
-            ###################################################
-            if 'RC' in analyses: ## 'RC' was queued as an analysis
-                Ns=[] ## empty list
-                Ss=[]
-                uNs=[]
-                uSs=[]
-                for k in ll.Objects: ## iterate over branch objects in the tree
-                    if k.traits.has_key('N'): ## if branch has a trait labelled "N"...
-                        Ns.append(k.traits['N']) ## add it to empty list
-                        Ss.append(k.traits['S']) ## likewise for every other trait
-                        uNs.append(k.traits['b_u_N'])
-                        uSs.append(k.traits['b_u_S'])
-                tNs=sum(Ns) ## sum of numbers in list
-                tSs=sum(Ss)
-                tuNs=sum(uNs)
-                tuSs=sum(uSs)
-                dNdS=(tNs/tSs)/(tuNs/tuSs) ## calculate dNdS
-                outfile.write('\t%s\t%s\t%s\t%s\t%s'%(tNs,tSs,tuNs,tuSs,dNdS)) ## output to file, separated by tabs
-            ###################################################
-            if 'tmrcas' in analyses:
-                assert calibration==True,'This analysis type requires time-calibrated trees'
-                nodes={x:None for x in tmrcas.keys()} ## each TMRCA will correspond to a single object
-                score={x:len(ll.Objects)+1 for x in tmrcas.keys()} ## this will be used to score the common ancestor candidate
-                for required in tmrcas.keys(): ## iterate over TMRCAs
-                    searchNodes=sorted([nd for nd in ll.Objects if nd.branchType=='node' and len(nd.leaves)>=len(tmrcas[required])],key=lambda n:len(n.leaves)) ## common ancestor candidates must have at least as many descendants as the list of search tips
-                    for k in searchNodes: ## iterate over candidates
-                        common,queryLeft,targetLeft=overlap(k.leaves,tmrcas[required]) ## find how many query tips exist as descendants of candidate nodes
-                        if len(targetLeft)==0 and len(queryLeft)<=score[required]: ## all of query tips must be descended from common ancestor, every extra descendant of common ancestor not in query contributes to a score
-                            nodes[required]=k ## if score improved - assign new common ancestor
-                            score[required]=len(queryLeft) ## score is extra descendants not in the list of known tips
+    # sort edges and reorder labels
+    order = np.argsort(edges)
+    edges = edges[order]
+    labels = labels[order]
 
-                outTMRCA=['%.6f'%(nodes[n].absoluteTime) for n in sorted(nodes.keys())] ## fetch absoluteTime of each identified common ancestor
-                outfile.write('\t%s'%('\t'.join(outTMRCA)))
-            ###################################################
-            if 'Sharp' in analyses:
-                assert calibration==True,'This analysis type requires time-calibrated trees'
-                assert len(analyses)==1,'More that one analysis queued in addition to Sharp, which is inadvisable'
-                outSharp=[]
-                for k in ll.Objects:
-                    if k.traits.has_key('N'):
-                        N=k.traits['N']
-                        S=k.traits['S']
-                        halfBranch=k.length*0.5
-                        if isinstance(k,node):
-                            all_leaves=[tips[lf] for lf in k.leaves]
-                            t=min(map(bt.calendar_to_decimal_date,[dateCerberus.search(x).group(1) for x in all_leaves]))-k.absoluteTime+halfBranch
-                        else:
-                            t=halfBranch
+    # find index of last edge <= time
+    idx = np.searchsorted(edges, times, side="right") - 1
 
-                        outSharp.append('(%d,%d,%.4f)'%(N,S,t))
-                outfile.write('\t%s'%('\t'.join(outSharp)))
-            ###################################################
-            if 'transitions' in analyses:
-                assert calibration==True,'This analysis type requires time-calibrated trees'
-                assert len(analyses)==1,'More that one analysis queued in addition to transitions, which is inadvisable'
-                outTransitions=[]
-                for k in ll.Objects:
-                    if k.traits.has_key('location.states') and k.parent.traits.has_key('location.states'):
-                        cur_value=k.traits['location.states']
-                        par_value=k.parent.traits['location.states']
-                        if cur_value!=par_value:
-                            outTransitions.append('{1,%s,%s,%s}'%(ll.treeHeight-k.height-0.5*k.length,par_value,cur_value))
-                outfile.write('\t%d\t%s'%(len(outTransitions),'\t'.join(outTransitions)))
-            ###################################################
-            if 'subtrees' in analyses:
-                traitName='location.states'
-                assert [k.traits.has_key(traitName) for k in ll.Objects].count(True)>0,'No branches have the trait "%s"'%(traitName)
-                for k in ll.Objects:
-                    if k.traits.has_key(traitName) and k.parent.traits.has_key(traitName) and k.parent.index!='Root' and k.traits[traitName]!=k.parent.traits[traitName] and k.traits[traitName]=='human':
-                        proceed=False ## assume we still can't proceed forward
-                        kloc=k.traits[traitName]
-                        if isinstance(k,bt.leaf): ## if dealing with a leaf - proceed
-                            N_children=1
-                            proceed=True
-                        else:
-                            N_children=len(k.leaves)
-                            if [ch.traits[traitName] for ch in k.children].count(kloc)>0:
-                                proceed=True
-                        #print k.index,k.parent.index,k.traits,k.parent.traits,k.traits[traitName]
+    # default to None
+    out = np.full(times.shape, None, dtype=object)
 
-                        if proceed==True: ## if at least one valid tip and no hanging nodes
-                            subtree=copy.deepcopy(ll.traverseWithinTrait(k,traitName))
-                            subtree_leaves=[x.name for x in subtree if isinstance(x,bt.leaf)]
+    # valid times: within [edges[0], edges[-1]]
+    mask = (idx >= 0) & (times <= edges[-1])
 
-                            if len(subtree_leaves)>0:
-                                mostRecentTip=max([bt.calendar_to_decimal_date(x.strip("'").split('|')[-1]) for x in subtree_leaves])
-                                while sum([len(nd.children)-sum([1 if ch in subtree else 0 for ch in nd.children]) for nd in subtree if isinstance(nd,bt.node) and nd.index!='Root'])>0: ## keep removing nodes as long as there are nodes with children that are not entirely within subtree
-                                    for nd in sorted([q for q in subtree if isinstance(q,bt.node)],key=lambda x:(sum([1 if ch in subtree else 0 for ch in x.children]),x.height)): ## iterate over nodes in subtree, starting with ones that have fewest valid children and are more recent
+    # assign labels for valid times
+    out[mask] = labels[idx[mask]]
 
-                                        child_status=[1 if ch in subtree else 0 for ch in nd.children] ## check how many children of current node are under the right trait value
+    return out
 
-                                        if sum(child_status)<2 and nd.index!='Root': ## if less than 2 children in subtree (i.e. not all children are under the same trait state)
-                                            #print 'removing: %d, children in: %s'%(nd.index,[location_to_country[ch.traits[traitName]] for ch in nd.children])
-                                            grand_parent=nd.parent ## fetch grandparent of node to be removed
-                                            grand_parent.children.remove(nd) ## remove node from its parent's children
+def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, traitName, timeline, headerMode = False):
+    """
+    Will take tree index, tree object, tipNames (str or list) of interest, traitName (for tracking back to root), timeline (time points at which to determine trait state along path).
+    Returns the trait state of the lineage connecting the tipNames provided to the root of the tree at each point along timeline.
+    tipNames can be a string (for one tip) or a list of tips (for multiple)
+    """
 
-                                            if sum(child_status)==0: ## node has no valid children - current grandparent will be removed on next iteration, since it will only have one child
-                                                pass
-                                            else: ## at least one child is still valid - reconnect the one valid child to grandparent
-                                                child=nd.children[child_status.index(1)] ## identify the valid child
-                                                child.parent=grand_parent ## child's parent is now its grandparent
-                                                grand_parent.children.append(child) ## child is now child of grandparent
-                                                child.length+=nd.length ## child's length now includes it's former parent's length
-                                            subtree.remove(nd) ## remove node from subtree
-                                outfile.write('\t{%s,%s,%s,%s,%d}'%(k.absoluteTime,mostRecentTip,k.parent.traits[traitName],k.traits[traitName],len(subtree_leaves)))
-                                sys.stderr.write('\t{%s,%s,%s,%s,%d}'%(k.absoluteTime,mostRecentTip,k.parent.traits[traitName],k.traits[traitName],len(subtree_leaves)))
-                                ##########
-                                ## Comment out to output stats rather than trees
-                                ##########
-#                                 if len(subtree)>0: ## only proceed if there's at least one tip in the subtree
-#                                     local_tree=bt.tree() ## create a new tree object where the subtree will be
-#                                     local_tree.Objects=subtree ## assign branches to new tree object
-#                                     local_tree.root.children.append(subtree[0]) ## connect tree object's root with subtree
-#                                     subtree[0].parent=local_tree.root ## subtree's root's parent is tree object's root
-#                                     #local_tree.root.absoluteTime=subtree[0].absoluteTime-subtree[0].length ## root's absolute time is subtree's root time
-#                                     local_tree.sortBranches() ## sort branches, draw small tree
-#                                     subtreeString=local_tree.toString()
-#                                     outfile.write('\t%s'%(subtreeString))
-            ###################################################
-            ## your analysis and output code goes here, e.g.
-            ## if 'custom' in analyses:
-            ##     out={x:0.0 for x in available_trait_values}
-            ##     for k in ll.Objects:
-            ##         if k.traits.has_key(trait):
-            ##             out[k.traits[trait]]+=k.length
-            ##     for tr in available_trait_values:
-            ##         outfile.write('\t%s'%(out[tr]))
-            ###################################################
-            outfile.write('\n') ## newline for post-burnin tree
-        treecount+=1 ## increment tree counter
-        ################################################################################
-        if treecount==threshold: ## tree passed progress bar threshold
-            timeTakenSoFar=dt.datetime.now()-begin ## time elapsed
-            timeElapsed=float(divmod(timeTakenSoFar.total_seconds(),60)[0]+(divmod(timeTakenSoFar.total_seconds(),60)[1])/float(60))
-            timeRate=float(divmod(timeTakenSoFar.total_seconds(),60)[0]*60+divmod(timeTakenSoFar.total_seconds(),60)[1])/float(treecount+1) ## rate at which trees have been processed
-            processingRate.append(timeRate) ## remember rate
-            ETA=(sum(processingRate)/float(len(processingRate))*(Ntrees-treecount))/float(60)/float(60) ## estimate how long it'll take, given mean processing rate
+    tree = make_tree(treeString, 'time')
+    tree.rename_tips(tipRenameDict)
+    tree.traverse_tree()
+    tree.set_absolute_time(maxDate)
+    
+    if isinstance(tipNames, str): ## was given a single tip
+        focalTips = tree.get_external(lambda k: k.is_leaf() and k.name == tipNames) ## get leaf object
+        assert len(focalTips) == 1, f'Found {len(focalTips)} tips named {tipNames} in tree.'
+    elif isinstance(tipNames, list): ## was given a list of tips
+        focalTips = tree.get_external(lambda k: k.is_leaf() and k.name in tipNames) ## get leaf objects
+        assert len(focalTips) == len(tipNames), f'Found {len(focalTips)} tips but {len(tipNames)} were expected in tree.\nFound in tree: {', '.join([k.name for k in focalTips if k.name in tipNames])}\nMissing from tree: {', '.join([k.name for k in focalTips if k.name not in tipNames])}'
 
-            excessiveTrees=treecount
-            if treecount>=10000:
-                excessiveTrees=10000
-            if timeElapsed>60.0: ## took over 60 minutes
-                reportElapsed=timeElapsed/60.0 ## switch to hours
-                reportUnit='h' ## unit is hours
-            else:
-                reportElapsed=timeElapsed ## keep minutes
-                reportUnit='m'
+    output_string = [] if headerMode == False else ['state']
+    
+    for focalTip in focalTips: ## iterate over leaf objects
 
-            sys.stderr.write('\r') ## output progress bar
-            sys.stderr.write("[%-30s] %4d%%  trees: %5d  elapsed: %5.2f%1s  ETA: %5.2fh (%6.1e s/tree)" % ('='*(excessiveTrees/progress_update),treecount/float(Ntrees)*100.0,treecount,reportElapsed,reportUnit,ETA,processingRate[-1]))
-            sys.stderr.flush()
+        if headerMode == False: ## processing tree and generating actual output
+            path = focalTip.get_path_to_root() ## ignore last value (parent of root)
+        
+            branchTimes = np.array([k.absoluteTime for k in path][::-1])
+            branchTraits = np.array([k.traits[traitName] for k in path][::-1])
+            
+            traitSwitchIdx = np.flatnonzero(branchTraits[1:] != branchTraits[:-1]) + 1 ## identify indices where trait switches
+            traitSwitchIdx = np.concatenate(([0], traitSwitchIdx, [len(branchTimes)-1])) ## add first and last value to indices
+            traitSwitchStates = branchTraits[traitSwitchIdx] ## grab (new) traits after switch
 
-            threshold+=progress_update ## increment to next threshold
-        ################################################################################
-        if 'End;' in line:
-            pass
-outfile.close()
-sys.stderr.write('\nDone!\n') ## done!
+            interpolatedLabels = label_timepoints(timeline, branchTimes[traitSwitchIdx], traitSwitchStates)
+
+            output_string += [traitState if traitState else '' for traitState in interpolatedLabels]
+        else: ## doing header
+            output_string += [f'{focalTip.name}__{t}' for t in timeline] ## only outputs output file header
+
+    return i, state, output_string
+
+def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictMRCA = False, headerMode = False):
+    """
+    Takes tipNames that define a clade and return its TMRCA.
+    strictMRCA parameter controls whether we want to restrict the common ancestor dates to just nodes whose descendants exactly match the descendants required or the common ancestor in its general sense. Basically whether we want to condition the TMRCA on monophyly of the tips provided.
+    If tipNames is a list, the function returns a single TMRCA value corresponding to the common ancestor of those tips.
+    If tipNames is a dict, its structure should be {'tmrca A': ['tip A1', 'tip A2', 'tip C'], 'tmrca B': ['tip B1', 'tip B2', 'tip D']} and it will returns a separate TMRCA value for each list of tips provided in the dict values.
+    """
+    tree = make_tree(treeString, 'time')
+    tree.rename_tips(tipRenameDict)
+    tree.traverse_tree()
+    tree.set_absolute_time(maxDate)
+    
+    if isinstance(tipNames, list):
+        tipNames = {'tmrca': tipNames} ## convert to dict format for later processing
+    
+    descendants = {}
+    for tmrca in tipNames:
+        assert len(tipNames[tmrca]) >= 2, f'Need at least 2 tip names to identify TMRCA, {len(tipNames[tmrca])} provided.'
+        descendants[tmrca] = tree.get_external(lambda k: k.name in tipNames[tmrca]) ## if dict - key is tmrca name and value is a list of str corresponding to tip names
+        assert len(descendants[tmrca]) == len(tipNames[tmrca]), f'Not all tips could be found: {', '.join([name for name in tipNames if name not in [k.name for k in descendants[tmrca]]])}.'
+
+    out = []
+    for tmrca in descendants: ## iterate over required tips
+        if headerMode == False:
+            commonAncestor = tree.find_MRCA(descendants[tmrca])
+            if (strictMRCA and commonAncestor.leaves == set(tipNames[tmrca])) or strictMRCA == False: ## want strict mrca and node matches OR don't need strict mrca
+                assert commonAncestor.absoluteTime is not None, f'Node {commonAncestor.index} does not have a set absolute time. Function received maxDate = {maxDate}'
+                out += [str(commonAncestor.absoluteTime)]
+            elif strictMRCA: ## need strictMRCA which wasn't found, write nan
+                out += ['nan']
+        else: ## header mode - just output tmrca name
+            out += [tmrca]
+    
+    return i, state, out
