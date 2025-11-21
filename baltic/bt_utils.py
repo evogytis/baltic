@@ -408,3 +408,31 @@ def desaturate_cmap(cmap, desat = 0.65):
     desat_colours = [desaturate(c, desat = desat) for c in base_colours]
 
     return ListedColormap(desat_colours)
+
+def hpd(data, level = 0.95):
+    """
+    Return highest posterior density interval from a list,
+    given the posterior density interval required.
+    Copyright (C) 2010 Joseph Heled
+    Author: Joseph Heled <jheled@gmail.com>
+    """
+    d = list(data)
+    d.sort()
+
+    nData = len(data)
+    nIn = int(round(level * nData))
+    if nIn < 2 :
+        return None
+    #raise RuntimeError("Not enough data. N data: %s"%(len(data)))
+ 
+    i = 0
+    r = d[i+nIn-1] - d[i]
+    for k in range(len(d) - (nIn - 1)) :
+        rk = d[k+nIn-1] - d[k]
+        if rk < r :
+            r = rk
+            i = k
+
+    assert 0 <= i <= i+nIn-1 < len(d)
+ 
+    return (d[i], d[i+nIn-1])
