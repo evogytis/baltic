@@ -853,21 +853,37 @@ class Tree: ## tree class
                 eta += w
                 self._assign_unrooted_tree_coordinates(circStart, ch, total, padNodes)
 
-    def find_MRCA(self, descendants):
-        assert (
-            len(descendants) > 1
-        ), f"Not enough descendants to find common ancestor: {len(descendants)}"
-        pathsToRoot = {
-            k.index: set(k.get_path_to_root()) for k in descendants
-        }  ## for every descendant create an empty set
-        # for k in descendants: ## iterate through every descendant
-        #     curNode=k ## start descent from descendant
-        #     while curNode: ## while not at root
-        #         pathsToRoot[k.index].add(curNode) ## remember every node visited along the way
-        #         curNode=curNode.parent ## descend
+    # def find_MRCA(self, descendants):
+    #     assert (
+    #         len(descendants) > 1
+    #     ), f"Not enough descendants to find common ancestor: {len(descendants)}"
+    #     pathsToRoot = {
+    #         k.index: set(k.get_path_to_root()) for k in descendants
+    #     }  ## for every descendant create an empty set
+    #     # for k in descendants: ## iterate through every descendant
+    #     #     curNode=k ## start descent from descendant
+    #     #     while curNode: ## while not at root
+    #     #         pathsToRoot[k.index].add(curNode) ## remember every node visited along the way
+    #     #         curNode=curNode.parent ## descend
 
-        # return the most recent branch that is shared across all paths to root
-        return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
+    #     # return the most recent branch that is shared across all paths to root
+    #     return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
+    def find_MRCA(self, descendants):
+        """
+        This is a ChatGPT suggested function that's meant to be much faster.
+        """
+        paths = [k.get_path_to_root()[::-1] for k in descendants]
+        mrca = None
+
+        # zip stops when any list ends
+        for nodes in zip(*paths):
+            # if all same object, continue
+            if all(n is nodes[0] for n in nodes):
+                mrca = nodes[0]
+            else:
+                break
+
+        return mrca
 
 
     def collapse_subtree_to_clade(self,
