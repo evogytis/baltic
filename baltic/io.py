@@ -2,6 +2,7 @@ import re
 import json
 from io import BytesIO as csio
 import logging
+import warnings
 import requests
 from baltic.baltic import make_tree, make_tree_JSON
 from baltic.bt_utils import calendar_to_decimal_date
@@ -9,9 +10,29 @@ from baltic.bt_utils import calendar_to_decimal_date
 logger = logging.getLogger("baltic.io")
 
 
+def process_tip_dates(tree, tipRegex, dateFmt, variableDate):
+    tip_dates = []
+    tip_names = []
+    tipDateUncertainties = {}
+    for k in tree.get_external():
+        tip_names.append(k.name)
+        match = re.search(tipRegex, k.name)
+        if match:
+            date = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate)
+            tip_dates.append(date[0] if variableDate else date) ## date will be tuple of (date, (dateMin,dateMax)) if variableDate == True
+            tipDateUncertainties[k.name] = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = True) ## logic around here might need more thinking
+        else:
+            warnings.warn(f"Collection date of leaf {k.name} was not captured by regex {tipRegex}.")
+
+    assert len(tip_dates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
+
+    tree.set_absolute_time(max(tip_dates), justLeaves = True if tree.treeType == 'divergence' else False)
+    if variableDate:
+        tree._assign_date_uncertainty(tipDateUncertainties)
+
 def load_newick(treePath,
                 treeType,
-                tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)',
+                tipRegex=r'\|([0-9\-]+)',
                 dateFmt='%Y-%m-%d',
                 variableDate=True,
                 absoluteTime=False,
@@ -32,15 +53,7 @@ def load_newick(treePath,
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime:
-        tip_dates = []
-        tip_names = []
-        for k in ll.get_external():
-            tip_names.append(k.name)
-            match = re.search(tipRegex, k.name)
-            if match:
-                tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate))
-        assert len(tip_dates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
-        ll.set_absolute_time(max(tip_dates))
+        process_tip_dates(tree = ll, tipRegex = tipRegex, dateFmt = dateFmt, variableDate = variableDate)
 
     if isinstance(treePath, str):
         handle.close()
@@ -98,16 +111,7 @@ def load_nexus(treePath,
         ll.rename_tips(tips) ## renames tips from numbers to actual names
         ll.tipMap = tips
     if absoluteTime:
-        tip_dates = []
-        tip_names = []
-        for k in ll.get_external():
-            tip_names.append(k.name)
-            match = re.search(tipRegex, k.name)
-            if match:
-                tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate))
-
-        assert len(tip_dates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
-        ll.set_absolute_time(max(tip_dates))
+        process_tip_dates(tree = ll, tipRegex = tipRegex, dateFmt = dateFmt, variableDate = variableDate)
 
     if isinstance(treePath,str):
         handle.close()

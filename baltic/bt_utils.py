@@ -1,4 +1,5 @@
 import re
+import copy
 import logging
 import datetime as dt
 import calendar
@@ -12,30 +13,119 @@ from matplotlib.collections import LineCollection
 
 logger = logging.getLogger("baltic.bt_utils")
 
-def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
+
+
+def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
+    """
+    Convert calendar date into decimal year.
+    If variable=True, return (midpoint, (min, max)) where min/max reflect
+    the full possible range implied by the precision of the input date.
+    """
+
     if not fmt:
         return date
-    delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
-    delimit=None
-    if delimiter is not None:
-        delimit=delimiter.group()
 
-    if variable: ## if date is variable - extract what is available
-        if delimit is not None:
-            dateL=len(date.split(delimit)) ## split date based on symbol
+    # Detect delimiter in the format (e.g. '-', '/', etc.)
+    delimiter = re.search(r"[^0-9A-Za-z%]", fmt)
+    delimit = delimiter.group() if delimiter is not None else None
+
+    # ------------------------------------------------------------------
+    # 1. Determine how much of the date is present when variable=True
+    # ------------------------------------------------------------------
+    if variable:
+        if delimit:
+            dateL = len(date.split(delimit))
         else:
-            dateL=1 ## no non-alphanumeric characters in date, assume dealing with an imprecise date (something like just year)
+            # If no delimiter exists, treat the date as a single field (e.g. "2020")
+            dateL = 1
+        # Reduce fmt to available precision
+        if dateL == 2: # "YYYY-MM"
+            fmt = delimit.join(fmt.split(delimit)[:-1])
+        elif dateL == 1: # "YYYY"
+            fmt = delimit.join(fmt.split(delimit)[:-2])
+        # If dateL == 3, fmt stays as full (YYYY-MM-DD)
 
-        if dateL==2:
-            fmt=delimit.join(fmt.split(delimit)[:-1]) ## reduce fmt down to what's available
-        elif dateL==1:
-            fmt=delimit.join(fmt.split(delimit)[:-2])
+    adatetime = dt.datetime.strptime(date, fmt)
+    year = adatetime.year
 
-    adatetime=dt.datetime.strptime(date,fmt) ## convert to datetime object
-    year = adatetime.year ## get year
-    boy = dt.datetime(year, 1, 1) ## get beginning of the year
-    eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
-    return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
+    def to_decimal(d: dt.datetime): # Convert an exact datetime into a decimal year
+        boy = dt.datetime(d.year, 1, 1)
+        eoy = dt.datetime(d.year + 1, 1, 1)
+        return d.year + (d - boy).total_seconds() / (eoy - boy).total_seconds()
+
+    if not variable:
+        return to_decimal(adatetime)
+
+    if delimit:
+        dateL = len(date.split(delimit))
+    else:
+        dateL = 1
+
+    # CASE 1 — Full date available (YYYY-MM-DD)
+    if dateL == 3:
+        dec = to_decimal(adatetime)
+        return dec, (dec, dec)
+
+    # CASE 2 — Only year and month (YYYY-MM)
+    if dateL == 2:
+        year = adatetime.year
+        month = adatetime.month
+
+        # Min = first day of that month
+        dmin = dt.datetime(year, month, 1)
+
+        # Max = last day of that month
+        last_day = calendar.monthrange(year, month)[1]
+        dmax = dt.datetime(year, month, last_day)
+
+        dec_min = to_decimal(dmin)
+        dec_max = to_decimal(dmax)
+        dec_mid = 0.5 * (dec_min + dec_max)
+
+        return dec_mid, (dec_min, dec_max)
+
+    # CASE 3 — Only year given (YYYY)
+    if dateL == 1:
+        # Min = Jan 1 of that year
+        dmin = dt.datetime(year, 1, 1)
+        # Max = Dec 31 of that year
+        dmax = dt.datetime(year, 12, 31)
+
+        dec_min = to_decimal(dmin)
+        dec_max = to_decimal(dmax)
+        dec_mid = 0.5 * (dec_min + dec_max)
+
+        return dec_mid, (dec_min, dec_max)
+
+    # Fallback (shouldn't happen)
+    dec = to_decimal(adatetime)
+    return dec, (dec, dec)
+
+
+# def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
+#     if not fmt:
+#         return date
+#     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
+#     delimit=None
+#     if delimiter is not None:
+#         delimit=delimiter.group()
+
+#     if variable: ## if date is variable - extract what is available
+#         if delimit is not None:
+#             dateL=len(date.split(delimit)) ## split date based on symbol
+#         else:
+#             dateL=1 ## no non-alphanumeric characters in date, assume dealing with an imprecise date (something like just year)
+
+#         if dateL==2:
+#             fmt=delimit.join(fmt.split(delimit)[:-1]) ## reduce fmt down to what's available
+#         elif dateL==1:
+#             fmt=delimit.join(fmt.split(delimit)[:-2])
+
+#     adatetime=dt.datetime.strptime(date,fmt) ## convert to datetime object
+#     year = adatetime.year ## get year
+#     boy = dt.datetime(year, 1, 1) ## get beginning of the year
+#     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
+#     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
 def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
     year = int(timepoint)
@@ -303,9 +393,9 @@ def unnest(nodeList, towardsRoot = True):
     return nodeList ## when done return list of remaining nodes
 
 def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
-    slope,intercept,rval,_,_ = linregress(tipDates,tipHeights) ## run linear regression
-    corr = np.corrcoef((tipDates,tipHeights))[0,1] ## correlation coefficient
-    ssq = sum([(y-(slope*x+intercept))**2 for x,y in zip(tipDates,tipHeights)]) ## sum of squares
+    slope, intercept, rval, _, _ = linregress(tipDates,tipHeights) ## run linear regression
+    corr = np.corrcoef((tipDates, tipHeights))[0,1] ## correlation coefficient
+    ssq = sum([(y - (slope * x + intercept))**2 for x, y in zip(tipDates, tipHeights)]) ## sum of squares
 
     if stat=='correlation': ## set stat to optimise
         localStat = corr
@@ -318,21 +408,112 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
 
     optStat = res[stat] if stat in res else (np.inf if stat in ['sum of squares'] else -np.inf)
 
+    invalidateRegression = True if forcePositive and slope < 0 else False
+
     if (localStat < optStat if stat in ['sum of squares'] else localStat > optStat): ## minimise sum of squares or maximise correlation/r^2
-        if forcePositive and slope<0: ## force positive True and slope<0
-            pass ## if forcing positive root slope must be positive, do nothing
-        else: ## force_positive is False or true and slope>0
-            optStat = localStat ## better root found
+        # if forcePositive and slope < 0: ## force positive True and slope<0
+        #     pass ## if forcing positive root, slope must be positive; do nothing
+        #     res['correlation'] = -np.inf
+        #     res['sum of squares'] = np.inf
+        #     res['slope'] = slope
+        #     res['intercept'] = intercept
+        #     res['r^2'] = -np.inf
+        #     res['root'] = rootCandidate
+        #     if frac is not None: res['frac'] = frac
+        # else: ## force_positive is False or true and slope>0
+        optStat = localStat ## better root found
 #             new_root = [w for w in self.Objects if w.index==k.index][0]
-            res['correlation']=corr
-            res['sum of squares']=ssq
-            res['slope']=slope
-            res['intercept']=intercept
-            res['r^2']=rval
-            res['root']=rootCandidate
-            if frac is None: res['frac']=frac
+        res['correlation'] = -np.inf if invalidateRegression else corr
+        res['sum of squares'] = np.inf if invalidateRegression else ssq
+        res['slope'] = slope
+        res['intercept'] = intercept
+        res['r^2'] = -np.inf if invalidateRegression else rval
+        res['root'] = rootCandidate
+        if frac is not None: res['frac'] = frac
 
     return res
+
+def _rtt_worker(args):
+    """
+    Worker for root_by_regression.
+
+    args = (
+        tree,                # a picklable copy of the tree
+        root_index,          # candidate root node index
+        fixed_times,         # dict: tip.index -> fixed date
+        uncertain_ranges,    # dict: tip.index -> (min_date, max_date)
+        n_mc,                # number of Monte Carlo iterations
+        stat,                # 'r^2', 'correlation', or 'sum of squares'
+        forcePositive,       # as in your original function
+    )
+    """
+    (tree,
+     root_index,
+     tipDates,
+     uncertainDateRanges,
+     n_mc,
+     stat,
+     forcePositive) = args
+
+    tree_copy = copy.deepcopy(tree)
+
+    # find candidate root node inside worker copy
+    candidate = next(obj for obj in tree_copy.Objects if obj.index == root_index)
+
+    # Reroot on this candidate for this sample
+    cll = tree_copy.reroot(candidate)
+    tips = cll.get_external()
+
+    rootDistances = {k.name: k.height for k in tips} ## these don't change
+
+    best_res = None
+    best_score = None
+    best_dates = None
+    best_branch_frac = None
+
+    rng = np.random.default_rng()
+
+    for _ in range(n_mc): ## Monte Carlo iterations
+
+        for k in uncertainDateRanges:
+            tipDates[k] = rng.uniform(*uncertainDateRanges[k]) ## for uncertain tips sample from possible date range randomly
+
+        xs = [tipDates[k.name] for k in tips]
+        ys = [rootDistances[k.name] for k in tips]
+
+        # Run root-to-tip regression
+        res_local = {}
+        res_local = _root_to_tip(
+            candidate, xs, ys, res_local,
+            stat=stat, forcePositive=forcePositive
+        )
+
+        if res_local: ## valid regression (when forcePositive == True but slope is negative res_local is None)
+            # Compute a scalar score, taking into account direction of optimisation
+            if stat == "sum of squares":
+                # Smaller is better
+                score = -res_local["sum of squares"]
+            else:
+                # Larger is better for r^2 or correlation
+                score = res_local[stat]
+
+            if best_score is None or score > best_score:
+                best_res = res_local
+                best_score = score
+                best_dates = {k: tipDates[k] for k in uncertainDateRanges}
+
+    if best_res is None:
+        best_res = {}
+
+    best_res["root_index"] = root_index
+    best_res["score"] = best_score
+    best_res["monte_carlo_dates"] = best_dates
+
+    # IMPORTANT: we replace 'root' with index so we don't leak deep-copied nodes
+    best_res["root"] = root_index
+
+    return best_res
+
 
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 

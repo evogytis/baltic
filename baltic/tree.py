@@ -11,7 +11,7 @@ from baltic.node import Node
 from baltic.leaf import Leaf
 from baltic.clade import Clade
 from baltic.reticulation import Reticulation
-from baltic.bt_utils import _root_to_tip, project_to_polar, project_polar_vector, unnest
+from baltic.bt_utils import project_to_polar, project_polar_vector, unnest
 
 logger = logging.getLogger("baltic.Tree")
 
@@ -207,14 +207,20 @@ class Tree: ## tree class
         self.sort_branches()
 
 
-    def set_absolute_time(self, mostRecentSamplingDate):
+    def set_absolute_time(self, mostRecentSamplingDate, justLeaves = False):
         logger.debug("Setting absoluteTime for all branches.")
         logger.debug(f"MRSD: {mostRecentSamplingDate}")
         for k in self.Objects:  ## iterate over all objects
+            if justLeaves and k.is_node():
+                continue
             k.absoluteTime = (
                 mostRecentSamplingDate - self.treeHeight + k.height
             )  ## heights are in units of time from the root
-        self.mostRecent = max(k.absoluteTime for k in self.Objects)
+        self.mostRecent = max(k.absoluteTime for k in self.Objects if k.absoluteTime)
+
+    def _assign_date_uncertainty(self, dateUncertainties):
+        for k in self.get_external():
+            k.absoluteTime, k.absoluteTimeRange = dateUncertainties[k.name]
 
     def rescale(self, factor):
         logger.debug(f"Rescaling tree by factor of {factor}.")
@@ -542,88 +548,246 @@ class Tree: ## tree class
 
         return self
 
-    def root_by_regression(self, stat="r^2", forcePositive=True):
+    # def root_by_regression(self, stat="r^2", forcePositive=True):
+    #     validRootingMethods = ["r^2", "correlation", "sum of squares"]
+    #     assert (
+    #         stat in validRootingMethods
+    #     ),f"Invalid option for root-to-tip regression: {stat} (options are {validRootingMethods})"
+
+    #     cll = copy.deepcopy(self)  ## deepcopy entire tree
+
+    #     res = {}  ## will be used to track better regressions with new roots
+    #     for k in self.Objects[1:]:  ## iterate over branches in tree (ignore root)
+    #         cll = cll.reroot(
+    #             [w for w in cll.Objects if w.index == k.index][0],
+    #             fixSingletons=False,
+    #         )  ## reroot on branch provided
+    #         tips = cll.get_external()  ## get all tips
+
+    #         xs, ys = zip(
+    #             *[(w.absoluteTime, w.height) for w in tips]
+    #         )  ## get collection dates
+    #         res = _root_to_tip(
+    #             k, xs, ys, res, stat=stat, forcePositive=forcePositive
+    #         )  ## check root-to-tip regression, update res if better
+    #     ##############
+    #     logger.debug(
+    #             f"Rooting tree first time at node {res['root']} with regression: {res}"
+    #         )
+    #     self = self.reroot(
+    #         res["root"]
+    #     )  ## reroot on branch optimising stat
+    #     ############
+    #     if (
+    #         len(self.root.children) == 2
+    #     ):  ## if root is strictly bifurcating - also optimise branch fraction
+    #         logger.debug("Bifurcating root, finding more precise rooting along new root")
+    #         res["frac"] = 0.0  ## add frac argument
+    #         left, right = self.root.children  ## get left and right children
+
+    #         totalBranch = (
+    #             left.length + right.length
+    #         )  ## total amount of branch length adjustment available at root
+    #         leftSubtree = self.traverse_tree(left)  ## get left subtree
+    #         rightSubtree = self.traverse_tree(right)  ## get right subtree
+
+    #         lxs = [
+    #             k.absoluteTime for k in leftSubtree
+    #         ]  ## get x coordinates for left subtree #TODO: these don't get used
+    #         rxs = [
+    #             k.absoluteTime for k in rightSubtree
+    #         ]  ## get x coordinates for right subtree #TODO: see above
+
+    #         for f in np.linspace(
+    #             0, 1, 21
+    #         ):  ## check root positions along best overall root
+    #             adjustL = (
+    #                 -left.length + totalBranch * f
+    #             )  ## height adjustments for left subtree
+    #             adjustR = -right.length + totalBranch * (
+    #                 1 - f
+    #             )  ## height adjustments for right subtree
+
+    #             lys = [
+    #                 k.height + adjustL for k in leftSubtree
+    #             ]  ## adjust left subtree heights #TODO: see above
+    #             rys = [
+    #                 k.height + adjustR for k in rightSubtree
+    #             ]  ## same for right #TODO: see above
+
+    #             res = _root_to_tip(
+    #                 left, xs, ys, res, stat=stat, forcePositive=forcePositive, frac=f
+    #             )  ## check regression
+
+    #         self = self.reroot(
+    #             branch=res["root"], branchFrac=res["frac"]
+    #         )  ## reroot on branch optimising stat
+    #     #############
+    #     logger.info(f"Correlation coefficient: {res['correlation']}")
+    #     logger.info(f"Sum of squares: {res['sum of squares']}")
+    #     logger.info(f"Evolutionary rate: {res['slope']}")
+    #     logger.info(f"Intercept (TMRCA): {max(xs) - res['intercept']}")
+    #     logger.info(f"r^2: {res['r^2']}")
+
+    #     return self
+
+
+    def root_by_regression(
+        self,
+        stat: str = "r^2",
+        forcePositive: bool = True,
+        nJobs: int | None = None,
+        baseMCiters: int = 20,
+        MCitersPerTip: int = 10,
+        maxMCiters: int = 400,
+        returnMCdates: bool = True
+    ):
+        from baltic.bt_utils import _root_to_tip, _rtt_worker, decimal_to_calendar_date
+
         validRootingMethods = ["r^2", "correlation", "sum of squares"]
-        assert (
-            stat in validRootingMethods
-        ),f"Invalid option for root-to-tip regression: {stat} (options are {validRootingMethods})"
+        assert stat in validRootingMethods, (
+            f"Invalid option for root-to-tip regression: {stat} "
+            f"(options are {validRootingMethods})"
+        )
 
-        cll = copy.deepcopy(self)  ## deepcopy entire tree
+        func_logger = logging.getLogger("baltic.tree.root_by_regression")
+        func_logger.setLevel(logging.INFO)
+        func_logger.propagate = False
 
-        res = {}  ## will be used to track better regressions with new roots
-        for k in self.Objects[1:]:  ## iterate over branches in tree (ignore root)
-            cll = cll.reroot(
-                [w for w in cll.Objects if w.index == k.index][0],
-                fixSingletons=False,
-            )  ## reroot on branch provided
-            tips = cll.get_external()  ## get all tips
+        if not func_logger.handlers:
+            import sys
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(logging.Formatter("[root_by_regression] %(message)s"))
+            handler.setLevel(logging.INFO)
+            func_logger.addHandler(handler)
 
-            xs, ys = zip(
-                *[(w.absoluteTime, w.height) for w in tips]
-            )  ## get collection dates
-            res = _root_to_tip(
-                k, xs, ys, res, stat=stat, forcePositive=forcePositive
-            )  ## check root-to-tip regression, update res if better
-        ##############
-        logger.debug(
-                f"Rooting tree first time at node {res['root']} with regression: {res}"
-            )
-        self = self.reroot(
-            res["root"]
-        )  ## reroot on branch optimising stat
-        ############
-        if (
-            len(self.root.children) == 2
-        ):  ## if root is strictly bifurcating - also optimise branch fraction
-            logger.debug("Bifurcating root, finding more precise rooting along new root")
-            res["frac"] = 0.0  ## add frac argument
-            left, right = self.root.children  ## get left and right children
+        func_logger.info(f"Starting root-to-tip regression, optimising {stat}.")
 
-            totalBranch = (
-                left.length + right.length
-            )  ## total amount of branch length adjustment available at root
-            leftSubtree = self.traverse_tree(left)  ## get left subtree
-            rightSubtree = self.traverse_tree(right)  ## get right subtree
+        candidates = self.Objects[1:]
+        if not candidates:
+            func_logger.warning("Tree has no non-root nodes; returning unchanged.")
+            return self
 
-            lxs = [
-                k.absoluteTime for k in leftSubtree
-            ]  ## get x coordinates for left subtree #TODO: these don't get used
-            rxs = [
-                k.absoluteTime for k in rightSubtree
-            ]  ## get x coordinates for right subtree #TODO: see above
+        ## Store uncertain dates for Monte Carlo sampling
+        tips = self.get_external()
+        tipDates = {k.name: k.absoluteTime for k in tips} ## get all tip dates
 
-            for f in np.linspace(
-                0, 1, 21
-            ):  ## check root positions along best overall root
-                adjustL = (
-                    -left.length + totalBranch * f
-                )  ## height adjustments for left subtree
-                adjustR = -right.length + totalBranch * (
-                    1 - f
-                )  ## height adjustments for right subtree
+        uncertainDateTips = [k for k in tips if np.diff(k.absoluteTimeRange)[0] > 1e-10] ## get leaf objects where difference between min and max dates is above threshold
+        uncertainDates = {k.name: k.absoluteTimeRange for k in uncertainDateTips} ## get uncertain date ranges for tips with uncertain dates
 
-                lys = [
-                    k.height + adjustL for k in leftSubtree
-                ]  ## adjust left subtree heights #TODO: see above
-                rys = [
-                    k.height + adjustR for k in rightSubtree
-                ]  ## same for right #TODO: see above
+        nUncertain = len(uncertainDateTips) ## count how many tips don't have precise dates
+        if nUncertain == 0:
+            nMC = 1
+            func_logger.info("All tip dates precise; running a single root-to-tip regression worker iteration.")
+        else:
+            nMC = baseMCiters + MCitersPerTip * nUncertain
+            nMC = min(maxMCiters, nMC)
 
-                res = _root_to_tip(
-                    left, xs, ys, res, stat=stat, forcePositive=forcePositive, frac=f
-                )  ## check regression
+        tasks = [(self, k.index, tipDates, uncertainDates, nMC, stat, forcePositive) for k in candidates]
 
-            self = self.reroot(
-                branch=res["root"], branchFrac=res["frac"]
-            )  ## reroot on branch optimising stat
-        #############
-        logger.info(f"Correlation coefficient: {res['correlation']}")
-        logger.info(f"Sum of squares: {res['sum of squares']}")
-        logger.info(f"Evolutionary rate: {res['slope']}")
-        logger.info(f"Intercept (TMRCA): {max(xs) - res['intercept']}")
-        logger.info(f"r^2: {res['r^2']}")
+        ## run root-to-tip regressions in parallel
+        if nJobs is None or nJobs <= 0:
+            from os import cpu_count
+            nJobs = cpu_count() or 1
 
-        return self
+        func_logger.info(
+            f"{len(candidates)} candidate roots, "
+            f"{nUncertain} imprecise dates; "
+            f"Running {nMC} Monte Carlo iterations to sample dates using "
+            f"{nJobs} workers."
+        )
+
+        if len(tasks) == 1:
+            # trivial case, no need to spin up a pool
+            results = [_rtt_worker(tasks[0])]
+        else:
+            from concurrent.futures import ProcessPoolExecutor
+
+            with ProcessPoolExecutor(max_workers=nJobs) as pool:
+                results = list(pool.map(_rtt_worker, tasks))
+
+        ## get best root, scores were precomputed in worker and already handle stat direction
+        best_res = max(results, key=lambda r: r["score"])
+        best_root_index = best_res["root_index"]
+        if nUncertain > 0:
+            best_uncertain_dates = best_res["monte_carlo_dates"]
+
+        func_logger.debug(f"Best root (coarse) at index {best_root_index} with regression stats: {best_res}")
+
+        ## reroot on best root
+        best_root_node = next(obj for obj in self.Objects if obj.index == best_root_index)
+        self = self.reroot(best_root_node)
+
+        ## for bifurcating roots check whether one of 20 equally-spaced points along branch maximise regression
+        res_final = best_res  # will be overwritten if we refine
+
+        if len(self.root.children) == 2:
+            func_logger.debug("Bifurcating root, refining root position along the root branch.")
+
+            left, right = self.root.children
+
+            totalBranch = left.length + right.length
+            leftSubtree = self.traverse_tree(left)
+            rightSubtree = self.traverse_tree(right)
+
+            # Build xs / ys for the *current* tree using midpoints for any remaining ranges.
+            tips_current = self.get_external()
+
+            tip_is_left = {k.name: False for k in tips_current}
+            tip_is_right = {k.name: False for k in tips_current}
+
+            for k in leftSubtree:
+                tip_is_left[k.name] = True
+            for k in rightSubtree:
+                tip_is_right[k.name] = True
+
+            xs = []
+            for k in tips_current:
+                date = k.absoluteTime if k.name not in best_uncertain_dates else best_uncertain_dates[k.name] ## fetch original absoluteTime if tip date precise, otherwise grab Monte Carlo inferred value
+                xs.append(date)
+
+            res_frac = {}
+            res_frac["frac"] = 0.0  # start with fraction 0 (the current position)
+
+            for f in np.linspace(0, 1, 21): ## run optimisation of branchFrac
+                adjustL = -left.length + totalBranch * f
+                adjustR = -right.length + totalBranch * (1 - f)
+
+                ys_f = []
+                for k in tips_current:
+                    if tip_is_left[k.name]:
+                        ys_f.append(k.height + adjustL)
+                    elif tip_is_right[k.name]:
+                        ys_f.append(k.height + adjustR)
+                    else:
+                        ys_f.append(k.height)
+
+                res_frac = _root_to_tip(
+                    left, xs, ys_f, res_frac,
+                    stat=stat, forcePositive=forcePositive, frac=f
+                )
+
+            self = self.reroot(branch=res_frac["root"], branchFrac=res_frac["frac"])
+            res_final = res_frac
+
+        ## reporting
+        corr = res_final.get("correlation", None)
+        sse = res_final.get("sum of squares", None)
+        slope = res_final.get("slope", None)
+        intercept = res_final.get("intercept", None)
+        r2 = res_final.get("r^2", None)
+
+        func_logger.info(f"Correlation coefficient: {corr:.4g}")
+        func_logger.info(f"Sum of squares: {sse:.4g}")
+        func_logger.info(f"r^2: {r2:.4g}")
+        func_logger.info(f"Evolutionary rate (slope): {slope:.4e}")
+        tmrca = -intercept / slope
+        func_logger.info(f"Intercept: {intercept:.4g} TMRCA: {tmrca:.3f} / {decimal_to_calendar_date(tmrca, fmt = '%Y-%b-%d')}")
+        
+        if returnMCdates:
+            return self, best_uncertain_dates
+        else:
+            return self
 
     def sort_branches(self, descending=True, sortFxn=None, operationFxn=None):
         mod = 1 if descending else -1
