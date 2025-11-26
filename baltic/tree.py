@@ -191,7 +191,7 @@ class Tree: ## tree class
             for k in sorted(multitypeNodes, key=lambda x: -x.height):
 
                 child = k.children[0]
-                if k.parent.index:
+                if k.parent is not None:
                     grandparent = k.parent
                 else:
                     grandparent = self.root
@@ -418,7 +418,7 @@ class Tree: ## tree class
             # Identify the midpoint and reroot there.
             # Trace the path to the outgroup tip until all of the root depth has
             # been traveled/accounted for.
-            path = tip2.get_path_to_root()[:-1]
+            path = tip2.get_path_to_root()
 
             for node in path[::-1]:  ## iterate from old root to new
                 rootRemainder -= node.length
@@ -435,9 +435,7 @@ class Tree: ## tree class
             return self
 
         ##############
-        path = branch.get_path_to_root()[
-            :-1
-        ]  ## get path from new root to old root, ignore actual root node
+        path = branch.get_path_to_root()  ## get path from new root to old root, ignore actual root node
         path = path[-2::-1]  ## invert
 
         ogLen = float(branch.length)  ## store branch length on the new root branch
