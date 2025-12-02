@@ -275,6 +275,166 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
 
     return ax
 
+
+def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None, style = 'simple', orientation = 'horizontal', ySpan = None, lineKwargs = None, textKwargs = None):
+    """
+    Plots a scale bar at given coordinates, can plot a scale bar of required length L or inferred automatically from the tree or just defaults to 0.001.
+    """
+
+    assert style in ['simple', 'fancy'], f"Scale bar style {style} not recognised. Must be 'simple' or 'fancy'."
+    assert orientation in ['horizontal', 'vertical'], f"Scale bar orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
+    
+    if tree is None and ySpan is None:
+        ySpan = 2e2
+    elif tree is not None:
+        if ySpan is not None:
+            warnings.warn("Both tree and ySpan provided; using tree.ySpan.")
+        ySpan = tree.ySpan
+    
+    localLineKwargs = dict(lineKwargs) if lineKwargs else {}
+    localTextKwargs = dict(textKwargs) if textKwargs else {}
+
+    if ('linewidth' not in localLineKwargs or 'lw' not in localLineKwargs): localLineKwargs['lw'] = 2
+    if 'color' not in localLineKwargs: localLineKwargs['color'] = 'k'
+
+    if orientation == 'vertical':
+        if 'ha' not in localTextKwargs: localTextKwargs['ha'] = 'left'
+        if 'va' not in localTextKwargs: localTextKwargs['va'] = 'center'
+        localTextKwargs['rotation_mode'] = 'anchor'
+    elif orientation == 'horizontal':
+        if 'ha' not in localTextKwargs: localTextKwargs['ha'] = 'center'
+        if 'va' not in localTextKwargs: localTextKwargs['va'] = 'top'
+
+    n_mutations = None  # will hold equivalent mutation count if alnL is known
+
+    if L is None:
+        # No explicit L given – we choose it
+        if tree is not None and tree.treeType == "divergence" and alnL is not None:
+            # Divergence tree + alignment length known:
+            # choose a NICE number of mutations, then convert to subs/site
+
+            total_mut = tree.treeHeight * alnL           # total divergence in mutations
+            target_mut = 0.05 * total_mut                # ~5% of total span
+
+            if target_mut <= 0:
+                target_mut = 1.0
+
+            exponent = np.floor(np.log10(target_mut))
+            fraction = target_mut / 10**exponent
+
+            for nf in (1, 2, 5, 10):
+                if fraction <= nf:
+                    n_mutations = nf * 10**exponent
+                    break
+            else:
+                n_mutations = 10 * 10**exponent
+
+            # convert mutations -> subs/site
+            L = n_mutations / alnL
+
+        elif tree is not None:
+            # No alnL: fall back to original subs/site logic
+            proposed = tree.treeHeight
+            exponent = np.floor(np.log10(proposed))
+            fraction = (0.05 * proposed) / 10**exponent ## 5% of tree height
+
+            for nf in (1, 2, 5, 10):  # nice numbers
+                if fraction <= nf:
+                    L = nf * 10**exponent
+                    break
+            else:
+                L = 10 * 10**exponent
+
+        else:
+            # No L, no tree
+            if alnL is not None:
+                raise Exception(
+                    "Neither scale bar length nor tree provided, "
+                    "impossible to rescale scale bar to alignment length."
+                )
+            warnings.warn("Neither L nor tree provided; defaulting to 0.001 (subs/site).")
+            L = 0.001
+
+    else:
+        # L was explicitly given
+        if tree is not None:
+            warnings.warn("Both L and tree provided; L takes precedence.")
+        if alnL is not None and tree is not None and tree.treeType == "divergence":
+            # Just record equivalent mutation count for labeling
+            n_mutations = L * alnL
+
+    if tree is not None and tree.treeType == 'time' and alnL is not None:
+        warnings.warn("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
+    
+    if unitText is None:
+        if tree is None:
+            if alnL is None:
+                warnings.warn("No units provided; assuming substitutions per site.")
+                unitText = "subs/site"
+            else:
+                # No tree, alnL given: interpret L as subs/site and show mutations
+                n_mutations = L * alnL if n_mutations is None else n_mutations
+                unitText = "mutation" if np.isclose(n_mutations, 1.0) else "mutations"
+        else:
+            if tree.treeType == "divergence":
+                if alnL is not None:
+                    # Prefer to label in mutations when alnL is known
+                    n_mutations = L * alnL if n_mutations is None else n_mutations
+                    unitText = "mutation" if np.isclose(n_mutations, 1.0) else "mutations"
+                else:
+                    unitText = "subs/site"
+            else:
+                warnings.warn("No units provided; assuming branch lengths are years.")
+                unitText = "years"
+
+    x, y = xy
+
+    xs = [x, x + L]
+    ys = [y, y]
+    
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+    
+    ax.plot(xs, ys, **localLineKwargs)
+    
+    if style == 'fancy':
+        width = 0.005 * ySpan
+        left_xs, left_ys = [x, x], [y - width, y + width]
+        right_xs, right_ys = [x + L, x + L], [y - width, y + width]
+
+        if orientation == 'vertical':
+            left_xs, left_ys = left_ys, left_xs
+            right_xs, right_ys = right_ys, right_xs
+        
+        ax.plot(left_xs, left_ys, **localLineKwargs)
+        ax.plot(right_xs, right_ys, **localLineKwargs)
+
+    if textXY is None: ## set text position defaults / might be worth turning these coordinates as fractions in relation to the bar itself
+        textX, textY = (x + L/2, y - ySpan * 0.02)
+    else:
+        textX, textY = textXY
+    
+    if orientation == 'vertical':
+        textX, textY = textY, textX
+    
+    if alnL is not None and tree is not None and tree.treeType == "divergence":
+        # Label in mutations if we know alnL
+        if n_mutations is None:
+            n_mutations = L * alnL
+        # nice formatting
+        if n_mutations >= 1:
+            n_disp = int(round(n_mutations))
+        else:
+            n_disp = np.round(n_mutations, 2)
+        scaleBarText = f'{n_disp}\n{unitText}'
+    else:
+        # Original behaviour: label in axis units
+        scaleBarText = f'{L}\n{unitText}'
+
+    ax.text(textX, textY, scaleBarText, **localTextKwargs)
+
+    return ax
+
 def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
 
     if colour is not None and colourFxn is not None:
