@@ -63,7 +63,7 @@ def load_newick(treePath,
 
 def load_nexus(treePath,
                 treeType,
-                tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)',
+                tipRegex=r'\|([0-9\-]+)',
                 dateFmt='%Y-%m-%d',
                 treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
                 variableDate=True,
