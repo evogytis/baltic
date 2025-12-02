@@ -1,24 +1,50 @@
+"""This module provides many of the helper functions that are commonly used both in BALTIC directly, as well as those used alongside baltic for the generation of figures.
+
+Attributes
+----------
+logger : logging.logger
+    Default logger which will be passed to other baltic functions.
+"""
 import re
 import logging
 import datetime as dt
 import calendar
-import warnings
 import math
-import numpy as np
 from itertools import permutations
+import numpy as np
 from scipy.stats import linregress
 import matplotlib as mpl
 from matplotlib.collections import LineCollection
+from cmcrameri import cm
 
 logger = logging.getLogger("baltic.bt_utils")
 
-def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
+
+def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
+    """Convert a calendar date of a specified format into a decimal number.
+
+    Parameters
+    ----------
+    date : str
+        Date string to be converted.
+    fmt : str, default="%Y-%m-%d"
+        String encoding the format of the input date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+    variable : bool, default=False
+        Set to ``True`` when dates may be of variable lengths (e.g. when looping over ``["2025-01-01", "2025-02"]``). Will use highest precision available.
+
+    Example
+    -------
+    >>> calendar_to_decimal_date("1253-07-06")
+    1253.509589041096
+    """
     if not fmt:
         return date
     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
     delimit=None
     if delimiter is not None:
         delimit=delimiter.group()
+    else:
+        delimit="-"
 
     if variable: ## if date is variable - extract what is available
         if delimit is not None:
@@ -37,41 +63,100 @@ def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
-def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
-    year = int(timepoint)
-    rem = timepoint - year
+
+def decimal_to_calendar_date(date, fmt='%Y-%m-%d'):
+    """Convert a decimal date to a calendar date.
+
+    Parameters
+    ----------
+    date : float
+        Decimal date to be converted
+    fmt : str, default="%Y-%m-%d"
+        String encoding the format of the desired output date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+
+    Example
+    -------
+    >>> decimal_to_calendar_date(1918.1260273972603)
+    '1918-02-16'
+    """
+    year = int(date)
+    rem = date - year
 
     base = dt.datetime(year, 1, 1)
     result = base + dt.timedelta(seconds=(base.replace(year=base.year + 1) - base).total_seconds() * rem)
 
     return dt.datetime.strftime(result,fmt)
 
-def convert_date_format(dateString,startFormat,endFormat):
-    return dt.datetime.strftime(dt.datetime.strptime(dateString,startFormat),endFormat)
-    try: #TODO deal with stuff that comes after the return statement
-        date_obj = dt.datetime.strptime(dateString, startFormat)
-        return dt.datetime.strftime(date_obj, endFormat)
-    except ValueError as e:
-        raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
-def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
+def convert_date_format(dateString, startFormat, endFormat):
+    """Convert the format of a date string.
+
+    Parameters
+    ----------
+    dateString : str
+        The date that will be converted.
+    startFormat : str
+        String encoding the format of the input date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+    endFormat : str
+        String encoding the format of the desired output date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+
+    Example
+    -------
+    >>> convert_date_format("1990-03-11", "%Y-%m-%d", "%d-%m-%Y")
+    '11-03-1990'
+    """
+
+    try:
+        return dt.datetime.strftime(dt.datetime.strptime(dateString,startFormat),endFormat)
+    except ValueError as e:
+        logger.error(f'Error converting date "{dateString}" from format "{startFormat}" to "{endFormat}": "{e}"')
+
+
+def generate_calendar_timeline(startDate,
+                               endDate,
+                               spacing='monthly',
+                               dateFmt='%Y-%m-%d',
+                               roundDates=True):
+    """Create a list of spaced dates (by default the first of each month) the half-open interval ``(startDate,endDate]``.
+
+    Parameters
+    ----------
+    startDate : str
+        The starting date (not included in final output).
+    endDate : str
+        The ending date (included in final output).
+    spacing : {"monthly", "weeky", "yearly", int}
+        The interval between output dates. If an ``int`` is given, encodes a spacing of days.
+    dateFmt : str, default="%Y-%m-%d"
+        String encoding the format of the dates (both input and output). Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+    roundDates : bool, default=True
+        Generate additional breaks in the timeline to correspond with beginnings of months or years.
+
+    Examples
+    --------
+    >>> generate_calendar_timeline("2016-10-01", "2017-10-01")
+    ['2016-11-01', '2016-12-01', '2017-01-01', '2017-02-01', '2017-03-01', '2017-04-01', '2017-05-01', '2017-06-01', '2017-07-01', '2017-08-01', '2017-09-01', '2017-10-01']
+
+    >>> generate_calendar_timeline("2016-10-01", "2016-10-31", 6)
+    ['2016-10-03', '2016-10-09', '2016-10-15', '2016-10-21', '2016-10-27', '2016-11-02']
+    """
     assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
 
     timeline = []
-    startTime = dt.datetime.strptime(startDateStr, dateFmt)
-    endTime = dt.datetime.strptime(endDateStr, dateFmt)
+    startTime = dt.datetime.strptime(startDate, dateFmt)
+    endTime = dt.datetime.strptime(endDate, dateFmt)
 
     if roundDates: ## rounding dates - additional breaks will be generated in the timeline to correspond with beginnings of months or years
         currentTime = dt.datetime(startTime.year, 1, 1) ## start from beginning of the year
         if spacing == 'yearly':
             timeline.append(dt.datetime.strftime(currentTime, dateFmt))
         elif isinstance(spacing,int):
-            warnings.warn(f"Calendar timeline spacing defined as int (set to {spacing}) so roundDates (True by default) parameter ignored.")
+            logger.warning(f"Calendar timeline spacing defined as int (set to {spacing}) so roundDates (True by default) parameter ignored.")
     else: ## no rounding - timeline starts at the specified start date and is incremented at specified intervals
         currentTime = startTime
         dateStr = dt.datetime.strftime(currentTime, dateFmt)
         timeline.append(dateStr)
-    
+
     while currentTime < endTime:
 
         if startTime < currentTime:
@@ -80,42 +165,71 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
 
         if isinstance(spacing,int):
             skip = dt.timedelta(days = spacing)
-        
         elif spacing == 'weekly':
             skip = dt.timedelta(days = 7)
             if currentTime.month != (currentTime + skip).month: ## next month starts in a week
                 daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
                 lastDateOfMonth = dt.datetime(currentTime.year, currentTime.month, daysInMonth)
                 dateStr = dt.datetime.strftime(lastDateOfMonth,dateFmt)
-                if startTime < currentTime and currentTime != lastDateOfMonth and roundDates == True:
+                if startTime < currentTime and currentTime != lastDateOfMonth and roundDates:
                     timeline.append(dateStr)
-            
-        if spacing == 'monthly':
+        elif spacing == 'monthly':
             daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
             skip = dt.timedelta(days = daysInMonth)
-
-        if spacing == 'yearly':
+        else:  # spacing == 'yearly'
             skip = dt.timedelta(365 + calendar.isleap(currentTime.year))
-    
+
         currentTime += skip
 
     dateStr = dt.datetime.strftime(currentTime,dateFmt)
     timeline.append(dateStr)
-    
+
     return timeline
 
-def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
+
+def initialize_plot(width=6, height=8):
+    logger.info("Importing the following modules: maplotlib, matplotlib.pyplot, seaborn, numpy, cmcrameri.cm")
+    logger.info("If import errors arise, ensure that baltic has been fully installed correctly along with all requirements.")
+    global mpl
+    import matplotlib as mpl
+    logger.info("import matplotlib as mpl")
+    global plt
+    import matplotlib.pyplot as plt
+    logger.info("import matplotlib.pyplot as plt")
+    global sns
+    import seaborn as sns
+    logger.info("import seaborn as sns")
+    global np
+    import numpy as np
+    logger.info("import numpy as np")
+    global cm
+    from cmcrameri import cm
+    logger.info("from cmcrameri import cm")
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(width,height))
+    return fig, ax
+    # TODO: keep this up: options to run
+
+
+def plot_tangled_chain(ax,
+                       treeList,
+                       colourMap=None,
+                       padding=None,
+                       treeSpaceFxn=None,
+                       treeSpace=None,
+                       treeKwargs={},
+                       pointKwargs={},
+                       **kwargs):
     localKwargs = dict(kwargs)
     localTreeKwargs = dict(treeKwargs)
     localPointKwargs = dict(pointKwargs)
 
     if treeSpace is not None and treeSpaceFxn is not None: ## treeSpace is how much space is left between consecutive trees, takes current tree if specified as a function
-        raise ValueError(
+        logger.error(
             "Cannot specify both treeSpace and treeSpaceFxn. Please use only one."
         ) ## should be a warning, since this eventuality is handled in the next line
-    if treeSpace is None and treeSpaceFxn is None:
-        treeSpaceFxn = lambda k: treeList[0].treeHeight * 0.20 ## 20% of first tree height is space between all trees
-    elif treeSpaceFxn is None:
+    if treeSpaceFxn is None:
+        if treeSpace is None:
+            treeSpaceFxn = lambda k: treeList[0].treeHeight * 0.20 ## 20% of first tree height is space between all trees
         treeSpaceFxn = lambda k: treeSpace
 
     if padding is None: ## padding is proportion of treeSpace protrudes beyond previous tree and before next tree (0 == line finishes at last tip of current tree and goes to root of next, 0.5 == line goes to middle between consecutive trees and switches abruptly)
@@ -126,21 +240,24 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
     if colourMap is None: ## colourMap is dict that assigns colours to tips according to their y-axis order in first tree
         colourMap = {}
 
-        cmap = mpl.cm.Spectral
+        cmap = cm.Bukavu
         firstTreeTips = treeList[0].get_external()
 
         for i,k in enumerate(sorted(firstTreeTips, key = lambda q: q.y)):
             colourMap[k.name] = cmap(i/(len(firstTreeTips)-1))
 
     cumulativeX = 0 ## tracks x coordinate as we plot consecutive trees
-    if 'coordinateFxn' in localTreeKwargs: warnings.warn(f"Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
-    if 'xCoordinateFxn' not in localTreeKwargs: localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
+    if 'coordinateFxn' in localTreeKwargs:
+        logger.warning("Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
+    if 'xCoordinateFxn' not in localTreeKwargs:
+        localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
 
     if len(localPointKwargs)>0: ## tip points are required - override xCoordinateFxn, assign default colours if nothing specified
-        if 'xCoordinateFxn' in localPointKwargs: warnings.warn(f"Custom x coordinate function for points was specified but will be overriden for tangled chain visualisation.")
+        if 'xCoordinateFxn' in localPointKwargs:
+            logger.warning("Custom x coordinate function for points was specified but will be overriden for tangled chain visualisation.")
         localPointKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
         if 'colour' not in localPointKwargs and 'colourFxn' not in localPointKwargs:
-            warnings.warn(f"Point colours were not specified, defaulting to tangled chain colour defaults. This may cause issues if targetFxn is not set to identify tips.")
+            logger.warning("Point colours were not specified, defaulting to tangled chain colour defaults. This may cause issues if targetFxn is not set to identify tips.")
             localPointKwargs['colourFxn'] = lambda k: colourMap[k.name]
 
     connectionCoordinates = []
@@ -185,6 +302,7 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
 
     return ax
 
+
 def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
 
     if colour is not None and colourFxn is not None:
@@ -207,14 +325,15 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
 
     localKwargs = dict(kwargs)
     if 'alpha' not in localKwargs: localKwargs['alpha'] = 0.08
-    
+
     if isinstance(timeline,list):
         try:
-            timeline = [bt_utils.calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to 
-        except:
-            warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+            timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to
+        except Exception as e:
+            logger.warning(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+            raise e
     else:
-        assert isinstance(timeline,range), f"timeline is neither a list nor a range."
+        assert isinstance(timeline,range), "timeline is neither a list nor a range."
 
     if axis == 'x':
         [ax.axvspan(timeline[t], timeline[t+1], fc=colourFxn(t), ec=edgeColourFxn(t), **localKwargs) for t in range(0,len(timeline)-1,2)]
@@ -222,32 +341,34 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
         [ax.axhspan(timeline[t], timeline[t+1], fc=colourFxn(t), ec=edgeColourFxn(t), **localKwargs) for t in range(0,len(timeline)-1,2)]
     return ax
 
+
 def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, labelPosition='mid', axis='x', **kwargs):
     assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
-    
+
     if outputFmtFxn is None:
-        outputFmtFxn = lambda date: bt_utils.convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if bt_utils.convert_date_format(date, '%Y-%m-%d', '%m') == '01' else bt_utils.convert_date_format(date, '%Y-%m-%d', '%b')
+        outputFmtFxn = lambda date: convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if convert_date_format(date, '%Y-%m-%d', '%m') == '01' else convert_date_format(date, '%Y-%m-%d', '%b')
 
     localKwargs = dict(kwargs)
 
     if axis == 'x':
         if labelPosition == 'left':
-            ax.set_xticks([bt_utils.calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_xticks([calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
             ax.set_xticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
         elif labelPosition == 'mid':
-            ax.set_xticks([np.mean([bt_utils.calendar_to_decimal_date(timeline[t], inputDateFmt), bt_utils.calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_xticks([np.mean([calendar_to_decimal_date(timeline[t], inputDateFmt), calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
             ax.set_xticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
     elif axis == 'y':
         if labelPosition == 'left':
-            ax.set_yticks([bt_utils.calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_yticks([calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
         elif labelPosition == 'mid':
-            ax.set_yticks([np.mean([bt_utils.calendar_to_decimal_date(timeline[t], inputDateFmt), bt_utils.calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_yticks([np.mean([calendar_to_decimal_date(timeline[t], inputDateFmt), calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
 
     ax.tick_params(axis=axis, size=0)
     return ax
+
 
 def untangle(trees,costFxn=None,iterations=None):
     if iterations is None: iterations=3
@@ -316,11 +437,12 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
 
     return res
 
+
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
     # circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
-    
+
     # rads = circle_start_radians + (circle_fraction_radians * y / yRange) ## compute position along circle
     rads = (circleStart + (circleFraction * y / yRange)) * 2*math.pi ## compute position along circle
 
@@ -329,10 +451,10 @@ def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
     return (tx,ty)
 
+
 def project_polar_vector(x,y,radians,length):
 
     new_x = x + length * math.cos(radians)
     new_y = y + length * math.sin(radians)
 
     return (new_x,new_y)
-

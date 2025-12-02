@@ -1,10 +1,26 @@
+"""This module provides the baltic ``Leaf`` class.
+"""
+
 import logging
 from baltic.branchLike import BranchLike
 
 logger = logging.getLogger("baltic.Leaf")
 
 
-class Leaf(BranchLike): ## leaf class
+class Leaf(BranchLike):
+    """``Leaf`` class for terminal nodes that represent individual taxa.
+
+    Note
+    ----
+    Most attributes have null default values as they are either (1) set automatically during tree construction, or (2) defined by the specific inherited subclass.
+
+    Attributes
+    ----------
+    branchType : str, default='leaf'
+        DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
+    name : str
+        The tip name for the leaf.
+    """
 
     def __init__(self,name):
         super().__init__() # all of leaf's traits come from BranchLike
@@ -12,10 +28,13 @@ class Leaf(BranchLike): ## leaf class
         self.name=name
 
     def is_leaflike(self):
+        """Returns True."""
         return True
 
     def is_leaf(self):
+        """Returns True."""
         return True
 
     def is_node(self):
+        """Returns False."""
         return False

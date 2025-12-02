@@ -1,0 +1,26 @@
+name: BALTIC
+description: Backronymed Adaptable Lightweight Tree Import Code
+
+commands:
+  quickstart:
+    unix: sphinx-quickstart
+  build:
+    unix: rm -rf build & sphinx-build -b html ./source ./build
+  serve:
+    unix: python -m http.server --directory ./build
+
+env_specs:
+  default:
+    packages:
+      - matplotlib
+      - myst-parser
+      - numpy
+      - python=3.10
+      - scipy
+      - sphinx
+      - sphinx_rtd_theme
+      - seaborn
+
+channels:
+  - defaults
+  - conda-forge

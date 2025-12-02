@@ -2,8 +2,8 @@
    :hidden:
    :maxdepth: 2
 
-API reference
-================
+Baltic treebuliders
+===================
 
 .. automodule:: baltic.baltic
     :members:

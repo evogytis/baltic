@@ -1,3 +1,26 @@
+"""This module provides the core BALTIC functions ``make_tree`` and ``make_tree_JOSN``, the core parser functions which create BALTIC tree, node, and branchLike objects.
+
+By convention, BALTIC (and this base module) are loaded under the name ``bt``.
+
+
+Example
+-------
+After loading the module, a basic Newick formatted tree string can be read by:
+
+>>> treeString='((A:1.0,B:2.0):1.0,C:3.0);'
+>>> ll = bt.make_tree(treeString, treeType="divergence")
+
+
+Notes
+-----
+This version of BALTIC (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
+Attributes
+----------
+logger : logging.logger
+    Default logger which will be passed to other baltic functions.
+"""
 __all__ = ['make_tree', 'make_tree_JSON']
 import re
 import sys
@@ -11,6 +34,32 @@ logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
 def make_tree(data, treeType, tre=None):
+    """Parses a tree string to create a baltic tree.
+
+    Trees are parsed according to the following standard algorithm:
+
+    * Every time an opening parenthesis (``(``) is encountered in the tree string a new instance of `Node` class is created. The new class' ``.index`` attribute is set to the index along the tree string where it was encountered, giving that particular class a unique identifier within the tree string. The ``.parent`` attribute is set to whatever the previous object encountered was, similarly, since the last encountered object could only be another node, the current node is added to its parents list of ``children``. Finally we set our new node as the 'current' node of the tree and append the node to the list of objects (``.Objects``, which are branches) contained in the tree.
+    * Every time a string is encountered which may or may not be surrounded by quotation marks (``'`` or ``"``) or have the beginning of an annotation block (``[``) we create a new ``Leaf`` object. It also receives an ``.index`` identifier, like the ``Node`` object. Unlike the ``Node``, however, the ``.numName`` attribute is also set as the string that defined the tip. In BEAST X trees it will be the number that identifies the tip, but it could also be a regular string.
+    * Next, baltic looks for annotations, which are the blocks in the format ``[&parameter1=1.0,parameter2=0.0]``. These are transformed into the ``.traits`` dictionary for the branch. In this example the branch being parsed would receive a dictionary with two keys: ``cur_branch.traits = {'parameter1' : 1.0, 'parameter2' : 0.0}``.
+    * Annotations should be followed by branch lengths preceded by a colon (``:``). The branch length is assigned to the current branch's ``.length`` attribute.
+    * Bifurcations (or multifurcations) in the tree string are notated by commas (``,``) and ends of clades are denoted by closing parentheses (``)``). Both mean that whatever comes next is in relation to the parent branch of whatever branch we were dealing with earlier.
+    * Finally tree strings are finished with a semi colon (``;``).
+
+
+    Parameters
+    ----------
+    data : str
+        Input tree string to be parsed.
+    treeType : {'time', 'divergence'}
+        The type of the tree, which defines meaning of branch lengths (e.g. for a time-calibrated phylogeny whose branches are in units of subst./site/year, 'time' should be used.)
+    tre : baltic.Tree, optional
+        Reference to an existing tree object. If omitted, a new object will be created.
+
+    Returns
+    -------
+    tre : baltic.Tree
+        Output tree object.
+    """
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
         'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
@@ -66,7 +115,7 @@ def make_tree(data, treeType, tre=None):
                     if destination is None: ## not set destination before
                         destination=k ## destination is matching node
                     else: ## destination seen before - raise an error (indicates reticulate branch ids are not unique)
-                        raise Exception(f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
+                        logger.error(f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
             if destination: ## identified destination of this branch
                 logger.debug(f'identified {match.group(1)} destination')
                 tre.curNode.target=destination ## set current node's target as the destination
@@ -174,7 +223,26 @@ def make_tree(data, treeType, tre=None):
         if data[i] == ';': ## look for string end
             return tre
 
+
 def make_tree_JSON(jsonNode,jsonTranslationDict,treeType,tre=None,):
+    """Creates a baltic tree object from a JSON.
+
+    Parameters
+    ----------
+    jsonNode
+        TODO: ADD THIS
+    jsonTranslationDict
+        TODO: ADD THIS
+    treeType : {'time', 'divergence'}
+        The type of the tree, which defines meaning of branch lengths (e.g. for a time-calibrated phylogeny whose branches are in units of subst./site/year, 'time' should be used.)
+    tre : baltic.Tree, optional
+        Reference to an existing tree object. If omitted, a new object will be created.
+
+    Returns
+    -------
+    tre : baltic.Tree
+        Output tree object.
+    """
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
     else:
