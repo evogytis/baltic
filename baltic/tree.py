@@ -285,6 +285,34 @@ class Tree: ## tree class
 
         return stats
 
+    def _partition_tree(self, partitionFxn, node = None, partition_label = None):
+        """
+        Assign a label of 10 random characters to branches depending on partitionFxn.
+        If partitionFxn evaluates to True a new label is generated for passing on to descendants, otherwise the label of current node is passed on.
+        Use case example: label parts of a tree that are introduced into a new location and stay in that location, generating a new label for exports to other countries.
+        """
+        if node is None: node = self.root
+        
+        if partition_label is None:
+            import random,string
+            characters = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
+            partition_label = ''.join(random.choices(characters, k = 10))
+        
+        generateLabelFxn = lambda k: k == self.root or partitionFxn(k) ## root of the tree also counts as entering a new state
+        
+        if generateLabelFxn(node): ## if True - generate new label
+            import random,string
+            characters = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
+            partition_label = ''.join(random.choices(characters, k = 10))
+        
+        node.traits['partition'] = partition_label
+        
+        if node.is_node():
+            for ch in node.children:
+                _partition_tree(self, partitionFxn = generateLabelFxn, node = ch, partition_label = partition_label)
+        
+        return self
+
     def traverse_tree(
         self, curNode=None, includeCondition=None, traverseCondition=None, collect=None
     ):
@@ -711,6 +739,8 @@ class Tree: ## tree class
         best_root_index = best_res["root_index"]
         if nUncertain > 0:
             best_uncertain_dates = best_res["monte_carlo_dates"]
+        else:
+            best_uncertain_dates = {}
 
         func_logger.debug(f"Best root (coarse) at index {best_root_index} with regression stats: {best_res}")
 

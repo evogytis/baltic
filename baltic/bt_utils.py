@@ -144,6 +144,33 @@ def convert_date_format(dateString,startFormat,endFormat):
     except ValueError as e:
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
+def state_collapse_tree(tree, switchFxn):
+    """
+    Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
+    Also known by the name of Phylotype maps/trees.
+    """
+    import copy
+    
+    local_tree = copy.deepcopy(tree)
+    
+    _partition_tree(local_tree, partitionFxn = switchFxn) ## run tree labelling
+    
+    labels = set(local_tree.get_parameter_list('partition',useTraitsDict=True)) ## get all unique labels in tree
+    sortingFxn = lambda k: k.absoluteTime if local_tree.treeType == 'time' else k.height ## determine whether to sort by height or absoluteTime
+    
+    label_to_branches = {label: [k for k in local_tree.get_external() if k.traits['partition'] == label] for label in labels} ## map each unique label to the furthest tip with that label
+    label_counts = {label: len(label_to_branches[label]) for label in labels}
+
+    label_to_last_branch = {label: sorted(label_to_branches[label], key = sortingFxn)[-1] for label in labels if label_counts[label] > 0}
+    
+    local_tree = local_tree.reduce_tree(label_to_last_branch.values()) ## keep a single tip for each unique label
+
+    for k in local_tree.get_external():
+        k.traits['size'] = label_counts[k.traits['partition']] ## assign tip counts of this label to representative branch
+        k.traits['members'] = label_to_branches[k.traits['partition']] ## remember descendants with label that may no longer be present
+    
+    return local_tree
+
 def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
     assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
 
