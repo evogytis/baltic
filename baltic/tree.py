@@ -35,7 +35,7 @@ from baltic.node import Node
 from baltic.leaf import Leaf
 from baltic.clade import Clade
 from baltic.reticulation import Reticulation
-from baltic.bt_utils import _root_to_tip, project_to_polar, project_polar_vector
+from baltic.bt_utils import project_to_polar, project_polar_vector, unnest
 
 logger = logging.getLogger("baltic.Tree")
 
@@ -305,7 +305,7 @@ class Tree:
             for k in sorted(multitypeNodes, key=lambda x: -x.height):
 
                 child = k.children[0]
-                if k.parent.index:
+                if k.parent is not None:
                     grandparent = k.parent
                 else:
                     grandparent = self.root
@@ -321,7 +321,7 @@ class Tree:
         self.sort_branches()
 
 
-    def set_absolute_time(self, mostRecentSamplingDate):
+    def set_absolute_time(self, mostRecentSamplingDate, justLeaves=False):
         """Set the absoluteTime value of all branches in the tree according to their height and the MRSD.
 
         Parameters
@@ -335,10 +335,16 @@ class Tree:
         assert self.treeType == "time", "Cannot set absolute time values for a divergence tree."
 
         for k in self.Objects:  ## iterate over all objects
+            if justLeaves and k.is_node():
+                continue
             k.absoluteTime = (
                 mostRecentSamplingDate - self.treeHeight + k.height
             )  ## heights are in units of time from the root
-        self.mostRecent = max(k.absoluteTime for k in self.Objects)
+        self.mostRecent = max(k.absoluteTime for k in self.Objects if k.absoluteTime)
+
+    def _assign_date_uncertainty(self, dateUncertainties):
+        for k in self.get_external():
+            k.absoluteTime, k.absoluteTimeRange = dateUncertainties[k.name]
 
 
     def rescale(self, factor):
@@ -601,7 +607,7 @@ class Tree:
             # Identify the midpoint and reroot there.
             # Trace the path to the outgroup tip until all of the root depth has
             # been traveled/accounted for.
-            path = tip2.get_path_to_root()[:-1]
+            path = tip2.get_path_to_root()
 
             for node in path[::-1]:  ## iterate from old root to new
                 rootRemainder -= node.length
@@ -618,9 +624,7 @@ class Tree:
             return self
 
         ##############
-        path = branch.get_path_to_root()[
-            :-1
-        ]  ## get path from new root to old root, ignore actual root node
+        path = branch.get_path_to_root()  ## get path from new root to old root, ignore actual root node
         path = path[-2::-1]  ## invert
 
         ogLen = float(branch.length)  ## store branch length on the new root branch
@@ -727,120 +731,279 @@ class Tree:
 
         return self
 
-    def root_by_regression(self, stat="r^2", forcePositive=True):
+    # def root_by_regression(self, stat="r^2", forcePositive=True):
+    #     validRootingMethods = ["r^2", "correlation", "sum of squares"]
+    #     assert (
+    #         stat in validRootingMethods
+    #     ),f"Invalid option for root-to-tip regression: {stat} (options are {validRootingMethods})"
+
+    #     cll = copy.deepcopy(self)  ## deepcopy entire tree
+
+    #     res = {}  ## will be used to track better regressions with new roots
+    #     for k in self.Objects[1:]:  ## iterate over branches in tree (ignore root)
+    #         cll = cll.reroot(
+    #             [w for w in cll.Objects if w.index == k.index][0],
+    #             fixSingletons=False,
+    #         )  ## reroot on branch provided
+    #         tips = cll.get_external()  ## get all tips
+
+    #         xs, ys = zip(
+    #             *[(w.absoluteTime, w.height) for w in tips]
+    #         )  ## get collection dates
+    #         res = _root_to_tip(
+    #             k, xs, ys, res, stat=stat, forcePositive=forcePositive
+    #         )  ## check root-to-tip regression, update res if better
+    #     ##############
+    #     logger.debug(
+    #             f"Rooting tree first time at node {res['root']} with regression: {res}"
+    #         )
+    #     self = self.reroot(
+    #         res["root"]
+    #     )  ## reroot on branch optimising stat
+    #     ############
+    #     if (
+    #         len(self.root.children) == 2
+    #     ):  ## if root is strictly bifurcating - also optimise branch fraction
+    #         logger.debug("Bifurcating root, finding more precise rooting along new root")
+    #         res["frac"] = 0.0  ## add frac argument
+    #         left, right = self.root.children  ## get left and right children
+
+    #         totalBranch = (
+    #             left.length + right.length
+    #         )  ## total amount of branch length adjustment available at root
+    #         leftSubtree = self.traverse_tree(left)  ## get left subtree
+    #         rightSubtree = self.traverse_tree(right)  ## get right subtree
+
+    #         lxs = [
+    #             k.absoluteTime for k in leftSubtree
+    #         ]  ## get x coordinates for left subtree #TODO: these don't get used
+    #         rxs = [
+    #             k.absoluteTime for k in rightSubtree
+    #         ]  ## get x coordinates for right subtree #TODO: see above
+
+    #         for f in np.linspace(
+    #             0, 1, 21
+    #         ):  ## check root positions along best overall root
+    #             adjustL = (
+    #                 -left.length + totalBranch * f
+    #             )  ## height adjustments for left subtree
+    #             adjustR = -right.length + totalBranch * (
+    #                 1 - f
+    #             )  ## height adjustments for right subtree
+
+    #             lys = [
+    #                 k.height + adjustL for k in leftSubtree
+    #             ]  ## adjust left subtree heights #TODO: see above
+    #             rys = [
+    #                 k.height + adjustR for k in rightSubtree
+    #             ]  ## same for right #TODO: see above
+
+    #             res = _root_to_tip(
+    #                 left, xs, ys, res, stat=stat, forcePositive=forcePositive, frac=f
+    #             )  ## check regression
+
+    #         self = self.reroot(
+    #             branch=res["root"], branchFrac=res["frac"]
+    #         )  ## reroot on branch optimising stat
+    #     #############
+    #     logger.info(f"Correlation coefficient: {res['correlation']}")
+    #     logger.info(f"Sum of squares: {res['sum of squares']}")
+    #     logger.info(f"Evolutionary rate: {res['slope']}")
+    #     logger.info(f"Intercept (TMRCA): {max(xs) - res['intercept']}")
+    #     logger.info(f"r^2: {res['r^2']}")
+
+    #     return self
+
+
+    def root_by_regression(
+        self,
+        stat: str = "r^2",
+        forcePositive: bool = True,
+        nJobs: int | None = None,
+        baseMCiters: int = 20,
+        MCitersPerTip: int = 10,
+        maxMCiters: int = 400,
+        returnMCdates: bool = True
+    ):
+        from baltic.bt_utils import _root_to_tip, _rtt_worker, decimal_to_calendar_date
+
         validRootingMethods = ["r^2", "correlation", "sum of squares"]
-        assert (
-            stat in validRootingMethods
-        ),f"Invalid option for root-to-tip regression: {stat} (options are {validRootingMethods})"
+        assert stat in validRootingMethods, (
+            f"Invalid option for root-to-tip regression: {stat} "
+            f"(options are {validRootingMethods})"
+        )
 
-        cll = copy.deepcopy(self)  ## deepcopy entire tree
+        func_logger = logging.getLogger("baltic.tree.root_by_regression")
+        func_logger.setLevel(logging.INFO)
+        func_logger.propagate = False
 
-        res = {}  ## will be used to track better regressions with new roots
-        for k in self.Objects[1:]:  ## iterate over branches in tree (ignore root)
-            cll = cll.reroot(
-                [w for w in cll.Objects if w.index == k.index][0],
-                fixSingletons=False,
-            )  ## reroot on branch provided
-            tips = cll.get_external()  ## get all tips
+        if not func_logger.handlers:
+            import sys
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(logging.Formatter("[root_by_regression] %(message)s"))
+            handler.setLevel(logging.INFO)
+            func_logger.addHandler(handler)
 
-            xs, ys = zip(
-                *[(w.absoluteTime, w.height) for w in tips]
-            )  ## get collection dates
-            res = _root_to_tip(
-                k, xs, ys, res, stat=stat, forcePositive=forcePositive
-            )  ## check root-to-tip regression, update res if better
-        ##############
-        logger.debug(
-                f"Rooting tree first time at node {res['root']} with regression: {res}"
-            )
-        self = self.reroot(
-            res["root"]
-        )  ## reroot on branch optimising stat
-        ############
-        if (
-            len(self.root.children) == 2
-        ):  ## if root is strictly bifurcating - also optimise branch fraction
-            logger.debug("Bifurcating root, finding more precise rooting along new root")
-            res["frac"] = 0.0  ## add frac argument
-            left, right = self.root.children  ## get left and right children
+        func_logger.info(f"Starting root-to-tip regression, optimising {stat}.")
 
-            totalBranch = (
-                left.length + right.length
-            )  ## total amount of branch length adjustment available at root
-            leftSubtree = self.traverse_tree(left)  ## get left subtree
-            rightSubtree = self.traverse_tree(right)  ## get right subtree
+        candidates = self.Objects[1:]
+        if not candidates:
+            func_logger.warning("Tree has no non-root nodes; returning unchanged.")
+            return self
 
-            lxs = [
-                k.absoluteTime for k in leftSubtree
-            ]  ## get x coordinates for left subtree #TODO: these don't get used
-            rxs = [
-                k.absoluteTime for k in rightSubtree
-            ]  ## get x coordinates for right subtree #TODO: see above
+        ## Store uncertain dates for Monte Carlo sampling
+        tips = self.get_external()
+        tipDates = {k.name: k.absoluteTime for k in tips} ## get all tip dates
 
-            for f in np.linspace(
-                0, 1, 21
-            ):  ## check root positions along best overall root
-                adjustL = (
-                    -left.length + totalBranch * f
-                )  ## height adjustments for left subtree
-                adjustR = -right.length + totalBranch * (
-                    1 - f
-                )  ## height adjustments for right subtree
+        uncertainDateTips = [k for k in tips if np.diff(k.absoluteTimeRange)[0] > 1e-10] ## get leaf objects where difference between min and max dates is above threshold
+        uncertainDates = {k.name: k.absoluteTimeRange for k in uncertainDateTips} ## get uncertain date ranges for tips with uncertain dates
 
-                lys = [
-                    k.height + adjustL for k in leftSubtree
-                ]  ## adjust left subtree heights #TODO: see above
-                rys = [
-                    k.height + adjustR for k in rightSubtree
-                ]  ## same for right #TODO: see above
+        nUncertain = len(uncertainDateTips) ## count how many tips don't have precise dates
+        if nUncertain == 0:
+            nMC = 1
+            func_logger.info("All tip dates precise; running a single root-to-tip regression worker iteration.")
+        else:
+            nMC = baseMCiters + MCitersPerTip * nUncertain
+            nMC = min(maxMCiters, nMC)
 
-                res = root_to_tip(
-                    left, xs, ys, res, stat=stat, forcePositive=forcePositive, frac=f
-                )  ## check regression
+        tasks = [(self, k.index, tipDates, uncertainDates, nMC, stat, forcePositive) for k in candidates]
 
-            self = self.reroot(
-                branch=res["root"], branchFrac=res["frac"]
-            )  ## reroot on branch optimising stat
-        #############
-        logger.info(f"Correlation coefficient: {res['correlation']}")
-        logger.info(f"Sum of squares: {res['sum of squares']}")
-        logger.info(f"Evolutionary rate: {res['slope']}")
-        logger.info(f"Intercept (TMRCA): {max(xs) - res['intercept']}")
-        logger.info(f"r^2: {res['r^2']}")
+        ## run root-to-tip regressions in parallel
+        if nJobs is None or nJobs <= 0:
+            from os import cpu_count
+            nJobs = cpu_count() or 1
 
-        return self
+        func_logger.info(
+            f"{len(candidates)} candidate roots, "
+            f"{nUncertain} imprecise dates; "
+            f"Running {nMC} Monte Carlo iterations to sample dates using "
+            f"{nJobs} workers."
+        )
 
-    def sort_branches(self, descending=True, sortFxn=None, sortByHeight=True):
-        mod = -1 if descending else 1
-        if sortFxn is None:
+        if len(tasks) == 1:
+            # trivial case, no need to spin up a pool
+            results = [_rtt_worker(tasks[0])]
+        else:
+            from concurrent.futures import ProcessPoolExecutor
+
+            with ProcessPoolExecutor(max_workers=nJobs) as pool:
+                results = list(pool.map(_rtt_worker, tasks))
+
+        ## get best root, scores were precomputed in worker and already handle stat direction
+        best_res = max(results, key=lambda r: r["score"])
+        best_root_index = best_res["root_index"]
+        if nUncertain > 0:
+            best_uncertain_dates = best_res["monte_carlo_dates"]
+
+        func_logger.debug(f"Best root (coarse) at index {best_root_index} with regression stats: {best_res}")
+
+        ## reroot on best root
+        best_root_node = next(obj for obj in self.Objects if obj.index == best_root_index)
+        self = self.reroot(best_root_node)
+
+        ## for bifurcating roots check whether one of 20 equally-spaced points along branch maximise regression
+        res_final = best_res  # will be overwritten if we refine
+
+        if len(self.root.children) == 2:
+            func_logger.debug("Bifurcating root, refining root position along the root branch.")
+
+            left, right = self.root.children
+
+            totalBranch = left.length + right.length
+            leftSubtree = self.traverse_tree(left)
+            rightSubtree = self.traverse_tree(right)
+
+            # Build xs / ys for the *current* tree using midpoints for any remaining ranges.
+            tips_current = self.get_external()
+
+            tip_is_left = {k.name: False for k in tips_current}
+            tip_is_right = {k.name: False for k in tips_current}
+
+            for k in leftSubtree:
+                tip_is_left[k.name] = True
+            for k in rightSubtree:
+                tip_is_right[k.name] = True
+
+            xs = []
+            for k in tips_current:
+                date = k.absoluteTime if k.name not in best_uncertain_dates else best_uncertain_dates[k.name] ## fetch original absoluteTime if tip date precise, otherwise grab Monte Carlo inferred value
+                xs.append(date)
+
+            res_frac = {}
+            res_frac["frac"] = 0.0  # start with fraction 0 (the current position)
+
+            for f in np.linspace(0, 1, 21): ## run optimisation of branchFrac
+                adjustL = -left.length + totalBranch * f
+                adjustR = -right.length + totalBranch * (1 - f)
+
+                ys_f = []
+                for k in tips_current:
+                    if tip_is_left[k.name]:
+                        ys_f.append(k.height + adjustL)
+                    elif tip_is_right[k.name]:
+                        ys_f.append(k.height + adjustR)
+                    else:
+                        ys_f.append(k.height)
+
+                res_frac = _root_to_tip(
+                    left, xs, ys_f, res_frac,
+                    stat=stat, forcePositive=forcePositive, frac=f
+                )
+
+            self = self.reroot(branch=res_frac["root"], branchFrac=res_frac["frac"])
+            res_final = res_frac
+
+        ## reporting
+        corr = res_final.get("correlation", None)
+        sse = res_final.get("sum of squares", None)
+        slope = res_final.get("slope", None)
+        intercept = res_final.get("intercept", None)
+        r2 = res_final.get("r^2", None)
+
+        func_logger.info(f"Correlation coefficient: {corr:.4g}")
+        func_logger.info(f"Sum of squares: {sse:.4g}")
+        func_logger.info(f"r^2: {r2:.4g}")
+        func_logger.info(f"Evolutionary rate (slope): {slope:.4e}")
+        tmrca = -intercept / slope
+        func_logger.info(f"Intercept: {intercept:.4g} TMRCA: {tmrca:.3f} / {decimal_to_calendar_date(tmrca, fmt = '%Y-%b-%d')}")
+
+        if returnMCdates:
+            return self, best_uncertain_dates
+        else:
+            return self
+
+    def sort_branches(self, descending=True, sortFxn=None, operationFxn=None):
+        mod = 1 if descending else -1
+        if sortFxn is None and operationFxn is None:
             logger.debug("Using default sort function.")
             # TODO This is really hard to parse. It is a variable mapped to a lambda function
             # that sometimes returns a 2-tuple and sometimes returns a 3-tuple, depending on
             # whether the argument to the function is a node or not
             # This should be rewritten as a normal function, and we should make sure
             # the different lengths of the tuple get handled sensibly downstream
-            sortFxn = lambda k: (
-                (k.is_node(), -len(k.leaves) * mod, k.length * mod)
-                if k.is_node()
-                else (k.is_node(), k.length * mod)
-            )
-        if sortByHeight:  # Sort nodes by height and group nodes and leaves together
-            ## Sort descendants of each node.
 
-            for k in self.get_internal():  ## iterate over nodes
-                k.children = sorted(k.children, key=sortFxn)
-        else:  # Do not sort by height. Retain leaves at original positions. Only sort nodes
+            def sortFxn(node):
+
+                if node.is_node():
+                    return (mod, len(node.leaves) * mod, node.length)
+
+                elif node.is_leaflike():
+                    if node.is_leaf() or isinstance(node, Reticulation):
+                        return (mod * -1, 1 * mod, node.length)
+                    elif isinstance(node, Clade):
+                        return (mod * -1, len(node.leaves) * mod, node.length)
+        elif sortFxn is not None and operationFxn is not None:
+            raise Exception(
+                    "Cannot specify both sortFxn and operationFxn, pick one."
+                )
+
+        if sortFxn:
             for k in self.get_internal():
-                leavesIdx = [
-                    (i, ctr) for ctr, i in enumerate(k.children) if i.is_leaflike()
-                ]  # Get original indices of leaves
-                nodes = sorted(
-                    [x for x in k.children if x.is_node()], key=sortFxn
-                )  # Sort nodes only by number of descendants
-                children = nodes
-                for i in leavesIdx:  # Insert leaves back into same positions
-                    children.insert(i[1], i[0])
-                k.children = children
+                k.children = sorted(k.children, key = sortFxn)
+        else:
+            for k in self.get_internal():
+                k.children = operationFxn(k.children)
+
         self._assign_tree_coordinates()  ## update x and y positions of each branch, since y positions will have changed because of sorting
 
     def _assign_tree_coordinates(self, order=None, padNodes=None):
@@ -858,7 +1021,7 @@ class Tree:
         assert len(nameOrder) == len(order), "Non-unique names present in tree"
 
         logger.debug("Drawing tree with default widths (1 unit for leaf objects, width+1 for clades)")
-        skips = [1 if isinstance(x, Leaf) else x.width for x in order]
+        skips = [1 if isinstance(x, Leaf) else x.width + 1 for x in order]
 
 
         for k in self.Objects:  ## reset coordinates for all objects
@@ -997,7 +1160,7 @@ class Tree:
                     w += 2*math.pi * (padNodes[desc]*2)/total
 
         elif isinstance(node,Clade): ## Clade - width is whatever was assigned during collapse
-            w = 2*math.pi * node.width/total
+            w = 2*math.pi * (node.width + 1)/total
 
 
         if node in padNodes: ## at a branch that's designated for additional padding
@@ -1018,14 +1181,14 @@ class Tree:
 
                 elif ch.is_node():
                     descendants=self.traverse_tree(ch,includeCondition=lambda w: True)
-                    w = 2*math.pi * sum([1 if d.is_leaf() else d.width for d in descendants if d.is_leaflike()])/total
+                    w = 2*math.pi * sum([1 if d.is_leaf() else d.width + 1 for d in descendants if d.is_leaflike()])/total
 
                     for desc in descendants:
                         if desc in padNodes:
                             w += 2*math.pi * (padNodes[desc]*2)/total
 
                 elif isinstance(ch,Clade):
-                    w = 2*math.pi * ch.width/total
+                    w = 2*math.pi * (ch.width + 1)/total
 
 
                 if ch in padNodes:
@@ -1035,21 +1198,37 @@ class Tree:
                 eta += w
                 self._assign_unrooted_tree_coordinates(circStart, ch, total, padNodes)
 
-    def find_MRCA(self, descendants):
-        assert (
-            len(descendants) > 1
-        ), f"Not enough descendants to find common ancestor: {len(descendants)}"
-        pathsToRoot = {
-            k.index: set(k.get_path_to_root()) for k in descendants
-        }  ## for every descendant create an empty set
-        # for k in descendants: ## iterate through every descendant
-        #     curNode=k ## start descent from descendant
-        #     while curNode: ## while not at root
-        #         pathsToRoot[k.index].add(curNode) ## remember every node visited along the way
-        #         curNode=curNode.parent ## descend
+    # def find_MRCA(self, descendants):
+    #     assert (
+    #         len(descendants) > 1
+    #     ), f"Not enough descendants to find common ancestor: {len(descendants)}"
+    #     pathsToRoot = {
+    #         k.index: set(k.get_path_to_root()) for k in descendants
+    #     }  ## for every descendant create an empty set
+    #     # for k in descendants: ## iterate through every descendant
+    #     #     curNode=k ## start descent from descendant
+    #     #     while curNode: ## while not at root
+    #     #         pathsToRoot[k.index].add(curNode) ## remember every node visited along the way
+    #     #         curNode=curNode.parent ## descend
 
-        # return the most recent branch that is shared across all paths to root
-        return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
+    #     # return the most recent branch that is shared across all paths to root
+    #     return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
+    def find_MRCA(self, descendants):
+        """
+        This is a ChatGPT suggested function that's meant to be much faster.
+        """
+        paths = [k.get_path_to_root()[::-1] for k in descendants]
+        mrca = None
+
+        # zip stops when any list ends
+        for nodes in zip(*paths):
+            # if all same object, continue
+            if all(n is nodes[0] for n in nodes):
+                mrca = nodes[0]
+            else:
+                break
+
+        return mrca
 
 
     def collapse_subtree_to_clade(self,
@@ -1181,7 +1360,7 @@ class Tree:
                 nodesToDelete.remove(k)  ## in fact, the node never existed
 
                 if len(designatedNodes) == 0:
-                    nodesToDelete == list(
+                    nodesToDelete = list(
                         filter(
                             lambda n: n.is_node()
                             and bool(collapseIfFxn(n))
@@ -1488,6 +1667,26 @@ class Tree:
 
         return subtrees
 
+    def condense_tree(self, cutoffs = None, protectedTips = [], widthFxn = None):
+        ## cutoffs is a tuple of values that define the minimum and maximum sizes of clades designated for collapsing
+        ## protectedTips is a list of tips names as str that will remain uncollapsed
+        ## widthFxn will determine how much y-axis space collapsed clades will occupy (default is same amount the uncollapsed subtree would)
+        if cutoffs is None:
+            N = len(self.get_external())
+            minClade, maxClade = 3, int(N * 0.2) ## default is collapse any node with between 3 and up to 20% of the tree's leaves as descendants
+        else:
+            minClade, maxClade = cutoffs
+
+        if widthFxn is None:
+            widthFxn = lambda k: len(k.leaves)
+
+        collapseCandidates = self.get_internal(lambda k: len(k.leaves.intersection(set(protectedTips))) == 0 and (minClade <= len(k.leaves) <= maxClade))
+        nodesToCollapse = unnest(collapseCandidates, towardsRoot = True)
+
+        for i,node in enumerate(nodesToCollapse):
+            self.collapse_subtree_to_clade(node,f'collapsed clade {i}', widthFunction = widthFxn)
+
+        return self
     ############################################
     ##########   PLOTTING FUNCTIONS   ##########
     ############################################
@@ -1566,7 +1765,7 @@ class Tree:
         colour=None,
         colourFxn=None,
         treeType='rectangular',
-        orientation='vertical',
+        orientation='horizontal',
         padNodes=None,
         circStart=0.0,
         circFrac=1.0,
@@ -1637,7 +1836,7 @@ class Tree:
     ):
         localKwargs = dict(kwargs)
 
-        if orientation == 'horizontal':
+        if orientation == 'vertical':
             if 'rotation' not in localKwargs:
                 localKwargs['rotation']=90
 
@@ -1653,7 +1852,7 @@ class Tree:
 
         for k in filter(targetFxn, self.Objects):
             x, y = xCoordinateFxn(k), yCoordinateFxn(k)
-            if orientation == 'horizontal':
+            if orientation == 'vertical':
                 x, y = y, x
             colour = colourFxn(k)
 
@@ -1923,7 +2122,7 @@ class Tree:
     #     return ax
 
     def plot_aligned_tip_labels(self, ax, xSpace=0.005, connectingLines=True, **kwargs):
-
+        ## need to implement orientation
         localKwargs=dict(kwargs)
         if 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': warnings.warn("Unrooted tree layout cannot accommodate aligned text labels, ignoring and plotting tip labels at the tips.")
         if 'xCoordinateFxn' in localKwargs:
@@ -2000,7 +2199,7 @@ class Tree:
         outlineColourFxn=None,
         padNodes=None,
         treeType='rectangular',
-        orientation='vertical',
+        orientation='horizontal',
         circStart=None,
         circFrac=None,
         inwardSpace=None,
@@ -2132,7 +2331,7 @@ class Tree:
                 outline_colours.append(outlineColourFxn(k))
                 outline_sizes.append(outlineSizeFxn(k))
 
-        if orientation=='horizontal': ## flip x and y coordinates if plotting horizontally
+        if orientation=='vertical': ## flip x and y coordinates if plotting horizontally
             if treeType == 'rectangular':
                 xs, ys = ys, xs
                 outline_xs, outline_ys = outline_ys, outline_xs
@@ -2168,7 +2367,7 @@ class Tree:
         Adds triangles for plotting collapsed clades.
         """
 
-        valid_styles=['equal','skewed']
+        valid_styles=['equal', 'skewed']
         assert style in valid_styles, f"Style {style} not recognised. Options are {valid_styles}"
 
         from matplotlib.patches import Polygon
@@ -2194,7 +2393,7 @@ class Tree:
                 lower_right=(early_end,yCoordinateFxn(k)-k.width/2)
 
             coords=[upper_left,upper_right,lower_right,lower_left]
-            if orientation=='horizontal':
+            if orientation=='vertical':
                 coords=[c[::-1] for c in coords]
 
             fc=colour(k) if callable(colour) else colour
@@ -2215,10 +2414,10 @@ class Tree:
         """
         Adds triangles for plotting collapsed clades.
         """
-        valid_styles=['equal','skewed']
+        valid_styles=['equal', 'skewed']
         assert style in valid_styles, f"Style {style} not recognised. Options are {valid_styles}"
 
-        valid_shapes=['triangle','rectangle']
+        valid_shapes=['triangle', 'rectangle']
         assert shape in valid_shapes, f"Clade shape {shape} not recognised. Options are {valid_shapes}"
 
         from matplotlib.patches import Polygon
@@ -2332,7 +2531,7 @@ class Tree:
             else:
                 pass  ## for now
 
-            if orientation=='horizontal': ## flip x and y coordinates if plotting horizontally
+            if orientation=='vertical': ## flip x and y coordinates if plotting horizontally
                 coords=[[coord[::-1] for coord in branch_coords] for branch_coords in coords] ## invert coordinates if plotting horizontally
 
             branches+=coords ## store branch for plotting
@@ -2446,7 +2645,7 @@ class Tree:
                 xCoordinateFxn=None,yCoordinateFxn=None,width=None,widthFxn=None,connectionType=None,
                 colour=None,colourFxn=None,orientation=None,padNodes=None,treeType='rectangular',
                 circStart=None,circFrac=None,inwardSpace=None,normaliseHeight=None,precision=None,
-                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.003,**kwargs):
+                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.001,**kwargs):
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
@@ -2504,7 +2703,7 @@ class Tree:
         ################################
         if treeType=='rectangular':
             if orientation is None:
-                orientation = 'vertical'
+                orientation = 'horizontal'
             else:
                 assert orientation in [
                     'horizontal',
@@ -2579,7 +2778,7 @@ class Tree:
                        pointSize=None,pointSizeFxn=None,
                        outline=True,outlineSize=None,outlineSizeFxn=None,
                        outlineColour=None,outlineColourFxn=None,
-                       padNodes=None,orientation='vertical',connectionType='baltic',**kwargs):
+                       padNodes=None,orientation='horizontal',connectionType='baltic',**kwargs):
         #### TODO: support for collapsed clades
 
         ### Set default values ###
@@ -2676,7 +2875,7 @@ class Tree:
 
         yCoordinateFxn = lambda k: k.y + cumulative_y
 
-        if orientation == 'horizontal':
+        if orientation == 'vertical':
             xCoordinateFxn, yCoordinateFxn = yCoordinateFxn, xCoordinateFxn
 
         for subtree in sorted(treeList, key = subtreeSortFxn):

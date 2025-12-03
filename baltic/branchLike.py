@@ -42,6 +42,7 @@ class BranchLike:
         self.length=0.0
         self.height=None
         self.absoluteTime=None
+        self.absoluteTimeRange=None ##todo: add this to docstring
         self.parent=None
         self.traits={}
         self.index=None
@@ -66,7 +67,8 @@ class BranchLike:
         """
         if path is None: path = []
 
-        if self.parent is None: # the root doesn't have a parent, so just return the path including the root
+        #TODO: make this self.parent.parent or flag the superroot
+        if self.parent.parent is None: # the root doesn't have a parent, so just return the path including the root // changed to .parent.parent because otherwise this function adds the "super root" - a fake parent to the root actually found in the tree string
             return path + [self]
         else: # if we aren't at the root, recurse
             newPath = path + [self]
