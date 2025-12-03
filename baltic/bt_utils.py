@@ -462,6 +462,83 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     return ax
 
+def _process_trait_prob_set(node, traitName):
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+
+    stateSet = node.traits[f"{traitName}.set"]
+    stateProbs = node.traits[f"{traitName}.set.prob"]
+    
+    stateSetDict = {key: value for key, value in zip(stateSet, stateProbs)}
+
+    return stateSetDict
+
+def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, centerFxn = None, area = 1.0, other_thres = 0.0, **kwargs):
+    
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+    
+    import squarify
+    from matplotlib.patches import Rectangle
+    
+    if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+    
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+    
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+    
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+    
+    x, y = centerFxn(node)
+
+    x -= width/2
+    y -= height/2
+
+    values = squarify.normalize_sizes(probs, width, height)
+    rects = squarify.squarify(values, x, y, width, height)
+
+    for i,rect in enumerate(rects):
+        rectPatch = Rectangle((rect['x'], rect['y']), rect['dx'], rect['dy'], fc = cs[i], **kwargs)
+        ax.add_patch(rectPatch)
+    
+    ax.autoscale()
+    return ax
+
+def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, radius = 0.5, other_thres = 0.0, **kwargs):
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+    
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+    
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+    
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+    
+    ax.pie(x = probs, colors = cs, radius = radius, center = centerFxn(node), **kwargs)
+
+    ax.autoscale()
+    return ax
+
 def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True, 
                          hpdLvl = 0.95, precision = 100, kdeWidth = 3, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}):
     
@@ -656,6 +733,26 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
 
     ax.tick_params(axis=axis, size=0)
+    return ax
+
+def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLabels = 'both'):
+    """
+    Remove selected spines, suppress ticks and ticklabels on x, y or both axes.
+    """
+    validSpines = ['left', 'top', 'right', 'bottom']
+    assert set(validSpines) >= set(hideSpines), f"Spine {[val for val in hideSpines if val not in validSpines]} not recognised. Must belong to the set {validSpines}."
+
+    validRemoveTickLabels = ['x', 'y', 'both']
+    assert removeTickLabels in validRemoveTickLabels, f"removeTickLabels value {removeTickLabels} not recognised. Must be one of {', '.join(validRemoveTickLabels)}"
+
+    if removeTickLabels in ['x', 'both']:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+    if removeTickLabels in ['y', 'both']:
+        ax.set_yticks([])
+        ax.set_yticklabels([])
+    
+    [ax.spines[loc].set_visible(False) for loc in hideSpines]
     return ax
 
 def untangle(trees,costFxn=None,iterations=None):
