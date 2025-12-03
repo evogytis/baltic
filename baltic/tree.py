@@ -1582,7 +1582,7 @@ class Tree: ## tree class
         colour=None,
         colourFxn=None,
         treeType='rectangular',
-        orientation='vertical',
+        orientation='horizontal',
         padNodes=None,
         circStart=0.0,
         circFrac=1.0,
@@ -1653,7 +1653,7 @@ class Tree: ## tree class
     ):
         localKwargs = dict(kwargs)
 
-        if orientation == 'horizontal':
+        if orientation == 'vertical':
             if 'rotation' not in localKwargs:
                 localKwargs['rotation']=90
 
@@ -1669,7 +1669,7 @@ class Tree: ## tree class
 
         for k in filter(targetFxn, self.Objects):
             x, y = xCoordinateFxn(k), yCoordinateFxn(k)
-            if orientation == 'horizontal':
+            if orientation == 'vertical':
                 x, y = y, x
             colour = colourFxn(k)
 
@@ -1939,7 +1939,7 @@ class Tree: ## tree class
     #     return ax
 
     def plot_aligned_tip_labels(self, ax, xSpace=0.005, connectingLines=True, **kwargs):
-
+        ## need to implement orientation
         localKwargs=dict(kwargs)
         if 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': warnings.warn("Unrooted tree layout cannot accommodate aligned text labels, ignoring and plotting tip labels at the tips.")
         if 'xCoordinateFxn' in localKwargs:
@@ -2016,7 +2016,7 @@ class Tree: ## tree class
         outlineColourFxn=None,
         padNodes=None,
         treeType='rectangular',
-        orientation='vertical',
+        orientation='horizontal',
         circStart=None,
         circFrac=None,
         inwardSpace=None,
@@ -2148,7 +2148,7 @@ class Tree: ## tree class
                 outline_colours.append(outlineColourFxn(k))
                 outline_sizes.append(outlineSizeFxn(k))
 
-        if orientation=='horizontal': ## flip x and y coordinates if plotting horizontally
+        if orientation=='vertical': ## flip x and y coordinates if plotting horizontally
             if treeType == 'rectangular':
                 xs, ys = ys, xs
                 outline_xs, outline_ys = outline_ys, outline_xs
@@ -2184,7 +2184,7 @@ class Tree: ## tree class
         Adds triangles for plotting collapsed clades.
         """
 
-        valid_styles=['equal','skewed']
+        valid_styles=['equal', 'skewed']
         assert style in valid_styles, f"Style {style} not recognised. Options are {valid_styles}"
         
         from matplotlib.patches import Polygon
@@ -2210,7 +2210,7 @@ class Tree: ## tree class
                 lower_right=(early_end,yCoordinateFxn(k)-k.width/2)
             
             coords=[upper_left,upper_right,lower_right,lower_left]
-            if orientation=='horizontal':
+            if orientation=='vertical':
                 coords=[c[::-1] for c in coords]
                 
             fc=colour(k) if callable(colour) else colour
@@ -2231,10 +2231,10 @@ class Tree: ## tree class
         """
         Adds triangles for plotting collapsed clades.
         """
-        valid_styles=['equal','skewed']
+        valid_styles=['equal', 'skewed']
         assert style in valid_styles, f"Style {style} not recognised. Options are {valid_styles}"
         
-        valid_shapes=['triangle','rectangle']
+        valid_shapes=['triangle', 'rectangle']
         assert shape in valid_shapes, f"Clade shape {shape} not recognised. Options are {valid_shapes}"
         
         from matplotlib.patches import Polygon
@@ -2348,7 +2348,7 @@ class Tree: ## tree class
             else:
                 pass  ## for now
 
-            if orientation=='horizontal': ## flip x and y coordinates if plotting horizontally
+            if orientation=='vertical': ## flip x and y coordinates if plotting horizontally
                 coords=[[coord[::-1] for coord in branch_coords] for branch_coords in coords] ## invert coordinates if plotting horizontally
             
             branches+=coords ## store branch for plotting
@@ -2520,7 +2520,7 @@ class Tree: ## tree class
         ################################
         if treeType=='rectangular':
             if orientation is None:
-                orientation = 'vertical'
+                orientation = 'horizontal'
             else:
                 assert orientation in [
                     'horizontal', 
@@ -2595,7 +2595,7 @@ class Tree: ## tree class
                        pointSize=None,pointSizeFxn=None,
                        outline=True,outlineSize=None,outlineSizeFxn=None,
                        outlineColour=None,outlineColourFxn=None,
-                       padNodes=None,orientation='vertical',connectionType='baltic',**kwargs):
+                       padNodes=None,orientation='horizontal',connectionType='baltic',**kwargs):
         #### TODO: support for collapsed clades
         
         ### Set default values ###
@@ -2692,7 +2692,7 @@ class Tree: ## tree class
 
         yCoordinateFxn = lambda k: k.y + cumulative_y
 
-        if orientation == 'horizontal':
+        if orientation == 'vertical':
             xCoordinateFxn, yCoordinateFxn = yCoordinateFxn, xCoordinateFxn
         
         for subtree in sorted(treeList, key = subtreeSortFxn):
