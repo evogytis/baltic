@@ -2142,7 +2142,7 @@ class Tree: ## tree class
             if normaliseHeight is None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
         
         elif treeType=='unrooted':
-
+            if circStart is None: circStart = 0.0
             if circFrac is not None: warnings.warn('Unrooted trees do not have a circFrac parameter, ignoring')
             if inwardSpace is not None: warnings.warn('Unrooted trees do not have an inwardSpace parameter, ignoring')
             if normaliseHeight is not None: warnings.warn('Unrooted trees do not have a normaliseHeight parameter, ignoring')
@@ -2412,7 +2412,7 @@ class Tree: ## tree class
 
         assert cladeShape in [
             'triangle',
-            'square'
+            'rectangle'
         ], f'Unrecognised clade shape "{cladeShape}"'
 
         assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
@@ -2589,7 +2589,7 @@ class Tree: ## tree class
         ###########################
         elif treeType=='unrooted':
             if circStart is None: circStart = 0.0
-            
+            if precision is None: precision = 15
             if orientation is not None: warnings.warn('Unrooted trees do not have an orientation parameter, ignoring')
             if circFrac is not None: warnings.warn('Unrooted trees do not have a circFrac parameter, ignoring')
             if inwardSpace is not None: warnings.warn('Unrooted trees do not have a inwardSpace parameter, ignoring')
