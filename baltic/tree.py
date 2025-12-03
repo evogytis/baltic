@@ -846,6 +846,32 @@ class Tree:
         maxMCiters: int = 400,
         returnMCdates: bool = True
     ):
+        """Reroot self according to a root-to-tip regression analysis.
+
+        Parameters
+        ----------
+        stat : str, optional
+            Which regression stat to optimize, by default "r^2"
+        forcePositive : bool, optional
+            Forbid date inference to allow negative branch lengths, by default True
+        nJobs : int | None, optional
+            Number of parallel threads to use for Monte Carlo regression, by default None
+        baseMCiters : int, optional
+            Minimum number of Monte Carlo iterations, by default 20
+        MCitersPerTip : int, optional
+            Additional Monte Carlo iterations per tip, by default 10
+        maxMCiters : int, optional
+            Maximum number of Monte Carlo iterations, by default 400
+        returnMCdates : bool, optional
+            True if the best-fitting inferred dates should be returned, by default True
+
+        Returns
+        -------
+        bt.Tree
+            Overwrites self following rerooting
+        dict
+            Mapping of tip names to the best-fitting dates
+        """
         from baltic.bt_utils import _root_to_tip, _rtt_worker, decimal_to_calendar_date
 
         validRootingMethods = ["r^2", "correlation", "sum of squares"]
@@ -993,7 +1019,24 @@ class Tree:
         else:
             return self
 
+
     def sort_branches(self, descending=True, sortFxn=None, operationFxn=None):
+        """Sort the branches of the tree so that they either ascend or descend for visualization.
+
+        Parameters
+        ----------
+        descending : bool, optional
+            Place branches with more descendants lower in y-coordinate space, by default True
+        sortFxn : function, optional
+            User-specified function to custom sort nodes, by default None
+        operationFxn : function, optional
+            User-specified function that reorders the children of each node, rather than the nodes, by default None
+
+        Raises
+        ------
+        Exception
+            If both a sortFxn and operationFxn are specified
+        """
         mod = 1 if descending else -1
         if sortFxn is None and operationFxn is None:
             logger.debug("Using default sort function.")
@@ -1027,8 +1070,20 @@ class Tree:
 
         self._assign_tree_coordinates()  ## update x and y positions of each branch, since y positions will have changed because of sorting
 
+
     def _assign_tree_coordinates(self, order=None, padNodes=None):
-        """ formerly drawTree()
+        """Assign x and y coordinates to all objects in a the tree.
+
+        Parameters
+        ----------
+        order : list[bt.BranchLike], optional
+            List of all leaves in their desired order, by default uses a pre-order traversal
+        padNodes : list[bt.BranchLike], optional
+            A list of nodes whose descendents will be padded with extra space, by default None
+
+        Notes
+        -----
+        formerly `drawTree()`
         """
         if order is None:
             ## order is a list of tips recovered from a tree traversal
@@ -1153,8 +1208,8 @@ class Tree:
         else:
             self.root.x = self.root.length
 
-    def _assign_unrooted_tree_coordinates(self, circStart=0.0, node=None, total=None, padNodes=None):
 
+    def _assign_unrooted_tree_coordinates(self, circStart=0.0, node=None, total=None, padNodes=None):
         if padNodes is None: padNodes = {}
 
         if node is None:
@@ -1234,9 +1289,20 @@ class Tree:
 
     #     # return the most recent branch that is shared across all paths to root
     #     return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
+
+
     def find_MRCA(self, descendants):
-        """
-        This is a ChatGPT suggested function that's meant to be much faster.
+        """Find the most recent common ancestor of a list of descendant nodes.
+
+        Parameters
+        ----------
+        descendants : list[bt.BranchLike]
+            List of node objects whose MRCA is being searched.
+
+        Returns
+        -------
+        bt.Node
+            The node that represents the most recent common ancestor.
         """
         paths = [k.get_path_to_root()[::-1] for k in descendants]
         mrca = None
