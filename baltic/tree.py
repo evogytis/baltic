@@ -1322,6 +1322,22 @@ class Tree:
                                     cl,
                                     givenName,
                                     widthFunction=lambda k: len(k.leaves)):
+        """Convert a subtree into a ``Clade`` object.
+
+        Parameters
+        ----------
+        cl : bt.Node
+            Node defining the root of the clade to collapse.
+        givenName : str
+            A name for the collapsed clade.
+        widthFunction : function, optional
+            Function defining the desired plotting width of the collapsed clade, by default lambda k: len(k.leaves)
+
+        Returns
+        -------
+        bt.Clade
+            The collapsed ``Clade`` object.
+        """
         assert cl.is_node(), "Cannot collapse non-node class"
         collapsedClade = Clade(givenName)
         collapsedClade.index = cl.index
