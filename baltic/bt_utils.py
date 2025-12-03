@@ -997,6 +997,60 @@ def desaturate(colour, desat = 0.65, out = "auto"):
     else:
         raise ValueError(f"out {out} invalid, must be one of {'auto','hex','rgb','rgba'}.")
 
+def make_cmap(colours, position=None, name="custom_cmap"):
+    """
+    Create a colormap from mixed color formats:
+        - RGB float tuples (0–1)
+        - RGB int tuples (0–255)
+        - Hex strings "#RRGGBB" or "RRGGBB"
+        - HTML/CSS names ("red", "steelblue")
+        - Matplotlib shorthand ("r", "C0")
+    """
+    
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+    
+    normalized = []
+    for c in colours:
+
+        # tuple/list: could be float or int RGB
+        if isinstance(c, (tuple, list)) and len(c) == 3:
+            if all(isinstance(v, float) for v in c) and all(0 <= v <= 1 for v in c):
+                normalized.append(tuple(c))
+            elif all(isinstance(v, int) for v in c) and all(0 <= v <= 255 for v in c):
+                normalized.append(tuple(v / 255.0 for v in c))
+            else:
+                raise ValueError(f"Invalid RGB tuple: {c}")
+
+        # string: hex, HTML name, or mpl shorthand
+        elif isinstance(c, str):
+            # allow "ffaa00" without "#"
+            if len(c) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in c):
+                c = "#" + c
+            try:
+                normalized.append(to_rgb(c))
+            except ValueError:
+                raise ValueError(f"Unrecognized color string: {c}")
+
+        else:
+            raise TypeError(f"Unsupported color format: {c}")
+
+    if position is None:
+        position = np.linspace(0, 1, len(colours))
+    else:
+        position = np.asarray(position, float)
+        if len(position) != len(colours):
+            raise ValueError("position must be same length as colors")
+        if position[0] != 0 or position[-1] != 1:
+            raise ValueError("position must start at 0 and end at 1")
+
+    cdict = {"red": [], "green": [], "blue": []}
+    for p, (r, g, b) in zip(position, normalized):
+        cdict["red"].append((p, r, r))
+        cdict["green"].append((p, g, g))
+        cdict["blue"].append((p, b, b))
+
+    return LinearSegmentedColormap(name, cdict)
+
 def desaturate_cmap(cmap, desat = 0.65):
     from matplotlib.colors import ListedColormap
 
