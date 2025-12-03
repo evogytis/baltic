@@ -569,6 +569,27 @@ class Tree:
 
 
     def reroot(self, branch=None, branchFrac=0.5, fixSingletons=True):
+        """Reroot a tree on a particular new branch.
+
+        Parameters
+        ----------
+        branch : bt.BranchLike, optional
+            Branch on which the reroot will take place, by default None. If no branchis given, initiate a midpoint rooting.
+        branchFrac : float, optional
+            Where in the new branch to split, by default 0.5
+        fixSingletons : bool, optional
+            True if singletons should be fixed, by default True
+
+        Returns
+        -------
+        bt.Tree
+            Overwrites self.
+
+        Raises
+        ------
+        AttributeError
+            If this method is called on a time-calibrated tree.
+        """
         if self.treeType == "time":
             logger.error("Cannot reroot a time-calibrated tree.")
             raise AttributeError
