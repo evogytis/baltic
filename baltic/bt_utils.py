@@ -435,6 +435,132 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     return ax
 
+def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True, 
+                         hpdLvl = 0.95, precision = 100, kdeWidth = 3, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}):
+    
+    ### certain tree orientations will require xCoord too
+    ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
+    import csv
+    from scipy.stats import gaussian_kde
+    from baltic.bt_utils import hpd, decimal_to_calendar_date
+
+
+    func_logger = logging.getLogger("baltic.tree.plot_tmrca_posterior")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[plot_tmrca_posterior] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+    
+    tmrcaPosterior = []
+    
+    if burnin == None:
+        burnin = 10e6
+        warnings.warn('No burnin set, defaulting to 10M states.')
+    
+    handle = open(tmrcaFile,'r')
+
+    for l in csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t'):
+        state = int(l['state'])
+        if state >= burnin:
+            tmrcaPosterior.append(float(l[tmrcaName])) ## grab column with tmrca stat
+
+    handle.close()
+    
+    if yCoord is None and node is None:
+        yCoord = 0.0
+    elif yCoord is None and node:
+        yCoord = node.y
+    elif yCoord is not None and node is not None:
+        warnings.warn(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
+    
+    localViolinKwargs = dict(violinKwargs)
+    if 'facecolor' not in localViolinKwargs: localViolinKwargs['facecolor'] = 'gray'
+    if 'edgecolor' not in localViolinKwargs: localViolinKwargs['edgecolor'] = 'none'
+    if 'alpha' not in localViolinKwargs: localViolinKwargs['alpha'] = 0.1
+    if 'zorder' not in localViolinKwargs: localViolinKwargs['zorder'] = 1
+    
+    localOutlineKwargs = dict(outlineKwargs)
+    if 'color' not in localOutlineKwargs: localOutlineKwargs['color'] = 'gray'
+    if 'linewidth' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
+    if 'zorder' not in localOutlineKwargs: localOutlineKwargs['zorder'] = 2
+    
+    kde = gaussian_kde(tmrcaPosterior)
+    hpdLo, hpdHi = hpd(tmrcaPosterior, hpdLvl)
+    x_grid = np.linspace(hpdLo, hpdHi, precision)
+
+    meanTmrca = np.mean(tmrcaPosterior)
+    medianTmrca = np.median(tmrcaPosterior)
+
+    func_logger.info(f"Node {tmrcaName} mean TMRCA: {meanTmrca:.3f} ({decimal_to_calendar_date(meanTmrca)}) median TMRCA: {medianTmrca:.3f} ({decimal_to_calendar_date(medianTmrca)})")
+    func_logger.info(f"Node {tmrcaName} TMRCA 95% HPD: {hpdLo:.3f} - {hpdHi:.3f} / {decimal_to_calendar_date(hpdLo)} - {decimal_to_calendar_date(hpdHi)}")
+    
+    y_grid = kde(x_grid)
+    y_max = y_grid.max()
+    y_grid /= y_max ## normalise KDE to peak at 1.0
+    y_grid *= kdeWidth ## rescale
+
+    upper_ys = [yCoord + y for y in y_grid]
+    lower_ys = [yCoord - y for y in y_grid]
+    constant_ys = [yCoord for _ in y_grid]
+    
+    if orientation == 'horizontal':
+        plotKDE = ax.fill_between
+    elif orientation == 'vertical':
+        plotKDE = ax.fill_betweenx
+
+    xs, uys, lys = x_grid, upper_ys, lower_ys
+    
+    if fullViolin:
+        plotKDE(xs, uys, lys, **localViolinKwargs)
+    else:
+        plotKDE(xs, uys, constant_ys, **localViolinKwargs)
+
+    if fullViolin:
+        if orientation == 'vertical':
+            ax.plot(uys, xs,**localOutlineKwargs)
+            ax.plot(lys, xs,**localOutlineKwargs)
+        elif orientation == 'horizontal':
+            ax.plot(xs, uys,**localOutlineKwargs)
+            ax.plot(xs, lys,**localOutlineKwargs)
+    else:
+        if orientation == 'vertical':
+            ax.plot(uys, xs,**localOutlineKwargs)
+        elif orientation == 'horizontal':
+            ax.plot(xs, uys,**localOutlineKwargs)
+
+    if connectNode and node:
+        x, y = meanTmrca, yCoord
+
+        mean_xs = [meanTmrca, meanTmrca]
+        if fullViolin:
+            mean_ys = [yCoord - kde(meanTmrca) / y_max * kdeWidth, yCoord + kde(meanTmrca) / y_max * kdeWidth]
+        else:
+            mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
+            mean_ys = np.array(mean_ys, dtype=float).tolist()
+        
+        elbow_xs = [meanTmrca, meanTmrca, node.absoluteTime]
+        elbow_ys = [yCoord, node.y, node.y]
+        
+        if orientation == 'vertical':
+            x, y = y, x
+            mean_xs, mean_ys = mean_ys, mean_xs
+            elbow_xs, elbow_ys = elbow_ys, elbow_xs
+        
+        ax.scatter(x, y, s = 40, fc = localViolinKwargs['facecolor'], ec = 'none', zorder = 10)
+        ax.scatter(x, y, s = 80, fc = 'k', ec = 'none', zorder = 9)
+
+        ax.plot(mean_xs, mean_ys, color = 'dimgray', ls = '-', zorder = 2)
+        ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
+    elif node is None:
+        warnings.warn(f"Need to specify node to connect to.")
+    
+    return ax
+
 def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
 
     if colour is not None and colourFxn is not None:
