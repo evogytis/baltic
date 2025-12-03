@@ -32,6 +32,8 @@ class Node(BranchLike):
         self.children=[]
         self.childHeight=None
         self.leaves=set()
+
+
     def is_leaflike(self):
         """Returns False."""
         return False

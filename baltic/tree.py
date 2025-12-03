@@ -1,3 +1,27 @@
+"""This module provides the baltic ``Tree`` class.
+
+Most baltic functionality including tree manipulations, simplifications, and plotting.
+
+Example
+-------
+To plot a simple tree in baltic and mtplotlib.pyplot (``plt``):
+
+>>> fig, ax = plt.subplot(1,1, figsize=(8,10))
+>>> treeString='((A:1.0,B:2.0):1.0,C:3.0);'
+>>> ll = bt.make_tree(treeString, treeType="divergence")
+>>> ll.plot_tree(ax)
+>>> plt.show_tree()
+
+Notes
+-----
+This version of BALTIC (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
+Attributes
+----------
+logger : logging.logger
+    Default logger which will be passed to other baltic functions.
+"""
 import copy
 import math
 import logging
@@ -15,28 +39,61 @@ from baltic.bt_utils import _root_to_tip, project_to_polar, project_polar_vector
 
 logger = logging.getLogger("baltic.Tree")
 
-class Tree: ## tree class
-    def __init__(self, treeType):
-        ## initial current node is a new instance of a node class which needs to be initialized
-        self.curNode = Node() ## current node is a new instance of a node class
-        self.curNode.index = 'Root' ## first object in the tree is the root to which the rest gets attached
-        self.curNode.length = 0.0 ## startind node branch length is 0
-        self.curNode.height = 0.0 ## starting node height is 0
+class Tree:
+    """
+    ``Tree'' class containing the majority of baltic functionality.
 
-        self.root = None #self.curNode ## root of the tree is current node
-        self.Objects = [] ## tree objects have a flat list of all branches in them
-        self.tipMap = None
-        self.treeHeight = 0 ## tree height is the distance between the root and the most recent tip
-        self.mostRecent = None
-        self.ySpan = 0.0
+    Attributes
+    ----------
+    treeType : {'divergence', 'time'}, REQUIRED
+    curNode : bt.Node
+        Current node is a new instance of a node class. Used as a reference in tree traversals. During tree construction is set by default to the root of the tree.
+    root : bt.Node, default=None
+        The root node of the tree.
+    Objects : list[bt.branchLike], default=[]
+        A flat list of all branchLike objects in the tree
+    tipMap : dict, default=None
+        Dictionary mapping between two alternative sets of tip names.
+    mostRecent : float, default=0.0
+        The x value of the most recent taxon in the tree.
+    treeHeight: float, default=0.0
+        Distance between the root and the most recent tip.
+    ySpan : float, default=0.0
+        The total span of the non-informative axis of the tree.
+    """
+    def __init__(self, treeType):
         assert treeType in [
             "divergence",
             "time"
         ], f"Failed to initialize tree with treeType {treeType}."
         self.treeType = treeType
 
-    def add_reticulation(self, name):
+        ## initial current node is a new instance of a node class which needs to be initialized
+        self.curNode = Node()
+        self.curNode.index = 'Root'
+        self.curNode.length = 0.0
+        self.curNode.height = 0.0
 
+        self.root = None
+        self.Objects = []
+        self.tipMap = None
+        self.mostRecent = 0.0
+        self.treeHeight = 0.0
+        self.ySpan = 0.0
+
+
+    def add_reticulation(self, name):
+        """Add a new reticulate branch to the tree branching off of ``self.curNode``.
+
+        Parameters
+        ----------
+        name : str
+            The name of the new reticulation
+
+        Notes
+        -----
+        After creating the reticulate branch, updates ``self.curNode`` to the newly created reticulate branch.
+        """
         logger.info(f"Creating new reticulation: {name}.")
         ret = Reticulation(name)
         ret.index = name
@@ -45,12 +102,29 @@ class Tree: ## tree class
         self.Objects.append(ret)
         self.curNode=ret
 
+
     def add_node(self, i):
         """Create a new internal node with appropriate parent-child links; add it to the tree.
+
+        Parameters
+        ----------
+        i : int
+            Unique index into the tree.
+
+        Notes
+        -----
+        If the tree does not have a root (i.e. a tree with no branches), then the new node will be set at the root of the tree.
+
+        After the new node is added, ``self.curNode`` will update to the newly created node.
+
+        Raises
+        ------
+        TypeError
+            If the current node of the tree to which the new node will be added is not itself a valid node (e.g. if ``self.curNode`` is a ``Leaf``).
         """
         logger.info(f"Creating new node: {i}.")
         new_node = Node() ## new node instance
-        new_node.index = i ## new node's index is the position along the tree string
+        new_node.index = i
         if self.root is None:
             self.root = new_node
             self.root.length = 0.0
@@ -63,32 +137,66 @@ class Tree: ## tree class
             )
             raise TypeError()
 
-        self.curNode.children.append(new_node) ## new node is a child of current node
-        self.curNode = new_node ## current node is now new node
-        self.Objects.append(self.curNode) ## add new node to list of objects in the tree
+        self.curNode.children.append(new_node)
+        self.curNode = new_node
+        self.Objects.append(self.curNode)
+
 
     def add_leaf(self, i, name):
         """Create a new leaf with appropriate parent-child links; add it to the tree.
+
+        Parameters
+        ----------
+        i : int
+            Unique index into the tree.
+        name : str
+            Name of the new leaf.
+
+        Notes
+        -----
+        If the tree does not have a root (i.e. a tree with no branches), then the new node will be set at the root of the tree.
+
+        After the new node is added, ``self.curNode`` will update to the newly created node.
+
+        Raises
+        ------
+        TypeError
+            If the current node of the tree to which the new node will be added is not itself a valid node (e.g. if ``self.curNode`` is a ``Leaf``).
         """
         logger.info(f"Creating new leaf: {name}.")
-        new_leaf = Leaf(name) ## new instance of leaf object
-        new_leaf.index = i ## index is position along tree string
+        new_leaf = Leaf(name)
+        new_leaf.index = i
         if self.root is None:
             self.root = new_leaf
 
-        new_leaf.parent = self.curNode ## leaf's parent is current node
+        new_leaf.parent = self.curNode
         if not self.curNode.is_node():
             logger.error("Attempted to add a child to a non-node object.")
             logger.error(
                 "Check if tip names have illegal characters like parentheses or commas."
             )
             raise TypeError()
-        self.curNode.children.append(new_leaf) ## assign leaf to parent's children
-        self.curNode = new_leaf ## current node is now new leaf
-        self.Objects.append(self.curNode) ## add leaf to all objects in the tree
+        self.curNode.children.append(new_leaf)
+        self.curNode = new_leaf
+        self.Objects.append(self.curNode)
 
-    def subtree(self,startingNode=None,traverseCondition=None,stem=True):
+
+    def subtree(self, startingNode=None, traverseCondition=None, stem=True):
         """Generate a new subtree starting from a given root node according to a certain condition.
+
+        Parameters
+        ----------
+        startingNode : bt.branchLike, default=self.root
+            The node from which the new subtree will descend.
+        traverseCondition : function, default=lambda k: True
+            Function defining the conditional inclusion descendant nodes.
+        stem : bool, default=True
+            Include the stem branch leading into the root.
+
+        Returns
+        -------
+        bt.Tree
+            A copy of the baltic tree that descends from ``startingNode``, where all descendant branches match ``traverseCondition``.
         """
         logger.info("Generating subtree.")
         if startingNode is None:
@@ -180,6 +288,12 @@ class Tree: ## tree class
         return localTree
 
     def make_single_type(self):
+        """Convert from a multitype tree to a single-type tree.
+
+        Notes
+        -----
+        Statically fuses any branches of the tree that are broken by a multitype node, resulting in only multitype nodes in the tree.
+        """
         logger.info("Converting to single-type tree.")
         while True:
             multitypeNodes = self.get_internal(lambda k: len(k.children) == 1)
@@ -208,21 +322,46 @@ class Tree: ## tree class
 
 
     def set_absolute_time(self, mostRecentSamplingDate):
+        """Set the absoluteTime value of all branches in the tree according to their height and the MRSD.
+
+        Parameters
+        ----------
+        mostRecentSamplingDate : float
+            The decimal date of the most recent sampling date included in the tree.
+        """
         logger.debug("Setting absoluteTime for all branches.")
         logger.debug(f"MRSD: {mostRecentSamplingDate}")
+
+        assert self.treeType == "time", "Cannot set absolute time values for a divergence tree."
+
         for k in self.Objects:  ## iterate over all objects
             k.absoluteTime = (
                 mostRecentSamplingDate - self.treeHeight + k.height
             )  ## heights are in units of time from the root
         self.mostRecent = max(k.absoluteTime for k in self.Objects)
 
+
     def rescale(self, factor):
+        """Rescale all branches of the tree by a scalar.
+
+        Parameters
+        ----------
+        factor : float
+            Scalar value by which all branch lengths in the tree will be multiplied.
+        """
         logger.debug(f"Rescaling tree by factor of {factor}.")
         for k in self.Objects:
             k.length = k.length * factor
         self.traverse_tree()
 
+
     def treeStats(self):
+        """Print a standardized set of statistics about the tree.
+
+        Notes
+        -----
+        Prints the tree height, length, if it is strictly bifurcating, if contains multitype nodes, if it is a singleton tree, if it has annotations present on its branches, and the number of total objects (nodes and leaves) in the tree.
+        """
         stats = self._calculate_tree_stats()
         print(
             "\nTree height: %.6f\nTree length: %.6f"
@@ -243,10 +382,25 @@ class Tree: ## tree class
             % (stats["numObjects"], stats["numNodes"], stats["numLeaves"])
         )  ## report numbers of different objects in the tree
 
+
     def treeStatsDict(self):
+        """The tree statistics as a dictionary.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all the canonical statistics of the tree that are typically printed by ``treeStats()``.
+        """
         return self._calculate_tree_stats()
 
+
     def _calculate_tree_stats(self):
+        """Calculate canonical tree statistics that will be printed by ``treeStats()``
+
+        Returns
+        -------
+        dict
+        """
         logger.debug("Calculating tree statistics.")
         stats = {}
 
@@ -279,9 +433,33 @@ class Tree: ## tree class
 
         return stats
 
+
     def traverse_tree(
         self, curNode=None, includeCondition=None, traverseCondition=None, collect=None
     ):
+        """Recursively traverse the tree.
+
+        Parameters
+        ----------
+        curNode : bt.branchLike, default=self.root
+            Node from which the traversal begins.
+        includeCondition : function, default=lambda k: k.is_leaflike()
+            Condition by which traversed nodes and leaves should be included in the output collection.
+        traverseCondition : function, default=lambda k: True
+            Condition determining if a node that is encountered during traversal should itself be traversed. All subtrees descending from non-traversed nodes will also be excluded from traversal.
+        collect : list[bt.branchLike], default=[]
+            A collection of traversed objects that match both ``includeCondition`` and ``traverseCondition``.
+
+        Returns
+        -------
+        collect : list[bt.branchLike]
+            Collection of traversed objects.
+
+        Raises
+        ------
+        AttributeError
+            If the traversal finds a node object that does not have any leaflike objects descending from it.
+        """
         logger.info("Beginning tree traversal.")
         if curNode is None:  ## if no starting point defined - start from root
             logger.debug("Initiated traversal from root.")
@@ -359,15 +537,20 @@ class Tree: ## tree class
             )  ## it's the highest child of the starting node
         return collect
 
-    def rename_tips(self, tipNameMap=None):
-        if tipNameMap is None:
-            if self.tipMap is not None:
-                logger.debug("No tipNameMap given, using tree.tipMap.")
-                tipNameMap = self.tipMap
-            else:
-                raise ValueError("No dictionary provided for renaming tips.")
 
     def rename_tips(self, tipNameMap=None):
+        """Rename the tips of a tree according to a tip name map.
+
+        Parameters
+        ----------
+        tipNameMap : dict, default=self.tipMap
+            Dictionary mapping of old tip names to new names.
+
+        Raises
+        ------
+        ValueError
+            If no dictionary is provided and self.tipMap is None.
+        """
         if tipNameMap is None:
             if self.tipMap is not None:
                 logger.debug("No tipNameMap given, using tree.tipMap.")
