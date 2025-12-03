@@ -479,8 +479,14 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         warnings.warn(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
     
     localViolinKwargs = dict(violinKwargs)
-    if 'facecolor' not in localViolinKwargs: localViolinKwargs['facecolor'] = 'gray'
-    if 'edgecolor' not in localViolinKwargs: localViolinKwargs['edgecolor'] = 'none'
+    if 'fc' in localViolinKwargs:
+        localViolinKwargs['facecolor'] = localViolinKwargs['fc']
+        localViolinKwargs.pop('fc')
+    if 'ec' in localViolinKwargs:
+        localViolinKwargs['edgecolor'] = localViolinKwargs['ec']
+        localViolinKwargs.pop('ec')
+    if 'facecolor' not in localViolinKwargs and 'fc' not in localViolinKwargs: localViolinKwargs['facecolor'] = 'gray'
+    if 'edgecolor' not in localViolinKwargs and 'ec' not in localViolinKwargs: localViolinKwargs['edgecolor'] = 'none'
     if 'alpha' not in localViolinKwargs: localViolinKwargs['alpha'] = 0.1
     if 'zorder' not in localViolinKwargs: localViolinKwargs['zorder'] = 1
     
@@ -552,7 +558,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
             elbow_xs, elbow_ys = elbow_ys, elbow_xs
         
         ax.scatter(x, y, s = 40, fc = localViolinKwargs['facecolor'], ec = 'none', zorder = 10)
-        ax.scatter(x, y, s = 80, fc = 'k', ec = 'none', zorder = 9)
+        ax.scatter(x, y, s = 80, fc = localViolinKwargs['edgecolor'], ec = 'none', zorder = 9)
 
         ax.plot(mean_xs, mean_ys, color = 'dimgray', ls = '-', zorder = 2)
         ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
