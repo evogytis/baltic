@@ -412,6 +412,49 @@ class Tree: ## tree class
         for k in self.get_external():  ## iterate through leaf objects in tree
             k.name = tipNameMap[k.name]  ## change its name
 
+    def midpoint_root(self, fixSingletons=True):
+        logger.debug("No branch provided, rooting at midpoint")
+        # Identify the largest pairwise distance
+        maxDistance = 0.0
+
+        for tip in self.get_external():  ## iterate over tips
+
+            self.reroot(branch=tip, branchFrac=0.0, fixSingletons=fixSingletons)
+            self.traverse_tree()  ## set heights
+
+            highestTip = sorted(self.get_external(), key=lambda k: k.height)[-1]
+            newMax = highestTip.height
+            if newMax > maxDistance:  ## check if current height is bigger
+                tip1 = tip
+                tip2 = highestTip
+                maxDistance = newMax
+                # logger.info(f'setting {tip2.name} as current highest tip at height {max_distance}')
+
+        # TODO: make sure that tip1 and tip2 always get assigned
+        logger.debug(f"Midpoint rooting: Rooting on highest tip under current topology ({tip1.name}).")
+        self = self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons)
+
+        # Depth to go from the ingroup tip toward the outgroup tip
+        rootRemainder = 0.5 * maxDistance  # - (self.root.length or 0))
+        assert rootRemainder >= 0
+        # Identify the midpoint and reroot there.
+        # Trace the path to the outgroup tip until all of the root depth has
+        # been traveled/accounted for.
+        path = tip2.get_path_to_root()
+
+        for node in path[::-1]:  ## iterate from old root to new
+            rootRemainder -= node.length
+            #             logger.info(f'iterating over path: {node.index} root remainder: {root_remainder}')
+            if rootRemainder < 0:
+                outgroup_node = node
+                branchFrac = -rootRemainder / outgroup_node.length
+                break
+        logger.debug(f"Midpoint rooting: rooting on node {outgroup_node.index} halfway from previous highest tip and current highest tip {tip2.name}.")
+        self = self.reroot(
+            branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons
+        )
+        logger.debug("Finished midpoint rooting.")
+        return self
 
     def reroot(self, branch=None, branchFrac=0.5, fixSingletons=True):
         if self.treeType == "time":
@@ -425,48 +468,7 @@ class Tree: ## tree class
         oldTreeLength = sum(self.get_parameter_list("length"))  ## get old tree length
         ###############
         if branch is None:  ## midpoint rooting
-            logger.debug("No branch provided, rooting at midpoint")
-            # Identify the largest pairwise distance
-            maxDistance = 0.0
-
-            for tip in self.get_external():  ## iterate over tips
-
-                self.reroot(branch=tip, branchFrac=0.0, fixSingletons=fixSingletons)
-                self.traverse_tree()  ## set heights
-
-                highestTip = sorted(self.get_external(), key=lambda k: k.height)[-1]
-                newMax = highestTip.height
-                if newMax > maxDistance:  ## check if current height is bigger
-                    tip1 = tip
-                    tip2 = highestTip
-                    maxDistance = newMax
-                    # logger.info(f'setting {tip2.name} as current highest tip at height {max_distance}')
-
-            # TODO: make sure that tip1 and tip2 always get assigned
-            logger.debug(f"Midpoint rooting: Rooting on highest tip under current topology ({tip1.name}).")
-            self = self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons)
-
-            # Depth to go from the ingroup tip toward the outgroup tip
-            rootRemainder = 0.5 * maxDistance  # - (self.root.length or 0))
-            assert rootRemainder >= 0
-            # Identify the midpoint and reroot there.
-            # Trace the path to the outgroup tip until all of the root depth has
-            # been traveled/accounted for.
-            path = tip2.get_path_to_root()
-
-            for node in path[::-1]:  ## iterate from old root to new
-                rootRemainder -= node.length
-                #             logger.info(f'iterating over path: {node.index} root remainder: {root_remainder}')
-                if rootRemainder < 0:
-                    outgroup_node = node
-                    branchFrac = -rootRemainder / outgroup_node.length
-                    break
-            logger.debug(f"Midpoint rooting: rooting on node {outgroup_node.index} halfway from previous highest tip and current highest tip {tip2.name}.")
-            self = self.reroot(
-                branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons
-            )
-            logger.debug("Finished midpoint rooting.")
-            return self
+            self = self.midpoint_root(fixSingletons=fixSingletons)
 
         ##############
         path = branch.get_path_to_root()  ## get path from new root to old root, ignore actual root node
