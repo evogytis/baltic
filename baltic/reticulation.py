@@ -22,7 +22,7 @@ class Reticulation(BranchLike):
         Name for the reticulation node
     width : float, default=0.5
         Plotting width for the reticulate branch.
-    target : bt.branchLike : default=None
+    target : BranchLike : default=None
         The branch which the reticulation merges into.
     """
 

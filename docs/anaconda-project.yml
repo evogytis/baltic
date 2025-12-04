@@ -12,14 +12,18 @@ commands:
 env_specs:
   default:
     packages:
+      - cmcrameri
       - matplotlib
       - myst-parser
       - numpy
+      - pip
       - python=3.10
       - scipy
       - sphinx
       - sphinx_rtd_theme
       - seaborn
+      - pip:
+          - python-docs-theme
 
 channels:
   - defaults

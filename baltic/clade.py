@@ -18,7 +18,7 @@ class Clade(BranchLike): ## clade class
     ----------
     branchType : str, default='leaf'
         DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
-    subtree : bt.Tree, default=None
+    subtree : Tree, default=None
         Tree object containing all the branches that were collapses.
     leaves : list[bt.Leaf], default=None
         List of descendent leaves contained in the clade.

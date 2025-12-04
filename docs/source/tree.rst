@@ -3,7 +3,7 @@
    :maxdepth: 2
 
 ``Tree``
-===================
+========
 
 .. automodule:: baltic.tree
-    :members:
+   :members:

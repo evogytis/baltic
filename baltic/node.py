@@ -18,7 +18,7 @@ class Node(BranchLike):
     ----------
     branchType : str, default='node'
         DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
-    children : list[bt.branchLike], default=[]
+    children : list[BranchLike], default=[]
         A list of the descendent branches of this node.
     childHeight : float, default=None
         The height of the youngest descendant of this node.
