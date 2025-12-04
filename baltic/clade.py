@@ -18,27 +18,33 @@ class Clade(BranchLike): ## clade class
     ----------
     branchType : str, default='leaf'
         DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
-    subtree : Tree, default=None
+
+    subtree : Tree
         Tree object containing all the branches that were collapses.
-    leaves : list[bt.Leaf], default=None
+
+    leaves : list[:class:`.Leaf`]
         List of descendent leaves contained in the clade.
+
     name : str
         The pretend tip name for the clade.
-    lastHeight : float, default=None
+
+    lastHeight : float
         The height of the highest (furthest in the past) tip in the collapsed tree.
-    lastAbsoluteTime : float, default=None
-        The absolute time of the highest (furthest in the past) tip in the collapsed clade
-    width : float, default=1.0
+
+    lastAbsoluteTime : float
+        The absolute time of the highest (furthest in the past) tip in the collapsed clade.
+
+    width : float
         Width value used in plotting of the collapsed clade.
     """
 
-    def __init__(self,givenName):
-        self.branchType='leaf'
-        self.subtree=None
-        self.leaves=None
-        self.name=givenName
-        self.lastHeight=None ## refers to the height of the highest tip in the collapsed clade
-        self.lastAbsoluteTime=None ## refers to the absolute time of the highest tip in the collapsed clade
+    def __init__(self,name, branchType='leaf', subtree=None, leaves=None, lastHeight=None, lastAbsoluteTime=None, width=1.0):
+        self.name=name
+        self.branchType=branchType
+        self.subtree=subtree
+        self.leaves=leaves
+        self.lastHeight=lastHeight ## refers to the height of the highest tip in the collapsed clade
+        self.lastAbsoluteTime=lastAbsoluteTime ## refers to the absolute time of the highest tip in the collapsed clade
         self.width=1.0
 
     def is_leaflike(self):
@@ -52,3 +58,6 @@ class Clade(BranchLike): ## clade class
     def is_node(self):
         """Returns False"""
         return False
+
+    def __str__(self):
+        return f"Clade({self.name})"

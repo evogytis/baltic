@@ -22,9 +22,9 @@ class Leaf(BranchLike):
         The tip name for the leaf.
     """
 
-    def __init__(self,name):
+    def __init__(self,name, branchType='leaf'):
         super().__init__() # all of leaf's traits come from BranchLike
-        self.branchType='leaf'
+        self.branchType=branchType
         self.name=name
 
     def is_leaflike(self):
@@ -38,3 +38,6 @@ class Leaf(BranchLike):
     def is_node(self):
         """Returns False."""
         return False
+
+    def __str__(self):
+        return f"Leaf({self.name})"

@@ -221,6 +221,7 @@ def make_tree(data, treeType, tre=None):
             tre.curNode=tre.curNode.parent
 
         if data[i] == ';': ## look for string end
+            tre.traverse_tree()
             return tre
 
 
@@ -240,8 +241,7 @@ def make_tree_JSON(jsonNode,jsonTranslationDict,treeType,tre=None,):
 
     Returns
     -------
-    tre : baltic.Tree
-        Output tree object.
+    :class:`.Tree`
     """
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()

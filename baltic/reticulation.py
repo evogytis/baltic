@@ -8,7 +8,8 @@ logger = logging.getLogger("baltic.Reticulation")
 
 
 class Reticulation(BranchLike):
-    """``Reticulation`` class for external nodes that represent recombination, conversion, and reassortment events.
+    """
+    ``Reticulation`` class for external nodes that represent recombination, conversion, and reassortment events.
 
     Note
     ----
@@ -18,6 +19,7 @@ class Reticulation(BranchLike):
     ----------
     branchType : str, default='leaf'
         DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
+
     name : str
         Name for the reticulation node
     width : float, default=0.5
@@ -26,12 +28,12 @@ class Reticulation(BranchLike):
         The branch which the reticulation merges into.
     """
 
-    def __init__(self,name):
+    def __init__(self,name, branchType='leaf', width=0.5, target=None):
         super().__init__() # Inherit traits from BranchLike
-        self.branchType='leaf'
         self.name=name
-        self.width=0.5
-        self.target=None
+        self.branchType=branchType
+        self.width=width
+        self.target=target
 
     def is_leaflike(self):
         """Returns True."""
@@ -44,3 +46,6 @@ class Reticulation(BranchLike):
     def is_node(self):
         """Returns False."""
         return False
+
+    def __str__(self):
+        return f"Reticulation({self.name})"

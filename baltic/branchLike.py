@@ -6,64 +6,85 @@ logger = logging.getLogger("baltic.BranchLike")
 
 
 class BranchLike:
-    """``BranchLike`` class serves as super class that gets inherited by ``Clade``, ``Leaf``, ``Node``, and ``Reticulation``.
+    """
+    ``BranchLike`` class serves as super class that gets inherited by
+    :class:`.Clade`, :class:`.Leaf`, :class:`.Node`, and :class:`.Reticulation`.
 
-    This class defines the recursive structures of which baltic ``Tree`` objects are built.
+    This class defines the recursive structures of which ``baltic`` :class:`.Tree` objects are built.
 
     Note
     ----
-    Most attributes have null default values as they are either (1) set automatically during tree construction, or (2) defined by the specific inherited subclass.
+    Most attributes have null default values as they are either (1) set automatically
+    during tree construction, or (2) defined by the specific inherited subclass.
 
     Attributes
     ----------
-    branchType : str, default=None
+    branchType : str
         DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
+
     length : float, default=0.0
         The length of the incoming branch leading to the node/leaf.
-    height : float, default=None
+
+    height : float
         Height, set by traversing the tree.
-    absoluteTime : float, default=None
+
+    absoluteTime : float
         Branch end point in absolute time.
-    parent : baltic.branchLike, default=None
+
+    parent : baltic.branchLike
         Reference to parent of ``self``.
+
     traits : dict, default={}
         Dictionary that will contain annotations from the tree string, e.g. ``{'posterior': 1.0}``.
-    index : int, default=None
-        Index of the character designating this object in the tree string. Uniquely identifies every object in the tree.
-    x : float, default=None
+
+    index : int
+        Index of the character designating this object in the tree string.
+
+        Uniquely identifies every object in the tree.
+
+    x : float
         The x-coordinate of the node, according to the coordinate system of a plot.
-    y : float, default=None
+
+    y : float
         The y-coordinate of the node, according to the coordinate system of a plot.
     """
 
+    def __init__(self,
+                branchType=None,
+                length=0.0,
+                height=None,
+                absoluteTime=None,
+                absoluteTimeRange=None,
+                parent=None,
+                traits=None):
+        self.branchType=branchType
+        self.length=length
+        self.height=height
+        self.absoluteTime=absoluteTime
+        self.absoluteTimeRange=absoluteTimeRange ##todo: add this to docstring
+        self.parent=parent
+        self.traits=traits if traits is not None else {}
 
-    def __init__(self):
-        self.branchType=None
-        self.length=0.0
-        self.height=None
-        self.absoluteTime=None
-        self.absoluteTimeRange=None ##todo: add this to docstring
-        self.parent=None
-        self.traits={}
+        # These three attributes are set later during tree construction / plotting
         self.index=None
         self.x=None
         self.y=None
 
 
     def get_path_to_root(self, path=None):
-        """Recursively find the path from this node to the root, listed in reverse-chrnonological order (starting with current node, ending with the root).
+        """
+        Recursively find the path from this node to the root, listed in reverse-chrnonological order (starting with current node, ending with the root).
 
         Operates by adding itself to the path, then recursively calling ``get_path_to_root`` on the current node's parent.
 
         Parameters
         ----------
-        path : str(baltic.branchLike), default=None
+        path : list[:class:`.BranchLike`]
             The path that has been traversed so far.
 
         Returns
         -------
-        path : str(baltic.branchLike)
-            The full path from self to the root of the tree.
+        path : list[:class:`.BranchLike`]
         """
         if path is None: path = []
 
@@ -85,7 +106,7 @@ class BranchLike:
 
         Returns
         -------
-        list(baltic.branchLike)
+        list[:class:`.BranchLike`]
         """
         if self.parent is None:
             logger.warning("Attempted to find siblings of root node. Returning empty list.")
@@ -97,8 +118,12 @@ class BranchLike:
         return list(sibs)
 
 
-    def is_leaflike(self):
-        """Returns ``True`` if the current node is a terminal node (i.e. ``Leaf``, ``Clade``, or ``Reticulation``).
+    def is_leaflike(self) -> bool:
+        """Returns ``True`` if the current node is a terminal node (i.e. :class:`.Leaf`, :class:`.Clade`, or :class:`.Reticulation`).
+
+        Returns
+        -------
+        bool
 
         Note
         ----
@@ -107,18 +132,26 @@ class BranchLike:
         return False
 
 
-    def is_leaf(self):
-        """Returns ``True`` if the current node is a ``Leaf`` node.
+    def is_leaf(self) -> bool:
+        """Returns ``True`` if the current node is a :class:`.Leaf` node.
+
+        Returns
+        -------
+        bool
 
         Note
         ----
-        This is set to always return ``False``, however this behavior is overwritten by the ``Leaf`` subclass.
+        This is set to always return ``False``, however this behavior is overwritten by the :class:`.Leaf` subclass.
         """
         return False
 
 
-    def is_node(self):
+    def is_node(self) -> bool:
         """Returns ``True`` if the current node is an internal node.
+
+        Returns
+        -------
+        bool
 
         Note
         ----

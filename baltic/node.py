@@ -18,20 +18,27 @@ class Node(BranchLike):
     ----------
     branchType : str, default='node'
         DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
-    children : list[BranchLike], default=[]
+
+    children : list[:class:`.BranchLike`]
         A list of the descendent branches of this node.
-    childHeight : float, default=None
+
+        By default this is an empty list, and should be populated during tree construction.
+
+    childHeight : float
         The height of the youngest descendant of this node.
-    leaves : set({bt.Leaf, bt.Clade}) : default={}
+
+    leaves : set({:class:`.Leaf`})
         A set of all the tips that descend from this node (i.e. the full clade defined by this node).
+
+        This set does not contain any internal nodes, only leaves.
     """
 
-    def __init__(self):
+    def __init__(self, branchType='node', children=None, childHeight=None, leaves=None):
         super().__init__()
         self.branchType='node'
-        self.children=[]
-        self.childHeight=None
-        self.leaves=set()
+        self.children = children if children is not None else []
+        self.childHeight = childHeight
+        self.leaves = leaves if leaves is not None else set()
 
 
     def is_leaflike(self):
@@ -45,3 +52,6 @@ class Node(BranchLike):
     def is_node(self):
         """Returns True."""
         return True
+
+    def __str__(self):
+        return f"Node({self.index})"

@@ -27,7 +27,6 @@ import logging
 import random
 import string
 import warnings
-from functools import reduce
 import numpy as np
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Polygon
@@ -40,29 +39,58 @@ from baltic.bt_utils import project_to_polar, project_polar_vector, unnest
 logger = logging.getLogger("baltic.Tree")
 
 class Tree:
-    """``Tree`` class containing the majority of baltic functionality.
+    """
+    ``Tree`` class containing the majority of baltic functionality.
 
     Attributes
     ----------
     treeType : {'divergence', 'time'}
-        Type of the tree
+        Type of the tree.
+
+        *Divergence* trees have branch lengths in relative units (e.g. substitutions per
+        site, or arbitrary units). *Time* trees have branch lengths in absolute time
+        units (e.g. years, days).
+
     curNode : :class:`.Node`
-        Current node is a new instance of a node class, defaults to root of tree
-    root : :class:`.Node`, default=None
+        Current node is a new instance of a :class:`.Node`, defaults to root of tree
+
+    root : :class:`.Node`
         The root node of the tree.
-    Objects : list[:class:`.BranchLike`], default=[]
-        A flat list of all :class:`.BranchLike` objects in the tree
-    tipMap : dict, default=None
+
+    Objects : list[:class:`.BranchLike`]
+        A flat list of all :class:`.BranchLike` objects in the tree.
+
+        By default, this list is populated as nodes and leaves are added to the tree.
+
+    tipMap : dict, optional
         Dictionary mapping between two alternative sets of tip names.
-    mostRecent : float, default=0.0
+
+    mostRecent : float
         The x value of the most recent taxon in the tree.
-    treeHeight: float, default=0.0
+
+    treeHeight: float
         Distance between the root and the most recent tip.
-    ySpan : float, default=0.0
+
+    ySpan : float
         The total span of the non-informative axis of the tree.
+
+        Typically in ``baltic``, the y-axis is used to separate tips and clades visually,
+        but does not have any inherent meaning. The convention of referring to this as the "y-axis" is
+        maintained for consistency, even in circular or vertical layouts where the y-axis is
+        not strictly vertical.
     """
 
-    def __init__(self, treeType):
+    def __init__(
+        self,
+        treeType,
+        curNode=None,
+        root=None,
+        Objects=None,
+        tipMap=None,
+        mostRecent=0.0,
+        treeHeight=0.0,
+        ySpan=0.0,
+        ):
         assert treeType in [
             "divergence",
             "time"
@@ -70,42 +98,34 @@ class Tree:
         self.treeType = treeType
 
         ## initial current node is a new instance of a node class which needs to be initialized
-        self.curNode = Node()
-        self.curNode.index = 'Root'
-        self.curNode.length = 0.0
-        self.curNode.height = 0.0
+        if not curNode:
+            self.curNode = Node()
+            self.curNode.index = 'Root'
+            self.curNode.length = 0.0
+            self.curNode.height = 0.0
+        else:
+            self.curNode = curNode
 
-        self.root = None
-        self.Objects = []
-        self.tipMap = None
-        self.mostRecent = 0.0
-        self.treeHeight = 0.0
-        self.ySpan = 0.0
+        self.root = root
+
+        if not Objects:
+            self.Objects = []
+        else:
+            self.Objects = Objects
+
+        self.tipMap = tipMap
+        self.mostRecent = mostRecent
+        self.treeHeight = treeHeight
+        self.ySpan = ySpan
 
 
-    def add_reticulation(self, name):
-        """Add a new reticulate branch to the tree branching off of ``self.curNode``
-
-        Parameters
-        ----------
-        name : str
-            The name of the new reticulation
-
-        Notes
-        -----
-        After creating the reticulate branch, updates ``self.curNode`` to the newly created reticulate branch.
+    def add_node(
+        self,
+        i,
+        ):
         """
-        logger.info(f"Creating new reticulation: {name}.")
-        ret = Reticulation(name)
-        ret.index = name
-        ret.parent = self.curNode
-        self.curNode.children.append(ret)
-        self.Objects.append(ret)
-        self.curNode=ret
-
-
-    def add_node(self, i):
-        """Create a new internal node with appropriate parent-child links; add it to the tree.
+        Create a new internal :class:`.Node` with appropriate parent-child
+        links; add it to the tree.
 
         Parameters
         ----------
@@ -114,14 +134,26 @@ class Tree:
 
         Notes
         -----
-        If the tree does not have a root (i.e. a tree with no branches), then the new node will be set at the root of the tree.
+        If the tree does not have a ``.root`` (i.e. a tree with no branches),
+        then the new node will be set as the root of the tree.
 
         After the new node is added, ``self.curNode`` will update to the newly created node.
 
         Raises
         ------
         TypeError
-            If the current node of the tree to which the new node will be added is not itself a valid node (e.g. if ``self.curNode`` is a ``Leaf``).
+            If the current node of the tree to which the new node will be added
+            is not itself a valid node (e.g. if ``self.curNode`` is a :class:`.Leaf`).
+
+        Examples
+        --------
+        >>> ll = bt.Tree(treeType="divergence")
+        >>> ll.add_node(1)
+        >>> ll.add_node(2)
+        >>> print(ll.root.index)
+        1
+        >>> print(ll.curNode.index)
+        2
         """
         logger.info(f"Creating new node: {i}.")
         new_node = Node() ## new node instance
@@ -143,27 +175,49 @@ class Tree:
         self.Objects.append(self.curNode)
 
 
-    def add_leaf(self, i, name):
-        """Create a new leaf with appropriate parent-child links; add it to the tree.
+    def add_leaf(
+        self,
+        i,
+        name,
+        ):
+        """
+        Create a new :class:`.Leaf` with appropriate parent-child links; add it to the tree.
 
         Parameters
         ----------
         i : int
             Unique index into the tree.
+
         name : str
             Name of the new leaf.
 
         Notes
         -----
-        If the tree does not have a root (i.e. a tree with no branches), then the new node will be set at the root of the tree.
+        If the tree does not have a root (i.e. a tree with no branches), then the
+        new node will be set at the root of the tree.
 
-        After the new node is added, ``self.curNode`` will update to the newly created node.
+        After the new node is added, ``self.curNode`` will update to the newly
+        created node.
 
         Raises
         ------
         TypeError
-            If the current node of the tree to which the new node will be added is not itself a valid node (e.g. if ``self.curNode`` is a ``Leaf``).
+            If the current node of the tree to which the new node will be added is not itself a
+            valid node (e.g. if ``self.curNode`` is a :class:`.Leaf`).
+
+        Examples
+        --------
+        >>> ll = bt.Tree(treeType="divergence")
+        >>> ll.add_node(1)
+        >>> ll.add_leaf(2, "LeafA")
+        >>> ll.root.index
+        1
+        >>> ll.curNode.index
+        2
+        >>> ll.curNode.name
+        "LeafA"
         """
+        assert self.curNode.is_node(), "Current node is not a valid node to add a leaf to. Check if tip names have illegal characters like parentheses or commas."
         logger.info(f"Creating new leaf: {name}.")
         new_leaf = Leaf(name)
         new_leaf.index = i
@@ -171,33 +225,83 @@ class Tree:
             self.root = new_leaf
 
         new_leaf.parent = self.curNode
-        if not self.curNode.is_node():
-            logger.error("Attempted to add a child to a non-node object.")
-            logger.error(
-                "Check if tip names have illegal characters like parentheses or commas."
-            )
-            raise TypeError()
+        # if not self.curNode.is_node():
+        #     logger.error("Attempted to add a child to a non-node object.")
+        #     logger.error(
+        #         "Check if tip names have illegal characters like parentheses or commas."
+        #     )
+        #     raise TypeError()
         self.curNode.children.append(new_leaf)
         self.curNode = new_leaf
         self.Objects.append(self.curNode)
 
 
-    def subtree(self, startingNode=None, traverseCondition=None, stem=True):
-        """Generate a new subtree starting from a given root node according to a certain condition.
+    def add_reticulation(
+        self,
+        name,
+        ):
+        """
+        Add a new :class:`.Reticulation` branch to the tree branching off of ``self.curNode``.
 
         Parameters
         ----------
-        startingNode : :class:`.BranchLike`, default=self.root
+        name : str
+            The name of the new reticulation.
+
+        Notes
+        -----
+        After creating the reticulate branch, updates ``self.curNode`` to the newly
+        created reticulate branch.
+
+        Examples
+        --------
+        >>> ll = bt.Tree(treeType="divergence")
+        >>> ll.add_node(1)
+        >>> ll.add_reticulation("ReticulationA")
+        >>> ll.curNode.name
+        "ReticulationA"
+        """
+        logger.info(f"Creating new reticulation: {name}.")
+        ret = Reticulation(name)
+        ret.index = name
+        ret.parent = self.curNode
+        self.curNode.children.append(ret)
+        self.Objects.append(ret)
+        self.curNode=ret
+
+
+    def subtree(
+        self,
+        startingNode=None,
+        traverseCondition=None,
+        stem=True,
+        ):
+        """
+        Generate a new subtree starting from a given root node according to a certain condition.
+
+        Parameters
+        ----------
+        startingNode : :class:`.BranchLike`
             The node from which the new subtree will descend.
-        traverseCondition : function, default=lambda k: True
+
+            By default, the root of the tree is used.
+
+        traverseCondition : function, optional
             Function defining the conditional inclusion descendant nodes.
-        stem : bool, default=True
+
+            By convention, the function should take a single :class:`.BranchLike` object
+            as input and return a boolean value indicating whether to traverse that branch.
+            For example, to include all branches with length greater than ``0.5``:
+            ``traverseCondition = lambda k: k.length > 0.5``.
+
+            By default, all branches are included.
+
+        stem : bool, optional
             Include the stem branch leading into the root.
 
         Returns
         -------
-        bt.Tree
-            A copy of the baltic tree that descends from ``startingNode``, where all descendant branches match ``traverseCondition``.
+        :class:`.Tree`
         """
         logger.info("Generating subtree.")
         if startingNode is None:
@@ -225,22 +329,6 @@ class Tree:
             stem_branch.children = [subtreeBranches[0]] ## stem has a single child
             subtreeBranches[0].parent = stem_branch ## assign stem as parent
             subtreeBranches.insert(0, stem_branch) ## add to list of subtree branches
-
-            # ## add all branches resulting from traversals of unwanted siblings
-            # unwantedBranches = []
-            # for child in node.children:
-            #     if child.index != startingNode.index:
-            #         unwantedBranches.extend(self.traverse_tree(child, includeCondition=lambda w: True))
-
-            # ## iterate over subtree branches, remember those that belong to unwanted subtrees
-            # remove = []
-            # for k in subtreeBranches:
-            #     if k.index in [ub.index for ub in unwantedBranches]:
-            #         remove.append(k)
-
-            # print(len(subtreeBranches),len(unwantedBranches),len(remove))
-            # for r in remove:
-            #     subtreeBranches.remove(r)
 
         ## nothing found or no leaf objects in traversal
         if subtreeBranches is None or not any(node.is_leaf() for node in subtreeBranches):
@@ -288,12 +376,15 @@ class Tree:
 
         return localTree
 
+
     def make_single_type(self):
-        """Convert from a multitype tree to a single-type tree.
+        """
+        Convert from a multitype tree to a single-type tree.
 
         Notes
         -----
-        Statically fuses any branches of the tree that are broken by a multitype node, resulting in only multitype nodes in the tree.
+        Statically fuses any branches of the tree that are broken by a multitype node,
+        resulting in only multitype nodes in the tree.
         """
         logger.info("Converting to single-type tree.")
         while True:
@@ -322,13 +413,21 @@ class Tree:
         self.sort_branches()
 
 
-    def set_absolute_time(self, mostRecentSamplingDate, justLeaves=False):
-        """Set the absoluteTime value of all branches in the tree according to their height and the MRSD.
+    def set_absolute_time(
+        self,
+        mostRecentSamplingDate,
+        justLeaves=False,
+        ):
+        """
+        Set the *absoluteTime* value of all branches in the tree according to their height and the MRSD.
 
         Parameters
         ----------
         mostRecentSamplingDate : float
             The decimal date of the most recent sampling date included in the tree.
+
+        justLeaves : bool, optional
+            If True, only set absolute time for leaf nodes. Default is ``False``.
         """
         logger.debug("Setting absoluteTime for all branches.")
         logger.debug(f"MRSD: {mostRecentSamplingDate}")
@@ -343,13 +442,21 @@ class Tree:
             )  ## heights are in units of time from the root
         self.mostRecent = max(k.absoluteTime for k in self.Objects if k.absoluteTime)
 
-    def _assign_date_uncertainty(self, dateUncertainties):
+
+    def _assign_date_uncertainty(
+        self,
+        dateUncertainties,
+        ):
         for k in self.get_external():
             k.absoluteTime, k.absoluteTimeRange = dateUncertainties[k.name]
 
 
-    def rescale(self, factor):
-        """Rescale all branches of the tree by a scalar.
+    def rescale(
+        self,
+        factor,
+        ):
+        """
+        Rescale all branches of the tree by a scalar.
 
         Parameters
         ----------
@@ -358,17 +465,16 @@ class Tree:
 
         Notes
         -----
-        - This method modifies the `length` attribute of all branches in the tree.
+        - This method modifies the *length* attribute of all branches in the tree.
         - After rescaling, the tree is traversed to ensure that all internal parameters are updated accordingly.
 
         Examples
         --------
-        >>> tree = Tree(treeType="divergence")
-        >>> tree.add_node(1)
-        >>> tree.add_leaf(2, "LeafA")
-        >>> tree.rescale(2.0)
-        >>> [branch.length for branch in tree.Objects]
-        [0.0, 0.0]  # Example output after rescaling
+        >>> treeString='((A:1.0,B:2.0):1.0,C:3.0);'
+        >>> ll = bt.make_tree(treeString, treeType="divergence")
+        >>> ll.rescale(2.0)
+        >>> [branch.length for branch in ll.get_branches()]
+        [0.0, 2.0, 2.0, 4.0, 6.0]  # Example output after rescaling
         """
         logger.debug(f"Rescaling tree by factor of {factor}.")
         for k in self.Objects:
@@ -377,11 +483,15 @@ class Tree:
 
 
     def treeStats(self):
-        """Print a standardized set of statistics about the tree.
+        """
+        Print a standardized set of statistics about the tree.
 
         Notes
         -----
-        Prints the tree height, length, if it is strictly bifurcating, if contains multitype nodes, if it is a singleton tree, if it has annotations present on its branches, and the number of total objects (nodes and leaves) in the tree.
+        Prints the tree *height*, *length*, if it is strictly bifurcating,
+        if contains multitype :class:`Node` objects, if it is a singleton tree,
+        if it has annotations present on its branches, and the number of total
+        objects (:class:`Node` objects and :class:`Leaf` objects) in the tree.
         """
         stats = self._calculate_tree_stats()
         print(
@@ -405,23 +515,23 @@ class Tree:
 
 
     def treeStatsDict(self):
-        """The tree statistics as a dictionary.
+        """
+        The tree statistics as a dictionary.
 
         Returns
         -------
         dict
-            Dictionary containing all the canonical statistics of the tree that are typically printed by ``treeStats()``.
         """
         return self._calculate_tree_stats()
 
 
     def _calculate_tree_stats(self):
-        """Calculate canonical tree statistics that will be printed by ``treeStats()``
+        """
+        Calculate canonical tree statistics that will be printed by :meth:`treeStats`
 
         Returns
         -------
         dict
-            Dictionary of tree stats
         """
         logger.debug("Calculating tree statistics.")
         stats = {}
@@ -457,32 +567,47 @@ class Tree:
 
 
     def traverse_tree(
-        self, curNode=None, includeCondition=None, traverseCondition=None, collect=None
-    ):
-        """Recursively traverse the tree.
+        self,
+        curNode=None,
+        traverseCondition=None,
+        includeCondition=None,
+        collect=None,
+        ):
+        """
+        Recursively traverse the tree.
 
         Parameters
         ----------
-        curNode : :class:`.BranchLike`, default=self.root
+        curNode : :class:`.BranchLike` or :class:`.Node` or None
             Node from which the traversal begins.
-        includeCondition : function, default=lambda k: k.is_leaflike()
+
+            If no node is provided, the traversal will begin from the root of the tree.
+
+        traverseCondition : function
+            Condition determining if a node that is encountered during traversal should
+            itself be traversed. All subtrees descending from non-traversed nodes will
+            also be excluded from traversal.
+
+            By default includes all :class:`.BranchLike` objects in the tree (``lambda k: True``).
+
+        includeCondition : function
             Condition by which traversed nodes and leaves should be included in the output collection.
-        traverseCondition : function, default=lambda k: True
-            Condition determining if a node that is encountered during traversal should itself be traversed. All subtrees descending from non-traversed nodes will also be excluded from traversal.
-        collect : list[:class:`.BranchLike`], default=[]
-            A collection of traversed objects that match both ``includeCondition`` and ``traverseCondition``.
+
+            By default, only leaflike objects are included in the output collection
+            (``lambda k: k.is_leaflike()``).
+
+        collect : list[:class:`.BranchLike`]
+            A collection of traversed objects that match both *includeCondition* and *traverseCondition*.
 
         Returns
         -------
         collect : list[:class:`.BranchLike`]
-            Collection of traversed objects.
 
         Raises
         ------
         AttributeError
             If the traversal finds a node object that does not have any leaflike objects descending from it.
         """
-        logger.info("Beginning tree traversal.")
         if curNode is None:  ## if no starting point defined - start from root
             logger.debug("Initiated traversal from root.")
             curNode = self.root
@@ -496,6 +621,7 @@ class Tree:
                         k.childHeight = None
                     k.height = None
 
+        logger.debug(f"Traversing tree from node {curNode}.")
         if traverseCondition is None:
             logger.debug("No traverseCondition given, using all branches.")
             traverseCondition = lambda k: True
@@ -560,18 +686,22 @@ class Tree:
         return collect
 
 
-    def rename_tips(self, tipNameMap=None):
-        """Rename the tips of a tree according to a tip name map.
+    def rename_tips(
+        self,
+        tipNameMap=None,
+        ):
+        """
+        Rename the tips of a tree according to a tip name map.
 
         Parameters
         ----------
-        tipNameMap : dict, default=self.tipMap
+        tipNameMap : dict, optional
             Dictionary mapping of old tip names to new names.
 
         Raises
         ------
         ValueError
-            If no dictionary is provided and self.tipMap is None.
+            If no dictionary is provided and ``.tipMap`` is ``None``.
         """
         if tipNameMap is None:
             if self.tipMap is not None:
@@ -584,22 +714,28 @@ class Tree:
             k.name = tipNameMap[k.name]  ## change its name
 
 
-    def reroot(self, branch=None, branchFrac=0.5, fixSingletons=True):
-        """Reroot a tree on a particular new branch.
+    def reroot(
+        self,
+        branch=None,
+        branchFrac=0.5,
+        fixSingletons=True,
+        ):
+        """
+        Reroot a tree on a particular new branch.
+
 
         Parameters
         ----------
-        branch : :class:`.BranchLike`, optional
-            Branch on which the reroot will take place. If no branchis given, initiate a midpoint rooting.
-        branchFrac : float, optional
-            Where in the new branch to split, by default 0.5
-        fixSingletons : bool, optional
-            True if singletons should be fixed, by default True
+        branch : :class:`.BranchLike` or :class:`.Node` or None, optional
+            Branch on which the reroot will take place.
 
-        Returns
-        -------
-        bt.Tree
-            Overwrites self.
+            If no branch is given, initiate a midpoint rooting.
+
+        branchFrac : float, optional
+            Where in the new branch to split, by default ``0.5``.
+
+        fixSingletons : bool, optional
+            True if singletons should be fixed, by default ``True``.
 
         Raises
         ------
@@ -636,7 +772,8 @@ class Tree:
 
             # TODO: make sure that tip1 and tip2 always get assigned
             logger.debug(f"Midpoint rooting: Rooting on highest tip under current topology ({tip1.name}).")
-            self = self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons)
+            # self = self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons)
+            self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons)
 
             # Depth to go from the ingroup tip toward the outgroup tip
             rootRemainder = 0.5 * maxDistance  # - (self.root.length or 0))
@@ -654,9 +791,9 @@ class Tree:
                     branchFrac = -rootRemainder / outgroup_node.length
                     break
             logger.debug(f"Midpoint rooting: rooting on node {outgroup_node.index} halfway from previous highest tip and current highest tip {tip2.name}.")
-            self = self.reroot(
-                branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons
-            )
+            self = self.reroot(branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons)
+            # self.reroot(branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons)
+
             logger.debug("Finished midpoint rooting.")
             return self
 
@@ -777,33 +914,40 @@ class Tree:
         baseMCiters: int = 20,
         MCitersPerTip: int = 10,
         maxMCiters: int = 400,
-        returnMCdates: bool = True
-    ):
-        """Reroot self according to a root-to-tip regression analysis.
+        returnMCdates: bool = True,
+        ):
+        """
+        Reroot self according to a root-to-tip regression analysis.
 
         Parameters
         ----------
-        stat : str, optional
-            Which regression stat to optimize, by default "r^2"
-        forcePositive : bool, optional
-            Forbid date inference to allow negative branch lengths, by default True
-        nJobs : int | None, optional
-            Number of parallel threads to use for Monte Carlo regression
+        stat : {"r^2", "correlation", "sum of squares"}
+            Which regression stat to optimize, by default ``"r^2"``
+
+        forcePositive : bool
+            Forbid date inference to allow negative branch lengths.
+
+        nJobs : int or None, optional
+            Number of parallel threads to use for Monte Carlo regression.
+
         baseMCiters : int, optional
-            Minimum number of Monte Carlo iterations, by default 20
+            Minimum number of Monte Carlo iterations, by default ``20``.
+
         MCitersPerTip : int, optional
-            Additional Monte Carlo iterations per tip, by default 10
+            Additional Monte Carlo iterations per tip, by default ``10``.
+
         maxMCiters : int, optional
-            Maximum number of Monte Carlo iterations, by default 400
+            Maximum number of Monte Carlo iterations, by default ``400``.
+
         returnMCdates : bool, optional
-            True if the best-fitting inferred dates should be returned, by default True
+            True if the best-fitting inferred dates should be returned, by default ``True``.
 
         Returns
         -------
-        bt.Tree
-            Overwrites self following rerooting
+        :class:`.Tree`
+
         dict
-            Mapping of tip names to the best-fitting dates
+            Mapping of tip names to the best-fitting dates.
         """
         from baltic.bt_utils import _root_to_tip, _rtt_worker, decimal_to_calendar_date
 
@@ -953,17 +1097,31 @@ class Tree:
             return self
 
 
-    def sort_branches(self, descending=True, sortFxn=None, operationFxn=None):
-        """Sort the branches of the tree so that they either ascend or descend for visualization.
+    def sort_branches(
+        self,
+        descending=True,
+        sortFxn=None,
+        operationFxn=None,
+        ):
+        """
+        Sort the branches of the tree so that they either ascend or descend for visualization.
 
         Parameters
         ----------
-        descending : bool, optional
-            Place branches with more descendants lower in y-coordinate space, by default True
+        descending : bool
+            Place branches with more descendants lower in y-coordinate space.
+
+            By default sorts in descending order.
+
         sortFxn : function or None, optional
-            User-specified function to custom sort nodes
+            User-specified function to custom sort nodes.
+
         operationFxn : function or None, optional
-            User-specified function that reorders the children of each node, rather than the nodes
+            User-specified function that reorders the children of each node, rather than the nodes.
+
+            Note: this function should take a list of child nodes as input and return a reordered
+            list of child nodes. This option's use is mutually exclusive with *sortFxn*, and should
+            only be used in rare cases.
 
         Raises
         ------
@@ -1004,15 +1162,21 @@ class Tree:
         self._assign_tree_coordinates()  ## update x and y positions of each branch, since y positions will have changed because of sorting
 
 
-    def _assign_tree_coordinates(self, order=None, padNodes=None):
-        """Assign x and y coordinates to all objects in a the tree.
+    def _assign_tree_coordinates(
+        self,
+        order=None,
+        padNodes=None,
+        ):
+        """
+        Assign *x* and *y* coordinates to all objects in a the tree.
 
         Parameters
         ----------
         order : list[:class:`.BranchLike`], optional
-            List of all leaves in their desired order, by default uses a pre-order traversal
+            List of all leaves in their desired order, by default uses a pre-order traversal.
+
         padNodes : list[:class:`.BranchLike`], optional
-            A list of nodes whose descendents will be padded with extra space
+            A list of nodes whose descendents will be padded with extra space.
 
         Notes
         -----
@@ -1142,7 +1306,13 @@ class Tree:
             self.root.x = self.root.length
 
 
-    def _assign_unrooted_tree_coordinates(self, circStart=0.0, node=None, total=None, padNodes=None):
+    def _assign_unrooted_tree_coordinates(
+        self,
+        circStart=0.0,
+        node=None,
+        total=None,
+        padNodes=None,
+        ):
         if padNodes is None: padNodes = {}
 
         if node is None:
@@ -1208,8 +1378,12 @@ class Tree:
                 self._assign_unrooted_tree_coordinates(circStart, ch, total, padNodes)
 
 
-    def find_MRCA(self, descendants):
-        """Find the most recent common ancestor of a list of descendant nodes.
+    def find_MRCA(
+        self,
+        descendants,
+        ):
+        """
+        Find the most recent common ancestor of a list of descendant nodes.
 
         Parameters
         ----------
@@ -1218,8 +1392,7 @@ class Tree:
 
         Returns
         -------
-        bt.Node
-            The node that represents the most recent common ancestor.
+        :class:`.Node`
         """
         paths = [k.get_path_to_root()[::-1] for k in descendants]
         mrca = None
@@ -1235,25 +1408,29 @@ class Tree:
         return mrca
 
 
-    def collapse_subtree_to_clade(self,
-                                    cl,
-                                    givenName,
-                                    widthFunction=lambda k: len(k.leaves)):
-        """Convert a subtree into a ``Clade`` object.
+    def collapse_subtree_to_clade(
+        self,
+        cl,
+        givenName,
+        widthFunction=lambda k: len(k.leaves),
+        ):
+        """Convert a subtree into a :class:`.Clade` object.
 
         Parameters
         ----------
-        cl : Node
+        cl : :class:`.Node`
             Node defining the root of the clade to collapse.
+
         givenName : str
             A name for the collapsed clade.
+
         widthFunction : function or None, optional
-            Function defining the desired plotting width of the collapsed clade, by default lambda k: len(k.leaves)
+            Function defining the desired plotting width of the collapsed
+            clade. Defaults to ``lambda k: len(k.leaves)``.
 
         Returns
         -------
-        bt.Clade
-            The collapsed ``Clade`` object.
+        :class:`.Clade`
         """
         assert cl.is_node(), "Cannot collapse non-node class"
         collapsedClade = Clade(givenName)
@@ -1295,7 +1472,8 @@ class Tree:
         return collapsedClade
 
     def restore_all_collapsed_subtrees(self):
-        """Revert all ``Clade``\s to complete subtrees.
+        """
+        Revert all :class:`.Clade` objects to complete subtrees.
         """
         while len([k for k in self.Objects if isinstance(k, Clade)]) > 0:
             clades = [k for k in self.Objects if isinstance(k, Clade)]
@@ -1312,17 +1490,22 @@ class Tree:
 
 
     def collapse_branches(
-            self,
-            collapseIfFxn=lambda x: x.traits["posterior"] <= 0.5,
-            designatedNodes=None,
+        self,
+        collapseIfFxn=lambda x: x.traits["posterior"] <= 0.5,
+        designatedNodes=None,
         ):
-        """Collapse branches according to a determined function, creating polytomies.
+        """
+        Collapse branches according to a determined function, creating polytomies.
 
         Parameters
         ----------
-        collapseIfFxn : function, default=``lambda x: x.traits["posterior"] <= 0.5``
+        collapseIfFxn : function
             Function which determines branch collapse.
-        designatedNodes : list[bt.Node], default=None
+
+            By default branches with posterior support less than or equal to 0.5 are
+            collapsed (``lambda x: x.traits["posterior"] <= 0.5``)
+
+        designatedNodes : list[:class:`.Node`], optional
             List of nodes that should be collapsed.
         """
         newTree = copy.deepcopy(self)  ## work on a copy of the tree
@@ -1424,33 +1607,63 @@ class Tree:
         quoteCharacter="'",
         json=False,
     ):
-        """Write the current tree to a string.
-
-        TODO: write this docstring
+        """
+        Convert the tree into a string representation in Newick or JSON format.
 
         Parameters
         ----------
-        curNode : Node, optional
-            Root node of subtree to write
-        traits : _type_, optional
-            _description_
+        curNode : :class:`.BranchLike`, optional
+            The node from which the string representation will begin.
+            Defaults to the root of the tree.
+
+        traits : set, optional
+            A set of trait keys to include as annotations in the output string.
+            If not provided, all traits present in the tree will be included.
+
         nexus : bool, optional
-            _description_, by default False
-        stringFragment : _type_, optional
-            _description_
-        traverseCondition : _type_, optional
-            _description_
-        rename : _type_, optional
-            _description_
+            If `True`, the tree will be written in NEXUS format. Defaults to `False`.
+
+        stringFragment : list[str], optional
+            A list to store fragments of the tree string during recursive traversal.
+            If not provided, a new list will be created.
+
+        traverseCondition : function, optional
+            A function that determines which branches are included in the output.
+            By default, all branches are included.
+
+        rename : dict, optional
+            A dictionary mapping original tip names to new names. If provided,
+            tip names will be replaced according to this mapping.
+
         quoteCharacter : str, optional
-            _description_, by default "'"
+            The character used to quote tip names in the output string. Defaults to `'`.
+
         json : bool, optional
-            _description_, by default False
+            If `True`, the tree will be written in JSON format. Defaults to `False`.
 
         Returns
         -------
-        _type_
-            _description_
+        str
+            A string representation of the tree in Newick, NEXUS, or JSON format.
+
+        Notes
+        -----
+        - If `nexus` is `True`, the output will include NEXUS-specific headers.
+        - If `json` is `True`, the output will be in JSON format, and the `nexus` parameter is ignored.
+        - If both `nexus` and `json` are `False`, the output will be in standard Newick format.
+        - Trait annotations are included in the output as comments in the Newick string.
+
+        Raises
+        ------
+        AssertionError
+            If `nexus` and `json` are both `True`, or if `rename` is not a dictionary.
+
+        Examples
+        --------
+        >>> treeString='((A:1.0,B:2.0):1.0,C:3.0);'
+        >>> ll = bt.make_tree(treeString, treeType="divergence")
+        >>> ll.to_string(nexus=False)
+        "(('A':1.000000,'B':2.000000):1.000000,'C':3.000000):0.000000;"  # Output in newick format
         """
         if curNode is None:
             curNode = self.root  # .children[-1]
@@ -1557,12 +1770,15 @@ class Tree:
 
 
     def get_all_tip_TMRCAs(self):
-        """Calculate a matrix of all pairwise time of most recent common ancestors.
+        """
+        Calculate a matrix of all pairwise time of most recent common ancestors.
+
+        This function's output takes the form of a nested dictionary, where the outer keys are tip names,
+        and the inner keys are tip names as well, with the values being the TMRCA.
 
         Returns
         -------
         dict
-            Matrix encoding all pairwise TMRCAs in the tree.
         """
         assert (
             self.treeType == "time"
@@ -1587,26 +1803,27 @@ class Tree:
         return tmrcaMatrix
 
 
-    def reduce_tree(self, tipsToKeep):
-        """Reduce a tree to only contain a defined set of tips, with all other branches being collapsed to multitype branches.
+    def reduce_tree(
+        self,
+        tipsToKeep,
+        ):
+        """
+        Reduce a tree to only contain a defined set of tips, with all other branches being collapsed to multitype branches.
 
         Parameters
         ----------
-        tipsToKeep : list[bt.Leaf]
+        tipsToKeep : list[:class:`.Leaf`]
             List of tips that should remain in the tree after reduction.
 
         Returns
         -------
-        bt.Tree
-            Multitype, reduced tree.
+        :class:`.Tree`
         """
         assert len(tipsToKeep) > 0, "No tips given to reduce the tree to."
         assert (
             len([k for k in tipsToKeep if not k.is_leaflike()]) == 0
-        ), "Embedding contains %d branches that are not leaf-like." % (
-            len([k for k in tipsToKeep if not k.is_leaflike()])
-        )
-        logger.debug("Preparing branch hash for keeping %d branches" % (len(tipsToKeep)))
+        ), f"Embedding contains {len([k for k in tipsToKeep if not k.is_leaflike()])} branches that are not leaf-like."
+        logger.debug(f"Preparing branch hash for keeping {len(tipsToKeep)} branches")
         branchHash = {k.index: k for k in tipsToKeep}
         embedding = []
         logger.debug("Deep copying tree")
@@ -1645,24 +1862,42 @@ class Tree:
 
 
     def count_lineages_at_time(
-        self, t, timeAttr="absoluteTime", inclusionConditionFxn=lambda x: True
-    ):
-        """Count how many branches exist at a given timepoint.
+        self,
+        t,
+        timeAttr="absoluteTime",
+        inclusionConditionFxn=lambda x: True
+        ):
+        """
+        Count the number of lineages present at a particular timepoint.
 
         Parameters
         ----------
         t : float
-            Timepoint to query
+            Timepoint to query.
+
         timeAttr : str, optional
-            Attribute that encodes the time, by default "absoluteTime"
+            Attribute that encodes the time, by default *absoluteTime*.
+
         inclusionConditionFxn : function or None, optional
-            Optional function to determine inclusion criteria, by default lambdax:True
+            Optional function to determine inclusion criteria.
+
+            By default all branches are included.
 
         Returns
         -------
         int
-            Number of lineages present at the time t.
+
+        Examples
+        --------
+        >>> treeString='((A:1.0,B:2.0):1.0,C:3.0);'
+        >>> ll = bt.make_tree(treeString, treeType="time")
+        >>> ll.set_absolute_time(3.0)
+        >>> ll.count_lineages_at_time(2.5)
+        2
         """
+        if self.treeType != "time":
+            logger.warning("Counting lineages at time on non-time-calibrated tree, results may be unexpected or cause errors if time attributes are missing.")
+
         return len(
             [
                 k
@@ -1674,20 +1909,29 @@ class Tree:
         )
 
 
-    def get_external(self, filterFxn=None, onlyLeaves=True):
-        """Get a (filtered) list of all the ``Leaf``\s or leaflike objects.
+    def get_external(
+        self,
+        filterFxn=None,
+        onlyLeaves=True,
+        ):
+        """
+        Get a (filtered) list of all the :class:`.Leaf` or leaflike objects in the tree.
 
         Parameters
         ----------
         filterFxn : function or None, optional
-            Filter function to select particular leaves
-        onlyLeaves : bool, optional
-            If ``True`` only return ``Leaf`` objects, otherwise also include leaflikes (``Clade`` or ``Reticulation``), by default True
+            Filter function to select particular leaves.
+
+            By default selects all leaves if *onlyLeaves* is ``True``,
+            otherwise all leaflike objects.
+
+        onlyLeaves : bool
+            If ``True`` only return :class:`.Leaf` objects, otherwise also include
+            leaflikes (:class:`.Clade` or :class:`.Reticulation`). Defaults to ``True``.
 
         Returns
         -------
-        list[:class:`.BranchLike`]
-            List of returned leaflike objects.
+        list[{:class:`.Leaf`, :class:`.Clade`, :class:`.Reticulation`}]
         """
         externals = list(
             filter(
@@ -1701,42 +1945,52 @@ class Tree:
         return externals
 
 
-    def get_internal(self, filterFxn=None):
+    def get_internal(
+        self,
+        filterFxn=None,
+        ):
         """Get a (filtered) list of non-leaflike objects in the tree.
 
         Parameters
         ----------
         filterFxn : function or None, optional
-            Filter function to select particular ``Node``\s
+            Filter function to select particular :class:`.Node` objects.
 
         Returns
         -------
-        list[bt.Node]
-            List of returned ``Node`` objects.
+        list[:class:`.Node`]
         """
         internals = list(filter(filterFxn, filter(lambda k: k.is_node(), self.Objects)))
         return internals
 
 
-    def get_branches(self, filterFxn=lambda x: True, failIfNoResults=True):
-        """Get a (filtered) list of all :class:`.BranchLike` objects in the tree.
+    def get_branches(
+        self,
+        filterFxn=lambda x: True,
+        failIfNoResults=True,
+        ):
+        """
+        Get a (filtered) list of all :class:`.BranchLike` objects in the tree.
 
         Parameters
         ----------
         filterFxn : function or None, optional
-            Filter function to determine which :class:`.BranchLike` objects should be selected, by default ``lambda x: True``
+            Filter function to determine which :class:`.BranchLike` objects should be selected.
+
+            By default selects all branches in the tree (``lambda x: True``), which is equivalent
+            to accessing the ``.Objects`` attribute of the tree.
+
         failIfNoResults : bool, optional
-            Raise an exception if all objects get filtered out, otherwise return an empty list, by default True
+            Raise an exception if all objects get filtered out, otherwise return an empty list. Defaults to ``True``.
 
         Returns
         -------
         list[:class:`.BranchLike`]
-            List of returned :class:`.BranchLike` objects.
 
         Raises
         ------
         Exception
-            If all objects are filtered out and ``failIfNoResults`` is ``True``.
+            If all objects are filtered out and *failIfNoResults* is ``True``.
         """
         select = list(filter(filterFxn, self.Objects))
 
@@ -1758,22 +2012,29 @@ class Tree:
             return select
 
 
-    def get_parameter_list(self, statistic, useTraitsDict=False, filterFxn=None):
-        """Get all values of a particular statistic across a selection of branches.
+    def get_parameter_list(
+        self,
+        statistic,
+        useTraitsDict=False,
+        filterFxn=None,
+        ):
+        """
+        Get all values of a particular statistic across a selection of branches.
 
         Parameters
         ----------
         statistic : str
             Name of the parameter to be extracted.
+
         useTraitsDict : bool, optional
-            If ``True`` access the `traits` dictionary of each node, otherwise use object attributes, by default False
+            If ``True`` access the ``.traits`` dictionary of each node, otherwise use object attributes.
+
         filterFxn : function or None, optional
-            Filter function to select branches by a particular criteria, by default selects all branches
+            Filter function to select branches by a particular criteria, by default selects all branches.
 
         Returns
         -------
         list
-            List of all values of the selected parameter.
         """
         if filterFxn is None:
             branches = self.Objects
@@ -1789,7 +2050,8 @@ class Tree:
 
 
     def fix_hanging_nodes(self):
-        """Remove all nodes from the tree that do not have any children.
+        """
+        Remove all nodes from the tree that do not have any children.
         """
         while True:
             hangingNodes = [
@@ -1803,29 +2065,37 @@ class Tree:
                 self.Objects.remove(node)
 
 
-    def explode_tree(self,trait=None,customFxn=None,stem=True):
-        """Split the tree into multiple subtrees based on a particular criteria.
+    def explode_tree(
+        self,
+        trait=None,
+        customFxn=None,
+        stem=True,
+        ):
+        """
+        Split the tree into multiple subtrees based on a particular criteria.
 
         Parameters
         ----------
         trait : str, optional
-            If specified, splits trees by instances where a node and its parent have different values of ``trait``
+            If specified, splits trees by instances where a node and its parent have different values of *trait*
+
         customFxn : function or None, optional
-            If specified, defines a function that defines when a node should be partitioned from its parent
+            If specified, defines a function that defines when a node should be partitioned from its parent.
+
         stem : bool, optional
             Include the branch leading into each output tree, by default True
 
         Returns
         -------
-        list[Tree]
-            A list of each tree that has been exploded from the input.
+        list[:class:`.Tree`]
 
         Raises
         ------
         ValueError
-            If both a ``trait`` and ``customFxn`` are provided.
+            If both a *trait* and *customFxn* are provided.
+
         ValueError
-            If neither a ``trait`` nor ``customFxn`` are provided.
+            If neither a *trait* nor *customFxn* are provided.
         """
         if trait is not None and customFxn is not None:
             raise ValueError(
@@ -1853,37 +2123,49 @@ class Tree:
         return subtrees
 
 
-    def condense_tree(self, minClade=3, maxClade=.2, protectedTips=None, widthFxn=None):
-        """Automatically collapse all clades in a tree programatically.
+    def condense_tree(
+        self,
+        minClade=3.0,
+        maxClade=0.2,
+        protectedTips=None,
+        widthFxn=None,
+        ):
+        """
+        Automatically collapse all clades in a tree programatically.
 
         Parameters
         ----------
-        minClade : int | float, optional
-            Value determining minimum clade size to collapse. If between zero and 1 interpreted as a fraction of the tree, if greater than one interpreted as an integer count of leaves, by default 3
-        maxClade : int | float, optional
-            Value determining maximum clade size to collapse. If between zero and 1 interpreted as a fraction of the tree, if greater than one interpreted as an integer count of leaves, by default .2
-        protectedTips : list[Node], optional
-            A list of key tips that will be ignored by the collapsing algorithm, so they always remain in the tree
-        widthFxn : function or None, optional
-            Function to determine the width of collapsed clades, by default lambda k: len(k.leaves)
+        minClade : int or float, optional
+            Value determining minimum clade size to collapse.
 
-        Returns
-        -------
-        _type_
-            _description_
+            If between zero and one interpreted as a fraction of the tree, if greater
+            than one interpreted as an integer count of leaves, by default *3.0*.
+
+        maxClade : int or float, optional
+            Value determining maximum clade size to collapse.
+
+            If between zero and one interpreted as a fraction of the tree, if greater
+            than one interpreted as an integer count of leaves, by default *0.2*.
+
+        protectedTips : list[:class:`.Node`], optional
+            A list of key tips that will be ignored by the collapsing algorithm, so they always remain in the tree.
+
+        widthFxn : function or None, optional
+            Function to determine the width of collapsed clades.
+
+            By default uses the number of leaves as the clade width (``lambda k: len(k.leaves)``).
         """
-        ## cutoffs is a tuple of values that define the minimum and maximum sizes of clades designated for collapsing
         ## protectedTips is a list of tips names as str that will remain uncollapsed
         ## widthFxn will determine how much y-axis space collapsed clades will occupy (default is same amount the uncollapsed subtree would)
-        from math import ceil
+
         # For min and max clade, if they are between zero and one interpret as a fraction, otherwise interpret
         # as an integer
-        if 0.0 < minClade < 1.0:
-            minClade = ceil(len(self.get_external()) * minClade)
+        if 0.0 < minClade <= 1.0:
+            minClade = math.ceil(len(self.get_external()) * minClade)
         else:
             minClade = int(minClade)
-        if 0.0 < maxClade < 1.0:
-            maxClade = ceil(len(self.get_external()) * maxClade)
+        if 0.0 < maxClade <= 1.0:
+            maxClade = math.ceil(len(self.get_external()) * maxClade)
         else:
             maxClade = int(maxClade)
         # Handle protectedTips and widthFxn defaults
@@ -1897,8 +2179,6 @@ class Tree:
 
         for i,node in enumerate(nodesToCollapse):
             self.collapse_subtree_to_clade(node,f'collapsed clade {i}', widthFunction = widthFxn)
-
-        return self  #todo: fix this return self stuff
 
 
     ############################################
@@ -1931,7 +2211,8 @@ class Tree:
         cladeBaseWidth=0.001,
         **kwargs
         ):
-        """Plot the branches of a :class:`.Tree`.
+        """
+        Plot the branches of a :class:`.Tree`.
 
         Parameters
         ----------
@@ -2173,15 +2454,123 @@ class Tree:
         return ax
 
 
-    def plot_exploded_tree(self,ax,trait=None,customFxn=None,stem=True,subtreeSortFxn=None,
-                            targetFxn=None,
-                            xCoordinateFxn=None,colour=None,colourFxn=None,tipPoints=True,originPoint=True,
-                            verticalSpace=2,
-                            width=None,widthFxn=None,
-                            pointSize=None,pointSizeFxn=None,
-                            outline=True,outlineSize=None,outlineSizeFxn=None,
-                            outlineColour=None,outlineColourFxn=None,
-                            padNodes=None,orientation='horizontal',connectionType='baltic',**kwargs):
+    def plot_exploded_tree(
+        self,ax,
+        trait=None,
+        customFxn=None,
+        stem=True,
+        subtreeSortFxn=None,
+        targetFxn=None,
+        xCoordinateFxn=None,
+        colour=None,
+        colourFxn=None,
+        tipPoints=True,
+        originPoint=True,
+        verticalSpace=2,
+        width=None,
+        widthFxn=None,
+        pointSize=None,
+        pointSizeFxn=None,
+        outline=True,
+        outlineSize=None,
+        outlineSizeFxn=None,
+        outlineColour=None,
+        outlineColourFxn=None,
+        padNodes=None,orientation='horizontal',
+        connectionType='baltic',
+        **kwargs
+        ):
+        """
+        Plot an exploded tree, splitting the tree into subtrees based on a specified trait or custom function.
+
+        Parameters
+        ----------
+        ax : :obj:`matplotlib.axes.Axes`
+            Axes on which the tree will be plotted.
+
+        trait : str, optional
+            The name of the trait used to split the tree into subtrees. If specified, subtrees are created
+            where a node and its parent have different values for this trait.
+
+        customFxn : function, optional
+            A custom function that defines when a node should be partitioned from its parent. This function
+            should take a single node as input and return a boolean value.
+
+        stem : bool, optional
+            If ``True``, include the branch leading into each subtree. Defaults to ``True``.
+
+        subtreeSortFxn : function, optional
+            A function to sort the subtrees. By default, subtrees are sorted by their root time (for time trees)
+            or root height (for divergence trees).
+
+        targetFxn : function, optional
+            A function describing which branches should be plotted. By default, all branches are included.
+
+        xCoordinateFxn : function, optional
+            A function describing where along the x-coordinate axis to plot labels. By default, selects
+            *absoluteTime* for time trees and *height* for divergence trees.
+
+        colour : `colour <https://matplotlib.org/stable/users/explain/colors/colors.html#colors-def>`__ or None, optional
+            The color of the branches. Note that *colour* is mutually exclusive with *colourFxn*.
+
+        colourFxn : function, optional
+            A function describing how branch colors should be determined. By default, all branches are black.
+
+        tipPoints : bool, optional
+            If ``True``, plot points at the tips of the subtrees. Defaults to ``True``.
+
+        originPoint : bool, optional
+            If ``True``, plot a point at the root of each subtree. Defaults to ``True``.
+
+        verticalSpace : float, optional
+            The vertical space between subtrees. Defaults to ``2``.
+
+        width : float, optional
+            Line width for all branches. Note that *width* is mutually exclusive with *widthFxn*.
+
+        widthFxn : function, optional
+            A function defining the width of individual branches. By default, all branches have a width of ``2``.
+
+        pointSize : float, optional
+            Size of points at the tips and roots of subtrees. Note that *pointSize* is mutually exclusive with *pointSizeFxn*.
+
+        pointSizeFxn : function, optional
+            A function defining the sizes of individual points. By default, all points have a size of ``40``.
+
+        outline : bool, optional
+            If `True`, outline points at the tips and roots of subtrees. Defaults to ``True``.
+
+        outlineSize : float, optional
+            Size of the outline around points. Note that *outlineSize* is mutually exclusive with *outlineSizeFxn*.
+
+        outlineSizeFxn : function, optional
+            A function defining the sizes of the outlines around points. By default, outlines are slightly larger than the points.
+
+        outlineColour : `colour <https://matplotlib.org/stable/users/explain/colors/colors.html#colors-def>`__ or None, optional
+            The color of the outlines around points. Note that *outlineColour* is mutually exclusive with *outlineColourFxn*.
+
+        outlineColourFxn : function, optional
+            A function describing how outline colors should be determined. By default, all outlines are black.
+
+        padNodes : dict, optional
+            A dictionary mapping nodes to their label padding.
+
+        orientation : {'horizontal', 'vertical'}, optional
+            The orientation of the tree. Defaults to ``'horizontal'``.
+
+        connectionType : {'baltic', 'direct', 'elbow'}, optional
+            The type of connection used to draw branches. Defaults to ``'baltic'``.
+
+        Returns
+        -------
+        :obj:`matplotlib.axes.Axes`
+
+        Notes
+        -----
+        - Either *trait* or *customFxn* must be specified to define how the tree is split into subtrees.
+        - If both *trait* and *customFxn* are provided, a ``ValueError`` will be raised.
+        - Subtrees are plotted sequentially, with vertical spacing determined by the *verticalSpace* parameter.
+        """
         #### TODO: support for collapsed clades
 
         ### Set default values ###
@@ -2334,54 +2723,85 @@ class Tree:
         normaliseHeight=None,
         **kwargs,
         ):
-        """Plot text labels for a tree.
+        """
+        Plot points on the tree, such as at tips or nodes, with customizable size, color, and outline.
 
         Parameters
         ----------
         ax : :obj:`matplotlib.axes.Axes`
             Axes on which points will be plotted.
-        targetFxn : function or None, optional
-            Function describing which branches should be plotted on
-        xCoordinateFxn : function or None, optional
-            Function describing where along the x coordinate axis to plot labels
-        yCoordinateFxn : function or None, optional
-            Function describing where along the y coordinate axis to plot labels
+
+        targetFxn : function, optional
+            A function describing which branches should have points plotted. By default, points are plotted at tips
+            (``lambda k: k.is_leaf()``).
+
+        xCoordinateFxn : function, optional
+            A function describing where along the x-coordinate axis to plot points. By default, selects
+            *absoluteTime* for time trees and *height* for divergence trees.
+
+        yCoordinateFxn : function, optional
+            A function describing where along the y-coordinate axis to plot points. By default, selects the ``.y``
+            attribute of each object.
+
         pointSize : float, optional
-            Size of points, by default 40
-        pointSizeFxn : function or None, optional
-            Function defining the sizes of individual points
+            Size of all points. Note that *pointSize* is mutually exclusive with *pointSizeFxn*.
+
+        pointSizeFxn : function, optional
+            A function defining the sizes of individual points. By default, all points have a size of ``40``.
+
         colour : `colour <https://matplotlib.org/stable/users/explain/colors/colors.html#colors-def>`__ or None, optional
-            Colour for plotting points
-        colourFxn : function or None, optional
-            Function describing how point colour should be plotted for each branch
+            The color of the points. Note that *colour* is mutually exclusive with *colourFxn*.
+
+        colourFxn : function, optional
+            A function describing how point colors should be determined. By default, all points are black.
+
         outline : bool, optional
-            Outline nodes in another color, by default True
+            If ``True``, outline points with a border. Defaults to ``True``.
+
         outlineSize : float, optional
-            Size cricles which form outlines, by deafult None
-        outlineSizeFxn : function or None, optional
-            Function describing how point outline sizes should be plotted for each branch
+            Size of the outline around points. Note that *outlineSize* is mutually exclusive with *outlineSizeFxn*.
+
+        outlineSizeFxn : function, optional
+            A function defining the sizes of the outlines around points. By default, outlines are slightly larger
+            than the points.
+
         outlineColour : `colour <https://matplotlib.org/stable/users/explain/colors/colors.html#colors-def>`__ or None, optional
-            Colour to plot the outlines of points
-        outlineColourFxn : function or None, optional
-            Function describing how point outline colors should be plotted for each branch
+            The color of the outlines around points. Note that *outlineColour* is mutually exclusive with *outlineColourFxn*.
+
+        outlineColourFxn : function, optional
+            A function describing how outline colors should be determined. By default, all outlines are black.
+
         padNodes : dict, optional
-            Dictionary mapping nodes to their label padding
-        treeType : str, optional
-            Type of the tree visualization, by default 'rectangular'
-        orientation : str, optional
-            Orientation of the tree, by default 'horizontal'
+            A dictionary mapping nodes to their label padding.
+
+        treeType : {'rectangular', 'circular', 'unrooted'}, optional
+            The type of the tree visualization. Defaults to ``'rectangular'``.
+
+        orientation : {'horizontal', 'vertical'}, optional
+            The orientation of the tree. Defaults to ``'horizontal'``.
+
         circStart : float, optional
-            Starting angle for circular trees, by default 0.0
+            Starting angle for circular trees. This argument is ignored for non-circular tree plots.
+
         circFrac : float, optional
-            Fraction of circular tree to plot, by default 1.0
+            Fraction of the circular tree to plot. This argument is ignored for non-circular tree plots.
+
         inwardSpace : float, optional
-            How much space to plot inwards for circular trees, by default 0.0
-        normaliseHeight : function or None, optional
-            Node height normalization function
+            How much space to plot inwards for circular trees. This argument is ignored for non-circular tree plots.
+
+        normaliseHeight : function, optional
+            A function to normalize node heights for circular trees. This argument is ignored for non-circular tree plots.
 
         Returns
         -------
         :obj:`matplotlib.axes.Axes`
+            The modified matplotlib ``Axes`` object.
+
+        Notes
+        -----
+        - Either *pointSize* or *pointSizeFxn* must be specified to define the size of the points.
+        - Either *colour* or *colourFxn* must be specified to define the color of the points.
+        - For circular trees, the *circStart*, *circFrac*, and *inwardSpace* parameters control the layout of the points.
         """
         ### Set default values ###
         if targetFxn is None:
@@ -2561,49 +2981,75 @@ class Tree:
         cladeEndAttrFxn=None,
         **kwargs,
         ):
-        """Plot text labels for a tree.
+        """
+        Plot text labels for branches or tips of the tree.
 
         Parameters
         ----------
-        ax : mpl.Axes
+        ax : :obj:`matplotlib.axes.Axes`
             Axes on which text will be plotted.
-        targetFxn : function or None, optional
-            Function describing which branches should be plotted on
-        xCoordinateFxn : function or None, optional
-            Function describing where along the x coordinate axis to plot labels
+
+        targetFxn : function, optional
+            A function describing which branches should have text labels plotted. By default, text is plotted at tips
+            (``lambda k: k.is_leaf()``).
+
+        xCoordinateFxn : function, optional
+            A function describing where along the x-coordinate axis to plot text labels. By default, selects
+            *absoluteTime* for time trees and *height* for divergence trees.
+
         xSpace : float, optional
-            Spacing along x coordinate axis, by default 0.005
-        yCoordinateFxn : function or None, optional
-            Function describing where along the y coordinate axis to plot labels
+            Spacing along the x-coordinate axis for text labels. Defaults to ``0.005``.
+
+        yCoordinateFxn : function, optional
+            A function describing where along the y-coordinate axis to plot text labels. By default, selects the ``.y``
+            attribute of each object.
+
         ySpace : float, optional
-            Padding along y coordinate axis, by default 0.0
-        textContentFxn : function or None, optional
-            Function describing what content should be plotted for each branch
+            Padding along the y-coordinate axis for text labels. Defaults to ``0.0``.
+
+        textContentFxn : function, optional
+            A function describing the content of the text labels for each branch. By default, the name of the branch is used.
+
         colour : `colour <https://matplotlib.org/stable/users/explain/colors/colors.html#colors-def>`__ or None, optional
-            Colour for plotting text
-        colourFxn : function or None, optional
-            Function describing how text colour should be plotted fore ach branch
-        treeType : str, optional
-            Type of the tree visualization, by default 'rectangular'
-        orientation : str, optional
-            Orientation of the tree, by default 'horizontal'
+            The color of the text labels. Note that *colour* is mutually exclusive with *colourFxn*.
+
+        colourFxn : function, optional
+            A function describing how text label colors should be determined. By default, all text labels are black.
+
+        treeType : {'rectangular', 'circular', 'unrooted'}, optional
+            The type of the tree visualization. Defaults to ``'rectangular'``.
+
+        orientation : {'horizontal', 'vertical'}, optional
+            The orientation of the tree. Defaults to ``'horizontal'``.
+
         padNodes : dict, optional
-            Dictionary mapping nodes to their label padding
+            A dictionary mapping nodes to their label padding.
+
         circStart : float, optional
-            Starting angle for circular trees, by default 0.0
+            Starting angle for circular trees. This argument is ignored for non-circular tree plots.
+
         circFrac : float, optional
-            Fraction of circular tree to plot, by default 1.0
+            Fraction of the circular tree to plot. This argument is ignored for non-circular tree plots.
+
         inwardSpace : float, optional
-            How much space to plot inwards for circular trees, by default 0.0
-        normaliseHeight : function or None, optional
-            Node height normalization function
-        cladeEndAttrFxn : function or None, optional
-            Function describing the end of a clade where labels should be placed
+            How much space to plot inwards for circular trees. This argument is ignored for non-circular tree plots.
+
+        normaliseHeight : function, optional
+            A function to normalize node heights for circular trees. This argument is ignored for non-circular tree plots.
+
+        cladeEndAttrFxn : function, optional
+            A function defining the end (most recent) dimension for clades where labels should be placed.
+
+        Notes
+        -----
+        - For circular trees, the *circStart*, *circFrac*, and *inwardSpace* parameters control the layout of the text labels.
+        - Either *colour* or *colourFxn* must be specified to define the color of the text labels.
+        - The *orientation* parameter determines whether the tree is plotted horizontally or vertically.
 
         Returns
         -------
-        ax
-            Modified matplotlib ``Axes``.
+        :obj:`matplotlib.axes.Axes`
+            The modified matplotlib ``Axes`` object.
         """
         valid_treeTypes = ['rectangular','circular','unrooted']
         assert treeType in valid_treeTypes, f"Tree type {treeType} not recognised. Options are {valid_treeTypes}"
@@ -2661,16 +3107,19 @@ class Tree:
             connectingLines=True,
             **kwargs,
             ):
-        """Plot tip labels aligned to one another.
+        """
+        Plot tip labels aligned to one another.
 
         Parameters
         ----------
         ax : :obj:`matplotlib.axes.Axes`
             Matplotlib ``Axes`` object to plot on.
+
         xSpace : float, optional
-            X coordinate spacing from the tips to the label, by default 0.005
+            X-coordinate spacing from the tips to the label, by default 0.005.
+
         connectingLines : bool, optional
-            Include dotted lines connecting tips to their labels, by default True
+            Include dotted lines connecting tips to their labels.
 
         Returns
         -------
