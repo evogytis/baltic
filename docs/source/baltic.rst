@@ -2,8 +2,8 @@
    :hidden:
    :maxdepth: 2
 
-Baltic treebuliders
-===================
+``baltic`` treebuliders
+=======================
 
 .. automodule:: baltic.baltic
     :members:

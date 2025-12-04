@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'BALTIC'
+project = 'baltic'
 copyright = '2025, Gytis Dudas & Barney Potter'
 author = 'Gytis Dudas & Barney Potter'
 release = 'v0.1'

@@ -1,6 +1,6 @@
-"""This module provides the core BALTIC functions ``make_tree`` and ``make_tree_JOSN``, the core parser functions which create BALTIC tree, node, and branchLike objects.
+"""This module provides the core ``baltic`` functions :func:`make_tree` and :func:`make_tree_JSON`, the core parser functions which create ``baltic`` tree, node, and branchLike objects.
 
-By convention, BALTIC (and this base module) are loaded under the name ``bt``.
+By convention, ``baltic`` (and this base module) are loaded under the name ``bt``.
 
 
 Example
@@ -13,7 +13,7 @@ After loading the module, a basic Newick formatted tree string can be read by:
 
 Notes
 -----
-This version of BALTIC (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
 Attributes
@@ -240,7 +240,7 @@ def make_tree_JSON(
     tre=None,
     ):
     """
-    Create a BALTIC tree object from a JSON representation.
+    Create a ``baltic`` tree object from a JSON representation.
 
     Parameters
     ----------
@@ -249,7 +249,7 @@ def make_tree_JSON(
         information about the node, including its name, attributes, and children.
 
     jsonTranslationDict : dict
-        A dictionary mapping JSON keys to the corresponding attributes in the BALTIC tree.
+        A dictionary mapping JSON keys to the corresponding attributes in the ``baltic`` tree.
         For example, it might map "name" to the node name or "children" to the list of child nodes.
 
     treeType : {'time', 'divergence'}
@@ -258,20 +258,20 @@ def make_tree_JSON(
         - 'divergence': Branch lengths represent relative units (e.g., substitutions per site).
 
     tre : baltic.Tree, optional
-        An existing BALTIC tree object to which the JSON tree will be added. If not provided,
+        An existing ``baltic`` tree object to which the JSON tree will be added. If not provided,
         a new tree object will be created.
 
     Returns
     -------
     :class:`.Tree`
-        A BALTIC tree object created from the JSON representation.
+        A ``baltic`` tree object created from the JSON representation.
 
     Notes
     -----
     - This function recursively traverses the JSON tree structure to create the corresponding
-      BALTIC tree, including nodes, leaves, and their attributes.
+      ``baltic`` tree, including nodes, leaves, and their attributes.
     - The `jsonTranslationDict` is used to map JSON keys to the appropriate attributes in the
-      BALTIC tree. For example, it can map "name" to the node name or "children" to the list of child nodes.
+      ``baltic`` tree. For example, it can map "name" to the node name or "children" to the list of child nodes.
     - If the JSON node has an "attr" key, its contents are merged into the node's attributes.
 
     Raises

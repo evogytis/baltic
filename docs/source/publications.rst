@@ -2,7 +2,7 @@
    :hidden:
    :maxdepth: 2
 
-Publications using BALTIC
+Publications using ``baltic``
 ==============================
 
 - Muller N, Kunze M, ..., Zeitlmann N, and Corman VM, 2021. Severe Acute Respiratory Syndrome Coronavirus 2 Outbreak Related to a Nightclub, Germany, 2020, `Emerging Infectious Diseases` 27(2): 645-648; `doi <https://doi.org/10.3201/eid2702.204443>`__.
