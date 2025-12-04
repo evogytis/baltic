@@ -20,7 +20,7 @@ class BranchLike:
     Attributes
     ----------
     branchType : str
-        DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
+        DEPRECATED: should now be checked using :meth:`is_leaf()`, or :meth:`is_node()`.
 
     length : float, default=0.0
         The length of the incoming branch leading to the node/leaf.
@@ -49,15 +49,16 @@ class BranchLike:
         The y-coordinate of the node, according to the coordinate system of a plot.
     """
 
-    def __init__(self,
-                branchType=None,
-                length=0.0,
-                height=None,
-                absoluteTime=None,
-                absoluteTimeRange=None,
-                parent=None,
-                traits=None):
-        self.branchType=branchType
+    def __init__(
+        self,
+        length=0.0,
+        height=None,
+        absoluteTime=None,
+        absoluteTimeRange=None,
+        parent=None,
+        traits=None,
+        ):
+        self.branchType=None
         self.length=length
         self.height=height
         self.absoluteTime=absoluteTime

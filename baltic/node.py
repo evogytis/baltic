@@ -8,16 +8,20 @@ logger = logging.getLogger("baltic.Node")
 
 
 class Node(BranchLike):
-    """``Node`` class for internal nodes that represent hypothetical common ancestors.
+    """
+    ``Node`` class for internal nodes that represent hypothetical common ancestors.
+
+    Inherits from :class:`.BranchLike`.
 
     Note
     ----
-    Most attributes have null default values as they are either (1) set automatically during tree construction, or (2) defined by the specific inherited subclass.
+    Most attributes have null default values as they are either (1) set automatically
+    during tree construction, or (2) defined by the specific inherited subclass.
 
     Attributes
     ----------
     branchType : str, default='node'
-        DEPRECATED: should now be checked using ``is_leaf()``, or ``is_node()``.
+        DEPRECATED: should now be checked using :meth:`~Node.is_leaf()`, or :meth:`~Node.is_node()`.
 
     children : list[:class:`.BranchLike`]
         A list of the descendent branches of this node.
@@ -33,7 +37,12 @@ class Node(BranchLike):
         This set does not contain any internal nodes, only leaves.
     """
 
-    def __init__(self, branchType='node', children=None, childHeight=None, leaves=None):
+    def __init__(
+        self,
+        children=None,
+        childHeight=None,
+        leaves=None,
+        ):
         super().__init__()
         self.branchType='node'
         self.children = children if children is not None else []
@@ -42,15 +51,15 @@ class Node(BranchLike):
 
 
     def is_leaflike(self):
-        """Returns False."""
+        """Returns ``False``."""
         return False
 
     def is_leaf(self):
-        """Returns False."""
+        """Returns ``False``."""
         return False
 
     def is_node(self):
-        """Returns True."""
+        """Returns ``True``."""
         return True
 
     def __str__(self):
