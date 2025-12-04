@@ -18,7 +18,7 @@ This version of BALTIC (v0.1) contains many API changes from previous versions, 
 
 Attributes
 ----------
-logger : logging.logger
+logger : :external+python:py:class:`logging.Logger`
     Default logger which will be passed to other baltic functions.
 """
 __all__ = ['make_tree', 'make_tree_JSON']
@@ -33,8 +33,13 @@ from baltic.reticulation import Reticulation
 logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
-def make_tree(data, treeType, tre=None):
-    """Parses a tree string to create a baltic tree.
+def make_tree(
+    data,
+    treeType,
+    tre=None,
+    ):
+    """
+    Parses a tree string to create a baltic tree.
 
     Trees are parsed according to the following standard algorithm:
 
@@ -50,15 +55,18 @@ def make_tree(data, treeType, tre=None):
     ----------
     data : str
         Input tree string to be parsed.
+
     treeType : {'time', 'divergence'}
-        The type of the tree, which defines meaning of branch lengths (e.g. for a time-calibrated phylogeny whose branches are in units of subst./site/year, 'time' should be used.)
-    tre : baltic.Tree, optional
+        The type of the tree, which defines meaning of branch lengths (e.g.
+        for a time-calibrated phylogeny whose branches are in units of
+        years or months, 'time' should be used.)
+
+    tre : :class:`baltic.Tree`, optional
         Reference to an existing tree object. If omitted, a new object will be created.
 
     Returns
     -------
-    tre : baltic.Tree
-        Output tree object.
+    tre : :class:`baltic.Tree`
     """
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)

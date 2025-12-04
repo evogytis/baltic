@@ -1,8 +1,13 @@
 """This module provides many of the helper functions that are commonly used both in BALTIC directly, as well as those used alongside baltic for the generation of figures.
 
+Notes
+-----
+This version of BALTIC (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
 Attributes
 ----------
-logger : logging.logger
+logger : :external+python:py:class:`logging.Logger`
     Default logger which will be passed to other baltic functions.
 """
 import re
