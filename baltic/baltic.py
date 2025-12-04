@@ -233,23 +233,67 @@ def make_tree(
             return tre
 
 
-def make_tree_JSON(jsonNode,jsonTranslationDict,treeType,tre=None,):
-    """Creates a baltic tree object from a JSON.
+def make_tree_JSON(
+    jsonNode,
+    jsonTranslationDict,
+    treeType,
+    tre=None,
+    ):
+    """
+    Create a BALTIC tree object from a JSON representation.
 
     Parameters
     ----------
-    jsonNode
-        TODO: ADD THIS
-    jsonTranslationDict
-        TODO: ADD THIS
+    jsonNode : dict
+        The root node of the JSON tree structure. This dictionary should contain
+        information about the node, including its name, attributes, and children.
+
+    jsonTranslationDict : dict
+        A dictionary mapping JSON keys to the corresponding attributes in the BALTIC tree.
+        For example, it might map "name" to the node name or "children" to the list of child nodes.
+
     treeType : {'time', 'divergence'}
-        The type of the tree, which defines meaning of branch lengths (e.g. for a time-calibrated phylogeny whose branches are in units of subst./site/year, 'time' should be used.)
+        The type of the tree, which defines the meaning of branch lengths. For example:
+        - 'time': Branch lengths represent absolute time (e.g., years, days).
+        - 'divergence': Branch lengths represent relative units (e.g., substitutions per site).
+
     tre : baltic.Tree, optional
-        Reference to an existing tree object. If omitted, a new object will be created.
+        An existing BALTIC tree object to which the JSON tree will be added. If not provided,
+        a new tree object will be created.
 
     Returns
     -------
     :class:`.Tree`
+        A BALTIC tree object created from the JSON representation.
+
+    Notes
+    -----
+    - This function recursively traverses the JSON tree structure to create the corresponding
+      BALTIC tree, including nodes, leaves, and their attributes.
+    - The `jsonTranslationDict` is used to map JSON keys to the appropriate attributes in the
+      BALTIC tree. For example, it can map "name" to the node name or "children" to the list of child nodes.
+    - If the JSON node has an "attr" key, its contents are merged into the node's attributes.
+
+    Raises
+    ------
+    KeyError
+        If required keys are missing from the JSON node or `jsonTranslationDict`.
+
+    Examples
+    --------
+    >>> jsonNode = {
+    ...     "name": "Root",
+    ...     "children": [
+    ...         {"name": "A", "attr": {"length": 1.0}},
+    ...         {"name": "B", "attr": {"length": 2.0}}
+    ...     ]
+    ... }
+    >>> jsonTranslationDict = {"name": "name", "children": "children"}
+    >>> tree = make_tree_JSON(jsonNode, jsonTranslationDict, treeType="divergence")
+    >>> print(tree.root.index)
+    'Root'
+    >>> print([child.index for child in tree.root.children])
+    ['A', 'B']
     """
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
