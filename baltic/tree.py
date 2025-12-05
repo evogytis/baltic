@@ -1502,13 +1502,13 @@ class Tree: ## tree class
         if trait is not None:
             traceFunction = lambda k: k == self.root or k.traits[trait] != k.parent.traits[trait] ## current branch trait not the same as parent or at root
         elif customFxn:
-            traceFunction = customFxn
+            traceFunction = lambda k: k == self.root or customFxn(k)
         
         subtrees=[]
         
         for k in self.Objects: ## iterate over every branch
             if traceFunction(k): ## check if branch satisfies splitting function
-                subtree = self.subtree(startingNode = k,traverseCondition = lambda ch: not traceFunction(ch),stem=stem) ## extract subtree
+                subtree = self.subtree(startingNode = k, traverseCondition = lambda ch: not traceFunction(ch), stem=stem) ## extract subtree
                 if subtree:
                     subtrees.append(subtree)
                 else:

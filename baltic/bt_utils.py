@@ -193,7 +193,8 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
 
         if startTime <= currentTime:
             dateStr = dt.datetime.strftime(currentTime, dateFmt)
-            timeline.append(dateStr)
+            if dateStr not in timeline:
+                timeline.append(dateStr)
 
         if isinstance(spacing,int):
             skip = dt.timedelta(days = spacing)
@@ -713,7 +714,7 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
     
     if outputFmtFxn is None:
-        outputFmtFxn = lambda date: bt_utils.convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if bt_utils.convert_date_format(date, '%Y-%m-%d', '%m') == '01' else bt_utils.convert_date_format(date, '%Y-%m-%d', '%b')
+        outputFmtFxn = lambda date: convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if convert_date_format(date, '%Y-%m-%d', '%m') == '01' else convert_date_format(date, '%Y-%m-%d', '%b')
 
     localKwargs = dict(kwargs)
 
