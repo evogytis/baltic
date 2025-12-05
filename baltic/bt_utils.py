@@ -10,33 +10,50 @@ Attributes
 logger : :external+python:py:class:`logging.Logger`
     Default logger which will be passed to other baltic functions.
 """
+import sys
 import re
 import copy
 import logging
 import datetime as dt
 import calendar
 import math
+import csv
 from itertools import permutations
 import numpy as np
-from scipy.stats import linregress
 import matplotlib as mpl
 from matplotlib.collections import LineCollection
+from scipy.stats import gaussian_kde, linregress
 from cmcrameri import cm
 
 logger = logging.getLogger("baltic.bt_utils")
 
 
-def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
-    """Convert a calendar date of a specified format into a decimal number.
+def calendar_to_decimal_date(
+        date,
+        fmt="%Y-%m-%d",
+        variable=False,
+    ):
+    """
+    Convert a calendar date of a specified format into a decimal number.
 
     Parameters
     ----------
     date : str
         Date string to be converted.
+
     fmt : str, default="%Y-%m-%d"
-        String encoding the format of the input date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+        String encoding the format of the input date. Must be parsable
+        by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
+        module.
+
     variable : bool, default=False
-        Set to ``True`` when dates may be of variable lengths (e.g. when looping over ``["2025-01-01", "2025-02"]``). Will use highest precision available.
+        Set to ``True`` when dates may be of variable lengths (e.g. when
+        looping over ``["2025-01-01", "2025-02"]``). Will use highest
+        precision available.
+
+    Returns
+    -------
+    str
 
     Example
     -------
@@ -123,41 +140,26 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     return dec, (dec, dec)
 
 
-# def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
-#     if not fmt:
-#         return date
-#     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
-#     delimit=None
-#     if delimiter is not None:
-#         delimit=delimiter.group()
-
-#     if variable: ## if date is variable - extract what is available
-#         if delimit is not None:
-#             dateL=len(date.split(delimit)) ## split date based on symbol
-#         else:
-#             dateL=1 ## no non-alphanumeric characters in date, assume dealing with an imprecise date (something like just year)
-
-#         if dateL==2:
-#             fmt=delimit.join(fmt.split(delimit)[:-1]) ## reduce fmt down to what's available
-#         elif dateL==1:
-#             fmt=delimit.join(fmt.split(delimit)[:-2])
-
-#     adatetime=dt.datetime.strptime(date,fmt) ## convert to datetime object
-#     year = adatetime.year ## get year
-#     boy = dt.datetime(year, 1, 1) ## get beginning of the year
-#     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
-#     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
-
-
-def decimal_to_calendar_date(date, fmt='%Y-%m-%d'):
-    """Convert a decimal date to a calendar date.
+def decimal_to_calendar_date(
+        date,
+        fmt='%Y-%m-%d',
+    ):
+    """
+    Convert a decimal date to a calendar date.
 
     Parameters
     ----------
     date : float
-        Decimal date to be converted
+        Decimal date to be converted.
+
     fmt : str, default="%Y-%m-%d"
-        String encoding the format of the desired output date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+        String encoding the format of the desired output date. Must be parsable
+        by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
+        module.
+
+    Returns
+    -------
+    str
 
     Example
     -------
@@ -173,17 +175,31 @@ def decimal_to_calendar_date(date, fmt='%Y-%m-%d'):
     return dt.datetime.strftime(result,fmt)
 
 
-def convert_date_format(dateString, startFormat, endFormat):
+def convert_date_format(
+        dateString,
+        startFormat,
+        endFormat,
+    ):
     """Convert the format of a date string.
 
     Parameters
     ----------
     dateString : str
         The date that will be converted.
+
     startFormat : str
-        String encoding the format of the input date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+        String encoding the format of the input date. Must be
+        parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
+        module.
+
     endFormat : str
-        String encoding the format of the desired output date. Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+        String encoding the format of the desired output date. Must be
+        parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
+        module.
+
+    Returns
+    -------
+    str
 
     Example
     -------
@@ -197,25 +213,41 @@ def convert_date_format(dateString, startFormat, endFormat):
         logger.error(f'Error converting date "{dateString}" from format "{startFormat}" to "{endFormat}": "{e}"')
 
 
-def generate_calendar_timeline(startDate,
-                               endDate,
-                               spacing='monthly',
-                               dateFmt='%Y-%m-%d',
-                               roundDates=True):
-    """Create a list of spaced dates (by default the first of each month) the half-open interval ``(startDate,endDate]``.
+def generate_calendar_timeline(
+        startDate,
+        endDate,
+        spacing='monthly',
+        dateFmt='%Y-%m-%d',
+        roundDates=True,
+    ):
+    """
+    Create a list of spaced dates (by default the first of each month)
+    the half-open interval ``(startDate,endDate]``.
 
     Parameters
     ----------
     startDate : str
         The starting date (not included in final output).
+
     endDate : str
         The ending date (included in final output).
+
     spacing : {"monthly", "weeky", "yearly", int}
-        The interval between output dates. If an ``int`` is given, encodes a spacing of days.
+        The interval between output dates. If an ``int`` is given,
+        encodes a spacing of days.
+
     dateFmt : str, default="%Y-%m-%d"
-        String encoding the format of the dates (both input and output). Must be parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__ module.
+        String encoding the format of the dates (both input and output). Must be
+        parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
+        module.
+
     roundDates : bool, default=True
-        Generate additional breaks in the timeline to correspond with beginnings of months or years.
+        Generate additional breaks in the timeline to correspond with
+        beginnings of months or years.
+
+    Returns
+    -------
+    list[str]
 
     Examples
     --------
@@ -272,7 +304,36 @@ def generate_calendar_timeline(startDate,
     return timeline
 
 
-def initialize_plot(width=6, height=8):
+def initialize_plot(
+        width=6,
+        height=8,
+    ):
+    """
+    Initialize a matplotlib figure and axes for plotting.
+
+    Parameters
+    ----------
+    width : float, optional
+        The width of the figure in inches. Defaults to 6.
+
+    height : float, optional
+        The height of the figure in inches. Defaults to 8.
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - `fig` (:obj:`matplotlib.figure.Figure`): The created matplotlib figure.
+        - `ax` (:obj:`matplotlib.axes.Axes`): The created matplotlib axes.
+
+    Notes
+    -----
+    - This function imports the required plotting libraries, including
+      `matplotlib <matplotlib.org>`__, `seaborn <https://seaborn.pydata.org/>`__,
+      and `numpy <https://numpy.org/>`__.
+    - If there are any import errors, ensure that all dependencies for `baltic` are installed correctly.
+    - The default figure size is set to 6x8 inches, but it can be customized using the `width` and `height` parameters.
+    """
     logger.info("Importing the following modules: maplotlib, matplotlib.pyplot, seaborn, numpy, cmcrameri.cm")
     logger.info("If import errors arise, ensure that baltic has been fully installed correctly along with all requirements.")
     global mpl
@@ -295,15 +356,75 @@ def initialize_plot(width=6, height=8):
     # TODO: keep this up: options to run
 
 
-def plot_tangled_chain(ax,
-                       treeList,
-                       colourMap=None,
-                       padding=None,
-                       treeSpaceFxn=None,
-                       treeSpace=None,
-                       treeKwargs={},
-                       pointKwargs={},
-                       **kwargs):
+def plot_tangled_chain(
+        ax,
+        treeList,
+        colourMap=None,
+        padding=None,
+        treeSpaceFxn=None,
+        treeSpace=None,
+        treeKwargs={},
+        pointKwargs={},
+        **kwargs,
+    ):
+    """
+    Plot a tanglegram visualization of multiple trees, connecting corresponding
+    tips across trees.
+
+    Parameters
+    ----------
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes on which the tangled chain will be plotted.
+
+    treeList : list[:class:`.Tree`]
+        A list of ``baltic`` tree objects to be plotted in sequence.
+
+    colourMap : dict, optional
+        A dictionary mapping tip names to colors. If not provided, a default colormap will be used.
+
+    padding : float, optional
+        Proportion of the space between consecutive trees used for padding. Must be between ``0`` and ``0.5``.
+        Defaults to ``0.1``.
+
+    treeSpaceFxn : function, optional
+        A function that determines the horizontal spacing between consecutive trees. If not provided,
+        the spacing is set to 20% of the height of the first tree.
+
+    treeSpace : float, optional
+        Fixed horizontal spacing between consecutive trees. If provided, it overrides *treeSpaceFxn*.
+
+    treeKwargs : dict, optional
+        Additional keyword arguments passed to the :meth:`.plot_tree` method for each tree.
+
+    pointKwargs : dict, optional
+        Additional keyword arguments passed to the :meth:`.plot_points` method for each tree.
+
+    Returns
+    -------
+    :obj:`matplotlib.axes.Axes`
+        The modified matplotlib `Axes` object.
+
+    Notes
+    -----
+    - This method connects corresponding tips across consecutive trees using lines, creating a tangled chain visualization.
+    - If both *treeSpace* and *treeSpaceFxn* are provided, *treeSpace* takes precedence.
+    - If *colourMap* is not provided, a default colormap will be generated based on the tips of the first tree.
+    - The *padding* parameter controls how far the connecting lines extend into the space between trees.
+
+    Raises
+    ------
+    ValueError
+        If both *treeSpace* and *treeSpaceFxn* are provided.
+
+    Examples
+    --------
+    >>> fig, ax = plt.subplots(figsize=(10, 6))
+    >>> tree1 = Tree(treeType="divergence")
+    >>> tree2 = Tree(treeType="divergence")
+    >>> treeList = [tree1, tree2]
+    >>> plot_tangled_chain(ax, treeList, padding=0.2)
+    >>> plt.show()
+    """
     localKwargs = dict(kwargs)
     localTreeKwargs = dict(treeKwargs)
     localPointKwargs = dict(pointKwargs)
@@ -388,11 +509,85 @@ def plot_tangled_chain(ax,
     return ax
 
 
-def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None, style = 'simple', orientation = 'horizontal', ySpan = None, lineKwargs = None, textKwargs = None):
+def plot_scale_bar(
+        ax,
+        xy,
+        L=None,
+        tree=None,
+        alnL=None,
+        textXY=None,
+        unitText=None,
+        style='simple',
+        orientation='horizontal',
+        ySpan=None,
+        lineKwargs=None,
+        textKwargs=None,
+    ):
     """
-    Plots a scale bar at given coordinates, can plot a scale bar of required length L or inferred automatically from the tree or just defaults to 0.001.
-    """
+    Plot a scale bar on the given axes.
 
+    Parameters
+    ----------
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes on which the scale bar will be plotted.
+
+    xy : tuple[float, float]
+        Coordinates of the starting point of the scale bar.
+
+    L : float, optional
+        Length of the scale bar. If not provided, it will be inferred from the tree or default to ``0.001``.
+
+    tree : :class:`.Tree`, optional
+        A ``baltic`` tree object used to infer the scale bar length and units if *L* is not provided.
+
+    alnL : int, optional
+        Alignment length used to convert branch lengths (in substitutions per site) to mutation counts.
+
+    textXY : tuple[float, float], optional
+        Coordinates for the scale bar label. If not provided, defaults to a position near the scale bar.
+
+    unitText : str, optional
+        Text describing the units of the scale bar. If not provided, defaults to "subs/site" for divergence trees
+        or "years" for time trees.
+
+    style : {'simple', 'fancy'}, optional
+        Style of the scale bar. Defaults to ``'simple'``.
+
+    orientation : {'horizontal', 'vertical'}, optional
+        Orientation of the scale bar. Defaults to ``'horizontal'``.
+
+    ySpan : float, optional
+        Vertical span of the scale bar, used to calculate default label positions. If not provided, it will be
+        inferred from the tree.
+
+    lineKwargs : dict, optional
+        Additional keyword arguments passed to the ``matplotlib`` line plotting function for the scale bar.
+
+    textKwargs : dict, optional
+        Additional keyword arguments passed to the ``matplotlib`` text plotting function for the scale bar label.
+
+    Returns
+    -------
+    :obj:`matplotlib.axes.Axes`
+        The modified matplotlib ``Axes`` object.
+
+    Notes
+    -----
+    - If both *L* and *tree* are provided, *L* takes precedence.
+    - If *alnL* is provided for a divergence tree, the scale bar will be labeled in mutation counts instead of substitutions per site.
+    - The *style* parameter determines whether the scale bar has simple or fancy end markers.
+    - The *orientation* parameter determines whether the scale bar is drawn horizontally or vertically.
+
+    Raises
+    ------
+    ValueError
+        If an invalid *style* or *orientation* is provided.
+
+    Warnings
+    --------
+    - If neither *L* nor *tree* is provided, the scale bar defaults to a length of ``0.001`` with units of "subs/site".
+    - If both *tree* and *ySpan* are provided, *ySpan* will be ignored in favor of the tree's *ySpan*.
+    """
     assert style in ['simple', 'fancy'], f"Scale bar style {style} not recognised. Must be 'simple' or 'fancy'."
     assert orientation in ['horizontal', 'vertical'], f"Scale bar orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
 
@@ -400,7 +595,7 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
         ySpan = 2e2
     elif tree is not None:
         if ySpan is not None:
-            warnings.warn("Both tree and ySpan provided; using tree.ySpan.")
+            logger.warning("Both tree and ySpan provided; using tree.ySpan.")
         ySpan = tree.ySpan
 
     localLineKwargs = dict(lineKwargs) if lineKwargs else {}
@@ -464,24 +659,24 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
                     "Neither scale bar length nor tree provided, "
                     "impossible to rescale scale bar to alignment length."
                 )
-            warnings.warn("Neither L nor tree provided; defaulting to 0.001 (subs/site).")
+            logger.warning("Neither L nor tree provided; defaulting to 0.001 (subs/site).")
             L = 0.001
 
     else:
         # L was explicitly given
         if tree is not None:
-            warnings.warn("Both L and tree provided; L takes precedence.")
+            logger.warning("Both L and tree provided; L takes precedence.")
         if alnL is not None and tree is not None and tree.treeType == "divergence":
             # Just record equivalent mutation count for labeling
             n_mutations = L * alnL
 
     if tree is not None and tree.treeType == 'time' and alnL is not None:
-        warnings.warn("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
+        logger.warning("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
 
     if unitText is None:
         if tree is None:
             if alnL is None:
-                warnings.warn("No units provided; assuming substitutions per site.")
+                logger.warning("No units provided; assuming substitutions per site.")
                 unitText = "subs/site"
             else:
                 # No tree, alnL given: interpret L as subs/site and show mutations
@@ -496,7 +691,7 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
                 else:
                     unitText = "subs/site"
             else:
-                warnings.warn("No units provided; assuming branch lengths are years.")
+                logger.warning("No units provided; assuming branch lengths are years.")
                 unitText = "years"
 
     x, y = xy
@@ -547,22 +742,113 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     return ax
 
-def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True,
-                         hpdLvl = 0.95, precision = 100, kdeWidth = 3, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}):
 
+def plot_tmrca_posterior(
+        ax,
+        tmrcaFile,
+        tmrcaName = 'age(root)',
+        burnin = None,
+        yCoord = None,
+        fullViolin = True,
+        hpdLvl = 0.95,
+        precision = 100,
+        kdeWidth = 3,
+        orientation = 'horizontal',
+        connectNode = False,
+        node = None,
+        violinKwargs = {},
+        outlineKwargs = {},
+    ):
+    """
+    Plot the posterior distribution of the time to the most recent common ancestor (TMRCA).
+
+    Produces a violin plot of the TMRCA posterior distribution estimated using a kernel density estimate (KDE),
+    the violin plot can either be full or half (upper) only. The highest posterior density (HPD) interval is calculated
+    and displayed on the plot. Optionally, the mean of the posterior distribution can be connected to a specified node
+    with a dotted line or placed directly
+
+    Parameters
+    ----------
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes on which the posterior distribution will be plotted.
+
+    tmrcaFile : str
+        Path to the file containing the posterior samples of TMRCA.
+
+    tmrcaName : str, optional
+        The name of the column in the file containing the TMRCA values. Defaults to `'age(root)'`.
+
+    burnin : int, optional
+        The number of initial states to discard as burn-in. Defaults to `10,000,000` if not specified.
+
+    yCoord : float, optional
+        The y-coordinate at which the posterior distribution will be plotted. If not provided, defaults to `0.0` or
+        the y-coordinate of the specified node.
+
+    fullViolin : bool, optional
+        If `True`, plot a full violin plot of the posterior distribution. If `False`, plot only the upper half.
+        Defaults to `True`.
+
+    hpdLvl : float, optional
+        The highest posterior density (HPD) level to calculate. Defaults to `0.95` (95% HPD interval).
+
+    precision : int, optional
+        The number of points used to calculate the kernel density estimate (KDE). Defaults to `100`.
+
+    kdeWidth : float, optional
+        The width of the KDE plot. Defaults to `3`.
+
+    orientation : {'horizontal', 'vertical'}, optional
+        The orientation of the plot. Defaults to `'horizontal'`.
+
+    connectNode : bool, optional
+        If `True`, connect the mean of the posterior distribution to the specified node with a dotted line.
+        Defaults to `False`.
+
+    node : :class:`.Node`, optional
+        The node to which the mean of the posterior distribution will be connected. Required if `connectNode` is `True`.
+
+    violinKwargs : dict, optional
+        Additional keyword arguments passed to the `fill_between` or `fill_betweenx` function for the violin plot.
+
+    outlineKwargs : dict, optional
+        Additional keyword arguments passed to the `plot` function for the outline of the violin plot.
+
+    Returns
+    -------
+    :obj:`matplotlib.axes.Axes`
+        The modified matplotlib `Axes` object.
+
+    Notes
+    -----
+    - The TMRCA posterior distribution is estimated using a kernel density estimate (KDE).
+    - The HPD interval is calculated and displayed in the plot.
+    - If `connectNode` is `True`, the mean of the posterior distribution is connected to the specified node with a dotted line.
+    - If both `yCoord` and `node` are provided, `yCoord` takes precedence for positioning the plot.
+
+    Raises
+    ------
+    ValueError
+        If `connectNode` is `True` but `node` is not specified.
+
+    Warnings
+    --------
+    - If `burnin` is not specified, a default value of `10,000,000` states is used.
+    - If both `yCoord` and `node` are provided, a warning is issued, and `yCoord` is used.
+
+    Examples
+    --------
+    >>> fig, ax = plt.subplots(figsize=(8, 6))
+    >>> plot_tmrca_posterior(ax, "tmrca_posterior.txt", tmrcaName="age(root)", burnin=1000000)
+    >>> plt.show()
+    """
     ### certain tree orientations will require xCoord too
     ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
-    import csv
-    from scipy.stats import gaussian_kde
-    from baltic.bt_utils import hpd, decimal_to_calendar_date
-
-
     func_logger = logging.getLogger("baltic.tree.plot_tmrca_posterior")
     func_logger.setLevel(logging.INFO)
     func_logger.propagate = False
 
     if not func_logger.handlers:
-        import sys
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter("[plot_tmrca_posterior] %(message)s"))
         handler.setLevel(logging.INFO)
@@ -572,7 +858,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
     if burnin == None:
         burnin = 10e6
-        warnings.warn('No burnin set, defaulting to 10M states.')
+        func_logger.warning('No burnin set, defaulting to 10M states.')
 
     handle = open(tmrcaFile,'r')
 
@@ -588,7 +874,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     elif yCoord is None and node:
         yCoord = node.y
     elif yCoord is not None and node is not None:
-        warnings.warn(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
+        logger.warning(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
 
     localViolinKwargs = dict(violinKwargs)
     if 'fc' in localViolinKwargs:
@@ -675,299 +961,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         ax.plot(mean_xs, mean_ys, color = 'dimgray', ls = '-', zorder = 2)
         ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
     elif node is None:
-        warnings.warn(f"Need to specify node to connect to.")
-
-    return ax
-
-
-def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None, style = 'simple', orientation = 'horizontal', ySpan = None, lineKwargs = None, textKwargs = None):
-    """
-    Plots a scale bar at given coordinates, can plot a scale bar of required length L or inferred automatically from the tree or just defaults to 0.001.
-    """
-
-    assert style in ['simple', 'fancy'], f"Scale bar style {style} not recognised. Must be 'simple' or 'fancy'."
-    assert orientation in ['horizontal', 'vertical'], f"Scale bar orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
-
-    if tree is None and ySpan is None:
-        ySpan = 2e2
-    elif tree is not None:
-        if ySpan is not None:
-            warnings.warn("Both tree and ySpan provided; using tree.ySpan.")
-        ySpan = tree.ySpan
-
-    localLineKwargs = dict(lineKwargs) if lineKwargs else {}
-    localTextKwargs = dict(textKwargs) if textKwargs else {}
-
-    if ('linewidth' not in localLineKwargs or 'lw' not in localLineKwargs): localLineKwargs['lw'] = 2
-    if 'color' not in localLineKwargs: localLineKwargs['color'] = 'k'
-
-    if orientation == 'vertical':
-        if 'ha' not in localTextKwargs: localTextKwargs['ha'] = 'left'
-        if 'va' not in localTextKwargs: localTextKwargs['va'] = 'center'
-        localTextKwargs['rotation_mode'] = 'anchor'
-    elif orientation == 'horizontal':
-        if 'ha' not in localTextKwargs: localTextKwargs['ha'] = 'center'
-        if 'va' not in localTextKwargs: localTextKwargs['va'] = 'top'
-
-    n_mutations = None  # will hold equivalent mutation count if alnL is known
-
-    if L is None:
-        # No explicit L given – we choose it
-        if tree is not None and tree.treeType == "divergence" and alnL is not None:
-            # Divergence tree + alignment length known:
-            # choose a NICE number of mutations, then convert to subs/site
-
-            total_mut = tree.treeHeight * alnL           # total divergence in mutations
-            target_mut = 0.05 * total_mut                # ~5% of total span
-
-            if target_mut <= 0:
-                target_mut = 1.0
-
-            exponent = np.floor(np.log10(target_mut))
-            fraction = target_mut / 10**exponent
-
-            for nf in (1, 2, 5, 10):
-                if fraction <= nf:
-                    n_mutations = nf * 10**exponent
-                    break
-            else:
-                n_mutations = 10 * 10**exponent
-
-            # convert mutations -> subs/site
-            L = n_mutations / alnL
-
-        elif tree is not None:
-            # No alnL: fall back to original subs/site logic
-            proposed = tree.treeHeight
-            exponent = np.floor(np.log10(proposed))
-            fraction = (0.05 * proposed) / 10**exponent ## 5% of tree height
-
-            for nf in (1, 2, 5, 10):  # nice numbers
-                if fraction <= nf:
-                    L = nf * 10**exponent
-                    break
-            else:
-                L = 10 * 10**exponent
-
-        else:
-            # No L, no tree
-            if alnL is not None:
-                raise Exception(
-                    "Neither scale bar length nor tree provided, "
-                    "impossible to rescale scale bar to alignment length."
-                )
-            warnings.warn("Neither L nor tree provided; defaulting to 0.001 (subs/site).")
-            L = 0.001
-
-    else:
-        # L was explicitly given
-        if tree is not None:
-            warnings.warn("Both L and tree provided; L takes precedence.")
-        if alnL is not None and tree is not None and tree.treeType == "divergence":
-            # Just record equivalent mutation count for labeling
-            n_mutations = L * alnL
-
-    if tree is not None and tree.treeType == 'time' and alnL is not None:
-        warnings.warn("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
-
-    if unitText is None:
-        if tree is None:
-            if alnL is None:
-                warnings.warn("No units provided; assuming substitutions per site.")
-                unitText = "subs/site"
-            else:
-                # No tree, alnL given: interpret L as subs/site and show mutations
-                n_mutations = L * alnL if n_mutations is None else n_mutations
-                unitText = "mutation" if np.isclose(n_mutations, 1.0) else "mutations"
-        else:
-            if tree.treeType == "divergence":
-                if alnL is not None:
-                    # Prefer to label in mutations when alnL is known
-                    n_mutations = L * alnL if n_mutations is None else n_mutations
-                    unitText = "mutation" if np.isclose(n_mutations, 1.0) else "mutations"
-                else:
-                    unitText = "subs/site"
-            else:
-                warnings.warn("No units provided; assuming branch lengths are years.")
-                unitText = "years"
-
-    x, y = xy
-
-    xs = [x, x + L]
-    ys = [y, y]
-
-    if orientation == 'vertical':
-        xs, ys = ys, xs
-
-    ax.plot(xs, ys, **localLineKwargs)
-
-    if style == 'fancy':
-        width = 0.005 * ySpan
-        left_xs, left_ys = [x, x], [y - width, y + width]
-        right_xs, right_ys = [x + L, x + L], [y - width, y + width]
-
-        if orientation == 'vertical':
-            left_xs, left_ys = left_ys, left_xs
-            right_xs, right_ys = right_ys, right_xs
-
-        ax.plot(left_xs, left_ys, **localLineKwargs)
-        ax.plot(right_xs, right_ys, **localLineKwargs)
-
-    if textXY is None: ## set text position defaults / might be worth turning these coordinates as fractions in relation to the bar itself
-        textX, textY = (x + L/2, y - ySpan * 0.02)
-    else:
-        textX, textY = textXY
-
-    if orientation == 'vertical':
-        textX, textY = textY, textX
-
-    if alnL is not None and tree is not None and tree.treeType == "divergence":
-        # Label in mutations if we know alnL
-        if n_mutations is None:
-            n_mutations = L * alnL
-        # nice formatting
-        if n_mutations >= 1:
-            n_disp = int(round(n_mutations))
-        else:
-            n_disp = np.round(n_mutations, 2)
-        scaleBarText = f'{n_disp}\n{unitText}'
-    else:
-        # Original behaviour: label in axis units
-        scaleBarText = f'{L}\n{unitText}'
-
-    ax.text(textX, textY, scaleBarText, **localTextKwargs)
-
-    return ax
-
-def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True,
-                         hpdLvl = 0.95, precision = 100, kdeWidth = 3, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}):
-
-    ### certain tree orientations will require xCoord too
-    ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
-    import csv
-    from scipy.stats import gaussian_kde
-    from baltic.bt_utils import hpd, decimal_to_calendar_date
-
-
-    func_logger = logging.getLogger("baltic.tree.plot_tmrca_posterior")
-    func_logger.setLevel(logging.INFO)
-    func_logger.propagate = False
-
-    if not func_logger.handlers:
-        import sys
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(logging.Formatter("[plot_tmrca_posterior] %(message)s"))
-        handler.setLevel(logging.INFO)
-        func_logger.addHandler(handler)
-
-    tmrcaPosterior = []
-
-    if burnin == None:
-        burnin = 10e6
-        warnings.warn('No burnin set, defaulting to 10M states.')
-
-    handle = open(tmrcaFile,'r')
-
-    for l in csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t'):
-        state = int(l['state'])
-        if state >= burnin:
-            tmrcaPosterior.append(float(l[tmrcaName])) ## grab column with tmrca stat
-
-    handle.close()
-
-    if yCoord is None and node is None:
-        yCoord = 0.0
-    elif yCoord is None and node:
-        yCoord = node.y
-    elif yCoord is not None and node is not None:
-        warnings.warn(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
-
-    localViolinKwargs = dict(violinKwargs)
-    if 'fc' in localViolinKwargs:
-        localViolinKwargs['facecolor'] = localViolinKwargs['fc']
-        localViolinKwargs.pop('fc')
-    if 'ec' in localViolinKwargs:
-        localViolinKwargs['edgecolor'] = localViolinKwargs['ec']
-        localViolinKwargs.pop('ec')
-    if 'facecolor' not in localViolinKwargs and 'fc' not in localViolinKwargs: localViolinKwargs['facecolor'] = 'gray'
-    if 'edgecolor' not in localViolinKwargs and 'ec' not in localViolinKwargs: localViolinKwargs['edgecolor'] = 'none'
-    if 'alpha' not in localViolinKwargs: localViolinKwargs['alpha'] = 0.1
-    if 'zorder' not in localViolinKwargs: localViolinKwargs['zorder'] = 1
-
-    localOutlineKwargs = dict(outlineKwargs)
-    if 'color' not in localOutlineKwargs: localOutlineKwargs['color'] = 'gray'
-    if 'linewidth' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
-    if 'zorder' not in localOutlineKwargs: localOutlineKwargs['zorder'] = 2
-
-    kde = gaussian_kde(tmrcaPosterior)
-    hpdLo, hpdHi = hpd(tmrcaPosterior, hpdLvl)
-    x_grid = np.linspace(hpdLo, hpdHi, precision)
-
-    meanTmrca = np.mean(tmrcaPosterior)
-    medianTmrca = np.median(tmrcaPosterior)
-
-    func_logger.info(f"Node {tmrcaName} mean TMRCA: {meanTmrca:.3f} ({decimal_to_calendar_date(meanTmrca)}) median TMRCA: {medianTmrca:.3f} ({decimal_to_calendar_date(medianTmrca)})")
-    func_logger.info(f"Node {tmrcaName} TMRCA 95% HPD: {hpdLo:.3f} - {hpdHi:.3f} / {decimal_to_calendar_date(hpdLo)} - {decimal_to_calendar_date(hpdHi)}")
-
-    y_grid = kde(x_grid)
-    y_max = y_grid.max()
-    y_grid /= y_max ## normalise KDE to peak at 1.0
-    y_grid *= kdeWidth ## rescale
-
-    upper_ys = [yCoord + y for y in y_grid]
-    lower_ys = [yCoord - y for y in y_grid]
-    constant_ys = [yCoord for _ in y_grid]
-
-    if orientation == 'horizontal':
-        plotKDE = ax.fill_between
-    elif orientation == 'vertical':
-        plotKDE = ax.fill_betweenx
-
-    xs, uys, lys = x_grid, upper_ys, lower_ys
-
-    if fullViolin:
-        plotKDE(xs, uys, lys, **localViolinKwargs)
-    else:
-        plotKDE(xs, uys, constant_ys, **localViolinKwargs)
-
-    if fullViolin:
-        if orientation == 'vertical':
-            ax.plot(uys, xs,**localOutlineKwargs)
-            ax.plot(lys, xs,**localOutlineKwargs)
-        elif orientation == 'horizontal':
-            ax.plot(xs, uys,**localOutlineKwargs)
-            ax.plot(xs, lys,**localOutlineKwargs)
-    else:
-        if orientation == 'vertical':
-            ax.plot(uys, xs,**localOutlineKwargs)
-        elif orientation == 'horizontal':
-            ax.plot(xs, uys,**localOutlineKwargs)
-
-    if connectNode and node:
-        x, y = meanTmrca, yCoord
-
-        mean_xs = [meanTmrca, meanTmrca]
-        if fullViolin:
-            mean_ys = [yCoord - kde(meanTmrca) / y_max * kdeWidth, yCoord + kde(meanTmrca) / y_max * kdeWidth]
-        else:
-            mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
-            mean_ys = np.array(mean_ys, dtype=float).tolist()
-
-        elbow_xs = [meanTmrca, meanTmrca, node.absoluteTime]
-        elbow_ys = [yCoord, node.y, node.y]
-
-        if orientation == 'vertical':
-            x, y = y, x
-            mean_xs, mean_ys = mean_ys, mean_xs
-            elbow_xs, elbow_ys = elbow_ys, elbow_xs
-
-        ax.scatter(x, y, s = 40, fc = localViolinKwargs['facecolor'], ec = 'none', zorder = 10)
-        ax.scatter(x, y, s = 80, fc = localViolinKwargs['edgecolor'], ec = 'none', zorder = 9)
-
-        ax.plot(mean_xs, mean_ys, color = 'dimgray', ls = '-', zorder = 2)
-        ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
-    elif node is None:
-        warnings.warn(f"Need to specify node to connect to.")
+        logger.warning(f"Need to specify node to connect to.")
 
     return ax
 
@@ -999,7 +993,7 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
         try:
             timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to
         except:
-            warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+            logger.warning(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
     else:
         assert isinstance(timeline,range), "timeline is neither a list nor a range."
 
@@ -1235,7 +1229,69 @@ def project_polar_vector(x,y,radians,length):
 
     return (new_x,new_y)
 
-def desaturate(colour, desat = 0.65, out = "auto"):
+def desaturate(
+        colour,
+        desat=0.65,
+        out="auto",
+    ):
+    """
+    Desaturate a given color by reducing its saturation in HSV space.
+
+    Parameters
+    ----------
+    colour : str or tuple
+        The input color to be desaturated. Can be a named
+        color, a hex string (e.g., ``"#RRGGBB"`` or ``"#RRGGBBAA"``),
+        or an RGB/RGBA tuple (e.g., ``(R, G, B)`` or ``(R, G, B, A)``).
+
+    desat : float, optional
+        The desaturation factor, where ``0`` results
+        in grayscale and ``1`` retains the original saturation.
+        Must be a value between ``0`` and ``1``. Defaults to ``0.65``.
+
+    out : {'auto', 'hex', 'rgb', 'rgba'}, optional
+        The output format of the desaturated color:
+        - ``'auto'``: Matches the input format (e.g.,
+        hex strings remain hex, tuples remain tuples).
+        - ``'hex'``: Returns a hex string (e.g.,
+        ``"#RRGGBB"`` or ``"#RRGGBBAA"`` if alpha is present).
+        - ``'rgb'``: Returns an RGB tuple ``(R, G, B)``.
+        - ``'rgba'``: Returns an RGBA tuple ``(R, G, B, A)``.
+        Defaults to ``'auto'``.
+    Returns
+    -------
+    str or tuple
+        The desaturated color in the specified output format.
+
+    Notes
+    -----
+    - The desaturation is applied by converting the color
+      to HSV space, scaling the saturation channel by the
+      *desat* factor, and converting it back to RGB space.
+    - If the input is a hex string, the output will include an
+      alpha channel if the input had one or if the alpha
+      value is less than ``1.0``.
+
+    Raises
+    ------
+    ValueError
+        If *desat* is not between ``0`` and ``1``, or if *out*
+        is not one of ``'auto'``, ``'hex'``, ``'rgb'``, or ``'rgba'``.
+
+    TypeError
+        If *colour* is not a valid color string or tuple.
+
+    Examples
+    --------
+    >>> desaturate("#FF0000", desat=0.5)
+    '#BF4040'
+
+    >>> desaturate((1.0, 0.0, 0.0), desat=0.5, out="rgb")
+    (0.75, 0.25, 0.25)
+
+    >>> desaturate("blue", desat=0.2, out="hex")
+    '#3333CC'
+    """
     if not (0 <= desat <= 1):
         raise ValueError(f"invalid desat value: {desat}, must be within interval [0, 1].")
 
@@ -1280,7 +1336,48 @@ def desaturate(colour, desat = 0.65, out = "auto"):
     else:
         raise ValueError(f"out {out} invalid, must be one of {'auto','hex','rgb','rgba'}.")
 
-def desaturate_cmap(cmap, desat = 0.65):
+def desaturate_cmap(
+        cmap,
+        desat = 0.65,
+    ):
+    """
+    Create a desaturated version of a given colormap.
+
+    Parameters
+    ----------
+    cmap : :obj:`matplotlib.colors.Colormap`
+        The input colormap to be desaturated. Must be an instance of
+        :obj:`matplotlib.colors.LinearSegmentedColormap` or :obj:`matplotlib.colors.ListedColormap`.
+
+    desat : float, optional
+        The desaturation factor, where ``0`` results in grayscale and ``1`` retains the original saturation.
+        Must be a value between ``0`` and ``1``. Defaults to ``0.65``.
+
+    Returns
+    -------
+    :obj:`matplotlib.colors.ListedColormap`
+        A new colormap with desaturated colors.
+
+    Notes
+    -----
+    - The desaturation is applied to each color in the colormap by converting it to HSV space and scaling
+      the saturation channel by the *desat* factor.
+    - This function is useful for creating muted or less vibrant versions of colormaps for better visualization
+      in certain contexts.
+
+    Raises
+    ------
+    AssertionError
+        If the input *cmap* is not an instance of :obj:`matplotlib.colors.LinearSegmentedColormap` or
+        :obj:`matplotlib.colors.ListedColormap`.
+
+    Examples
+    --------
+    >>> from matplotlib import cm
+    >>> from baltic.bt_utils import desaturate_cmap
+    >>> original_cmap = cm.viridis
+    >>> desaturated_cmap = desaturate_cmap(original_cmap, desat=0.5)
+    """
     from matplotlib.colors import ListedColormap
 
     assert isinstance(cmap, mpl.colors.LinearSegmentedColormap) or isinstance(cmap, mpl.colors.ListedColormap), f"cmap type {type(cmap)} invalid, must be mpl.colors.LinearSegmentedColormap or mpl.colors.ListedColormap."
