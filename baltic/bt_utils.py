@@ -1196,6 +1196,101 @@ def plot_root_to_tip(ax, tree,
     
     return (outliers, slope, intercept, residuals)
 
+def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.95, orientation = 'horizontal', log = True, **kwargs):
+    ### need to add assertions that there's 'skygrid.logPopSize' and 'skygrid.cutOff' in log file
+    localKwargs = dict(kwargs)
+
+    import csv
+
+    assert mostRecent in ['logfile', None] or isinstance(mostRecent, float), f"mostRecent value {mostRecent} not recognised. Must be 'logfile', None or float"
+    assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'"
+    
+    func_logger = logging.getLogger("baltic.bt_utils.plot_skygrid")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[plot_skygrid] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+    
+    if burnin == None:
+        burnin = 10e6
+        warnings.warn('No burnin set, defaulting to 10M states.')
+    
+    handle = open(logFile,'r')
+    reader = csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t')
+    header = reader.fieldnames
+
+    skygridPopSizes = sorted([key for key in header if key.startswith('skygrid.logPopSize')], key = lambda f: int(f.replace('skygrid.logPopSize', '')))
+    
+    skygrid = {key: [] for key in skygridPopSizes}
+    rootAge = []
+    cutoff = None
+
+    def compute_root(lineDict):
+        if mostRecent == 'logfile':
+            rootDate = float(lineDict['age(root)'])
+        elif mostRecent is None:
+            rootDate = float(-lineDict['age(root)'])
+        elif isinstance(mostRecent, float):
+            rootDate = mostRecent - float(lineDict['rootHeight'])
+        
+        return rootDate
+    
+    for l in reader:
+        state = int(l['state'])
+        if state >= burnin:
+            for key in skygridPopSizes:
+                popSize = float(l[key])
+                skygrid[key].append(popSize)
+            
+            rootAgeParam = compute_root(l)
+            rootAge.append(rootAgeParam)
+            
+            if mostRecent == 'logfile':
+                mostRecentDate = float(l['age(root)']) + float(l['rootHeight'])
+            
+            if cutoff is None:
+                cutoff = float(l['skygrid.cutOff'])
+    handle.close()
+
+    if isinstance(mostRecent, float): mostRecentDate = mostRecent
+    
+    start = -cutoff if mostRecent is None else mostRecentDate - cutoff
+    end = 0.0 if mostRecent is None else mostRecentDate
+    
+    xs = np.linspace(start, end, len(skygridPopSizes))
+    
+    ys = [np.pow(np.e, np.mean(skygrid[key])) for key in skygridPopSizes[::-1]]
+    y_lower, y_upper = zip(*[np.pow(np.e, hpd(skygrid[key], hpdLvl)) for key in skygridPopSizes[::-1]])
+
+    fillPlotFxn = ax.fill_between
+    if orientation == 'vertical':
+        fillPlotFxn = ax.fill_betweenx
+
+    if 'facecolor' not in localKwargs and 'fc' not in localKwargs: localKwargs['facecolor'] = 'lightskyblue'
+    fillPlotFxn(xs, y_lower, y_upper, zorder = 9, **localKwargs)
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+    
+    ax.plot(xs, ys, color = 'k', lw = 2, zorder = 10)
+
+    rootPlotFxn = ax.axvline
+    if orientation == 'vertical':
+        rootPlotFxn = ax.axhline
+    rootPlotFxn(np.mean(rootAge), color = 'dimgray', zorder = 10)
+    rootPlotFxn(hpd(rootAge, hpdLvl)[-1], color = 'dimgray', ls = '--', zorder = 10)
+    rootPlotFxn(hpd(rootAge, hpdLvl)[0], color = 'dimgray', ls = '--', zorder = 10)
+    
+    if log:
+        if orientation == 'horizontal':
+            ax.set_yscale('log')
+        elif orientation == 'vertical':
+            ax.set_xscale('log')
+
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
