@@ -472,6 +472,70 @@ def _process_trait_prob_set(node, traitName):
 
     return stateSetDict
 
+def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 10, width = 0.2, other_thres = 0.0, connectNode = True, connectingCorner = 'lower middle', orientation = 'vertical', **kwargs):
+    from matplotlib.patches import Rectangle
+    
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    if xyFxn is None: xyFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+    
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+
+    localKwargs = dict(kwargs)
+    
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+    
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    for i, (state, prob) in enumerate(zip(stateOrder, probs)):
+        x, y = xyFxn(node)
+
+        cumulativeProb = sum(probs[:i])
+        rectHeight = height * prob
+        
+        if 'zorder' not in localKwargs: localKwargs['zorder'] = 1
+
+        if orientation == 'horizontal':
+            rectBottom = x + height * cumulativeProb
+            rect = Rectangle((rectBottom, y), width = rectHeight, height = width, fc = traitColourDict[state], **localKwargs)
+
+        elif orientation == 'vertical':
+            rectBottom = y + height * cumulativeProb
+            rect = Rectangle((x, rectBottom), width = width, height = rectHeight, fc = traitColourDict[state], **localKwargs)
+        
+        ax.add_patch(rect)
+
+    if connectNode:
+        vaCorner, haCorner = connectingCorner.split(' ')
+        assert vaCorner in ['upper', 'lower'], f"Vertical corner connection parameter {vaCorner} not recognised. Must be 'lower' or 'upper'"
+        assert haCorner in ['left', 'middle', 'right'], f"Horizontal corner connection parameter {haCorner} not recognised. Must be 'left', 'middle' or 'right'"
+
+        x, y = xyFxn(node)
+        
+        if vaCorner == 'upper':
+            y += height if orientation == 'vertical' else width
+        
+        if haCorner == 'right':
+            x += width if orientation == 'vertical' else height
+        elif haCorner == 'middle':
+            x += width/2 if orientation == 'vertical' else height/2
+        
+        xs, ys = zip(*[(x, y), (x, node.y), (node.x, node.y)])
+
+        ax.plot(xs, ys, ls = '--', color = 'dimgray', zorder = 0)
+        
+
 def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, centerFxn = None, area = 1.0, other_thres = 0.0, **kwargs):
     
     assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
