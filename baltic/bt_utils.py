@@ -13,8 +13,6 @@ from matplotlib.collections import LineCollection
 
 logger = logging.getLogger("baltic.bt_utils")
 
-
-
 def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
     Convert calendar date into decimal year.
@@ -304,7 +302,8 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
     return ax
 
 
-def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None, style = 'simple', orientation = 'horizontal', ySpan = None, lineKwargs = None, textKwargs = None):
+def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None, 
+    style = 'simple', orientation = 'horizontal', ySpan = None, fancyWidth = 0.1, lineKwargs = None, textKwargs = None):
     """
     Plots a scale bar at given coordinates, can plot a scale bar of required length L or inferred automatically from the tree or just defaults to 0.001.
     """
@@ -421,29 +420,29 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
     ys = [y, y]
     
     if orientation == 'vertical':
-        xs, ys = ys, xs
+        xs = [x, x]
+        ys = [y, y + L]
     
     ax.plot(xs, ys, **localLineKwargs)
     
     if style == 'fancy':
-        width = 0.005 * ySpan
+        width = L * fancyWidth ## fancyWidth is a scalar of scale bar length
         left_xs, left_ys = [x, x], [y - width, y + width]
         right_xs, right_ys = [x + L, x + L], [y - width, y + width]
 
         if orientation == 'vertical':
-            left_xs, left_ys = left_ys, left_xs
-            right_xs, right_ys = right_ys, right_xs
+            left_xs, left_ys = [x - width, x + width], [y, y]
+            right_xs, right_ys = [x - width, x + width], [y + L, y + L]
         
         ax.plot(left_xs, left_ys, **localLineKwargs)
         ax.plot(right_xs, right_ys, **localLineKwargs)
 
     if textXY is None: ## set text position defaults / might be worth turning these coordinates as fractions in relation to the bar itself
         textX, textY = (x + L/2, y - ySpan * 0.02)
+        if orientation == 'vertical':
+            textX, textY = (x + ySpan * 0.002, y + L/2)
     else:
         textX, textY = textXY
-    
-    if orientation == 'vertical':
-        textX, textY = textY, textX
     
     if alnL is not None and tree is not None and tree.treeType == "divergence":
         # Label in mutations if we know alnL
@@ -547,10 +546,10 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
     import csv
     from scipy.stats import gaussian_kde
-    from baltic.bt_utils import hpd, decimal_to_calendar_date
+    # from baltic.bt_utils import hpd, decimal_to_calendar_date
 
 
-    func_logger = logging.getLogger("baltic.tree.plot_tmrca_posterior")
+    func_logger = logging.getLogger("baltic.bt_utils.plot_tmrca_posterior")
     func_logger.setLevel(logging.INFO)
     func_logger.propagate = False
 
@@ -828,18 +827,7 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     invalidateRegression = True if forcePositive and slope < 0 else False
 
     if (localStat < optStat if stat in ['sum of squares'] else localStat > optStat): ## minimise sum of squares or maximise correlation/r^2
-        # if forcePositive and slope < 0: ## force positive True and slope<0
-        #     pass ## if forcing positive root, slope must be positive; do nothing
-        #     res['correlation'] = -np.inf
-        #     res['sum of squares'] = np.inf
-        #     res['slope'] = slope
-        #     res['intercept'] = intercept
-        #     res['r^2'] = -np.inf
-        #     res['root'] = rootCandidate
-        #     if frac is not None: res['frac'] = frac
-        # else: ## force_positive is False or true and slope>0
         optStat = localStat ## better root found
-#             new_root = [w for w in self.Objects if w.index==k.index][0]
         res['correlation'] = -np.inf if invalidateRegression else corr
         res['sum of squares'] = np.inf if invalidateRegression else ssq
         res['slope'] = slope
@@ -852,85 +840,297 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
 
 def _rtt_worker(args):
     """
-    Worker for root_by_regression.
+    Worker for root_by_regression, using deterministic iterative refinement
+    of uncertain tip dates instead of Monte Carlo sampling.
 
     args = (
         tree,                # a picklable copy of the tree
         root_index,          # candidate root node index
-        fixed_times,         # dict: tip.index -> fixed date
-        uncertain_ranges,    # dict: tip.index -> (min_date, max_date)
-        n_mc,                # number of Monte Carlo iterations
+        tipDates,            # dict: tip.name -> initial date (float)
+        uncertainDateRanges, # dict: tip.name -> (min_date, max_date)
+        max_iters,           # formerly n_mc: now max refinement iterations
         stat,                # 'r^2', 'correlation', or 'sum of squares'
         forcePositive,       # as in your original function
     )
     """
+
     (tree,
      root_index,
      tipDates,
      uncertainDateRanges,
-     n_mc,
+     max_iters,
      stat,
      forcePositive) = args
 
+    # deep-copy tree and reroot on candidate
     tree_copy = copy.deepcopy(tree)
-
-    # find candidate root node inside worker copy
     candidate = next(obj for obj in tree_copy.Objects if obj.index == root_index)
-
-    # Reroot on this candidate for this sample
     cll = tree_copy.reroot(candidate)
+
     tips = cll.get_external()
+    uncertainTips = [k for k in tips if k.name in uncertainDateRanges]
 
-    rootDistances = {k.name: k.height for k in tips} ## these don't change
+    # root-to-tip distances are fixed for a given root
+    rootDistances = {k.name: k.height for k in tips}
 
+    # start from a local copy of tipDates
+    # (each worker gets its own copy due to pickling, but we clone anyway to be explicit)
+    currentDates = dict(tipDates)
+
+    # storage for the best result across iterations
     best_res = None
     best_score = None
     best_dates = None
-    best_branch_frac = None
 
-    rng = np.random.default_rng()
+    # tolerance for date convergence
+    tol = 1e-6
 
-    for _ in range(n_mc): ## Monte Carlo iterations
+    # main refinement loop
+    for _ in range(max(1, int(max_iters))):
 
-        for k in uncertainDateRanges:
-            tipDates[k] = rng.uniform(*uncertainDateRanges[k]) ## for uncertain tips sample from possible date range randomly
+        # build regression inputs with current dates
+        xs = [currentDates[k.name] for k in tips]               # dates
+        ys = [rootDistances[k.name] for k in tips]               # heights
 
-        xs = [tipDates[k.name] for k in tips]
-        ys = [rootDistances[k.name] for k in tips]
-
-        # Run root-to-tip regression
         res_local = {}
         res_local = _root_to_tip(
             candidate, xs, ys, res_local,
             stat=stat, forcePositive=forcePositive
         )
 
-        if res_local: ## valid regression (when forcePositive == True but slope is negative res_local is None)
-            # Compute a scalar score, taking into account direction of optimisation
-            if stat == "sum of squares":
-                # Smaller is better
-                score = -res_local["sum of squares"]
-            else:
-                # Larger is better for r^2 or correlation
-                score = res_local[stat]
+        # if regression is invalid (e.g., negative slope with forcePositive=True), bail out
+        if not res_local:
+            break
 
-            if best_score is None or score > best_score:
-                best_res = res_local
-                best_score = score
-                best_dates = {k: tipDates[k] for k in uncertainDateRanges}
+        # compute scalar score (same logic as before)
+        if stat == "sum of squares":
+            score = -res_local["sum of squares"]  # smaller SSE is better
+        else:
+            score = res_local[stat]               # larger r^2 / correlation is better
 
+
+        # track best iteration so far
+        if best_score is None or score > best_score:
+            best_score = score
+            best_res = res_local
+            # store only the uncertain ones (like before with monte_carlo_dates)
+            best_dates = {name: currentDates[name] for name in uncertainDateRanges}
+
+        # if there are no uncertain dates, we are done after one regression
+        if not uncertainDateRanges:
+            break
+
+        # update uncertain dates by projecting onto the regression line
+        slope = res_local["slope"]
+        intercept = res_local["intercept"]
+
+        # if slope is zero, projection is undefined – nothing to refine
+        if abs(slope) < 1e-12:
+            break
+
+        newDates = _adjust_tip_dates_by_regression(uncertainTips, slope, intercept)
+        delta = 0.0
+        for tipName in newDates:
+            delta += abs(currentDates[tipName] - newDates[tipName])
+            currentDates[tipName] = newDates[tipName]
+
+        # stop if updates are tiny (converged)
+        if delta < tol:
+            break
+
+
+    # if we never got a valid regression, return an empty-ish record
     if best_res is None:
         best_res = {}
+        best_score = None
+        best_dates = None
 
+    # attach metadata expected by root_by_regression
     best_res["root_index"] = root_index
     best_res["score"] = best_score
-    best_res["monte_carlo_dates"] = best_dates
+    best_res["assigned_uncertain_dates"] = best_dates
 
-    # IMPORTANT: we replace 'root' with index so we don't leak deep-copied nodes
+    # IMPORTANT: replace 'root' node reference with index so we don't leak deep-copied nodes
     best_res["root"] = root_index
 
     return best_res
 
+def _adjust_tip_dates_by_regression(
+    uncertainTips,
+    slope: float,
+    intercept: float):
+    """
+    Receives a list of tips with uncertain dates and regression parameters, adjusts .absoluteTime (within uncertainty range .absoluteTimeRange) to be as close to regression line as possible.
+    """
+    adjustedDates = {}
+
+    for k in uncertainTips:
+        regressionDate = (k.height - intercept) / slope ## interpolate date of tip based on subs/site height
+        minD, maxD = k.absoluteTimeRange ## get clamp
+
+        adjustedDates[k.name] = min(max(regressionDate, minD), maxD) ## clamp tip date
+
+    return adjustedDates
+
+def plot_root_to_tip(ax, tree, 
+                     colour = None, colourFxn = None, 
+                     pointSize = None, pointSizeFxn = None, 
+                     outline = True, outlineColour = None, outlineColourFxn = None, 
+                     outlineSize = None, outlineSizeFxn = None, 
+                     orientation = 'horizontal', 
+                     targetFxn = None, 
+                     plotRegression = True, plotTree = False, 
+                     highlightOutliers = False, outlierThres = None, outlierColour = None, 
+                     pointKwargs = {}, lineKwargs = {}, treeKwargs = {}):
+
+    import math
+    # from baltic.bt_utils import desaturate_cmap, calendar_to_decimal_date, decimal_to_calendar_date
+    from scipy.stats import linregress
+    
+    assert tree.treeType == 'divergence', f"Cannot run root-to-tip regression on a time tree. Branch lengths must be in substitution space."
+    assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
+
+    func_logger = logging.getLogger("baltic.bt_utils.plot_root_to_tip")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[root_to_tip] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+    
+    if targetFxn is None: targetFxn = lambda k: k.is_leaf()
+    
+    localPointKwargs = dict(pointKwargs)
+    localLineKwargs = dict(lineKwargs)
+    localTreeKwargs = dict(treeKwargs)
+
+    tipOrder = tree.get_external(targetFxn)
+    
+    ys = [k.height for k in tipOrder]
+    xs = [k.absoluteTime for k in tipOrder if k.absoluteTime]
+    
+    assert len(xs) > 0, f"Tips do not have an assigned `absoluteTime` attribute that represents tip collection dates."
+    assert len(xs) == len(ys), f"Some branches missing collection dates. Branhes with heights: {len(ys)}; with collection dates: {len(xs)}."
+    #################
+    
+    # Colour logic
+    if colour is not None and colourFxn is not None:
+        raise ValueError(
+            "Cannot specify both colour and colourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if colour is None and colourFxn is None:
+        cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
+        norm = mpl.colors.Normalize(min(xs), max(xs))
+        colourFxn = lambda k: cmap(norm(k.absoluteTime))
+    
+    elif colourFxn is None:
+        colourFxn = lambda k: colour
+    
+    if outlineColour is None and outlineColourFxn is None:
+        outlineColourFxn = lambda k: "k"
+    elif outlineColourFxn is None:
+        outlineColourFxn = lambda k: outlineColour
+
+    # Point size logic
+    if pointSize is not None and pointSizeFxn is not None:
+        raise ValueError(
+            "Cannot specify both pointSize and pointSizeFxn. Please use only one."
+        )
+    if pointSize is None and pointSizeFxn is None:
+        pointSizeFxn = lambda k: 60
+    elif pointSizeFxn is None:
+        pointSizeFxn = lambda k: pointSize
+    
+    # Outline size logic
+    if outlineSize is not None and outlineSizeFxn is not None:
+        raise ValueError(
+            "Cannot specify both outlineSize and outlineSizeFxn. Please use only one."
+        )
+    if outlineSize is None and outlineSizeFxn is None:
+        outlineSizeFxn = lambda k: ((2+math.sqrt(pointSizeFxn(k)/math.pi))**2)*math.pi
+    elif outlineSizeFxn is None:
+        outlineSizeFxn = lambda k: outlineSize
+
+    slope, intercept, rval, _, std_err = linregress(xs, ys) ## run linear regression
+
+    tmrca = -intercept / slope
+    func_logger.info(f"Root-to-tip regression parameters: slope = {slope:.4e} intercept = {intercept:.4g} TMRCA = {tmrca:.3f} "
+                f"({decimal_to_calendar_date(tmrca, fmt='%Y-%b-%d')})")
+
+    sizes = [pointSizeFxn(k) for k in tipOrder]
+    cs = [colourFxn(k) for k in tipOrder]
+
+    if outlierThres is None: ## default outlier threshold is residual standard deviation
+        residuals = {k.name: float(k.height - (k.absoluteTime * slope + intercept)) for k in tipOrder}
+        justResiduals = [residuals[k.name] for k in tipOrder]
+        sigma = np.sqrt(np.sum(np.pow(justResiduals,2)) / (len(tipOrder) - 2))
+        outlierThres = 2 * sigma
+        
+    outliers = [k for k in tipOrder if abs(k.height - (k.absoluteTime * slope + intercept)) >= outlierThres]
+
+    if plotRegression:
+
+        x_grid = np.linspace(min(xs), max(xs))
+        y_grid = [x * slope + intercept for x in x_grid]
+
+        if orientation == 'vertical':
+            x_grid, y_grid = y_grid, x_grid
+        
+        if 'color' not in localLineKwargs: localLineKwargs['color'] = 'k'
+        if 'lw' not in localLineKwargs and 'linewidth' not in localLineKwargs: localLineKwargs['lw'] = 3
+        if 'ls' not in localLineKwargs and 'linestyle' not in localLineKwargs: localLineKwargs['ls'] = '--'
+        ax.plot(x_grid, y_grid, **localLineKwargs)
+    
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+    
+    if 'zorder' not in localPointKwargs: localPointKwargs['zorder'] = 4
+    if 'edgecolor' not in localPointKwargs: localPointKwargs['edgecolor'] = 'none'
+    ax.scatter(
+            xs,
+            ys,
+            s=sizes,
+            facecolor=cs,
+            **localPointKwargs,
+        )  ## put a circle at each tip
+    if outline:
+        os = [outlineSizeFxn(k) for k in tipOrder]
+        outlierColour = 'darkred' if outlierColour is None else outlierColour
+        ocs = [outlierColour if (highlightOutliers and k in outliers) else outlineColourFxn(k) for k in tipOrder]
+        localPointKwargs['zorder'] -= 1 ## decrease zorder for outlines
+        ax.scatter(
+            xs,
+            ys,
+            s=os,
+            facecolor=ocs,
+            **localPointKwargs,
+        )  ## put a circle at each tip
+
+    for k in tipOrder:
+        if np.diff(k.absoluteTimeRange)[0] > 1e-10:
+            uxs, uys = k.absoluteTimeRange, [k.height, k.height]
+            if orientation == 'vertical':
+                uxs, uys = uys, uxs
+            ax.plot(uxs, uys, color = 'k')
+        
+    if plotTree:
+        
+        xFxn = lambda k: k.absoluteTime if k.is_leaf() else (k.height - intercept) / slope
+        yFxn = lambda k: k.height
+
+        if orientation == 'vertical':
+            xFxn, yFxn = yFxn, xFxn
+        
+        if 'connectionType' in localTreeKwargs and localTreeKwargs['connectionType'] != 'direct':
+            warnings.warn(f"plot_root_to_tip does not support connectionType other than 'direct'.")
+        localTreeKwargs['connectionType'] = 'direct'
+        if 'alpha' not in localTreeKwargs: localTreeKwargs['alpha'] = 0.05
+        
+        tree.plot_tree(ax, xCoordinateFxn = xFxn, yCoordinateFxn = yFxn, **localTreeKwargs)
+    
+    return (outliers, slope, intercept, residuals)
 
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
