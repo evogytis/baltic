@@ -402,7 +402,7 @@ def plot_tangled_chain(
     Returns
     -------
     :obj:`matplotlib.axes.Axes`
-        The modified matplotlib `Axes` object.
+        The modified matplotlib Axes object.
 
     Notes
     -----
@@ -569,7 +569,7 @@ def plot_scale_bar(
     Returns
     -------
     :obj:`matplotlib.axes.Axes`
-        The modified matplotlib ``Axes`` object.
+        The modified matplotlib Axes object.
 
     Notes
     -----
@@ -760,12 +760,15 @@ def plot_tmrca_posterior(
         outlineKwargs = {},
     ):
     """
-    Plot the posterior distribution of the time to the most recent common ancestor (TMRCA).
+    Plot the posterior distribution of the time to the most recent common
+    ancestor (TMRCA).
 
-    Produces a violin plot of the TMRCA posterior distribution estimated using a kernel density estimate (KDE),
-    the violin plot can either be full or half (upper) only. The highest posterior density (HPD) interval is calculated
-    and displayed on the plot. Optionally, the mean of the posterior distribution can be connected to a specified node
-    with a dotted line or placed directly
+    Produces a violin plot of the TMRCA posterior distribution estimated
+    using a kernel density estimate (KDE), the violin plot can either be
+    full or half (upper) only. The highest posterior density (HPD) interval
+    is calculated and displayed on the plot. Optionally, the mean of the
+    posterior distribution can be connected to a specified node with a dotted
+    line or placed directly.
 
     Parameters
     ----------
@@ -776,65 +779,76 @@ def plot_tmrca_posterior(
         Path to the file containing the posterior samples of TMRCA.
 
     tmrcaName : str, optional
-        The name of the column in the file containing the TMRCA values. Defaults to `'age(root)'`.
+        The name of the column in the file containing the TMRCA values.
+        Defaults to ``'age(root)'``.
 
     burnin : int, optional
-        The number of initial states to discard as burn-in. Defaults to `10,000,000` if not specified.
+        The number of initial states to discard as burn-in. Defaults to
+        ``10,000,000`` if not specified.
 
     yCoord : float, optional
-        The y-coordinate at which the posterior distribution will be plotted. If not provided, defaults to `0.0` or
-        the y-coordinate of the specified node.
+        The y-coordinate at which the posterior distribution will be
+        plotted. If not provided, defaults to ``0.0`` or the y-coordinate
+        of the specified node.
 
     fullViolin : bool, optional
-        If `True`, plot a full violin plot of the posterior distribution. If `False`, plot only the upper half.
-        Defaults to `True`.
+        If ``True``, plot a full violin plot of the posterior distribution.
+        If ``False``, plot only the upper half. Defaults to ``True``.
 
     hpdLvl : float, optional
-        The highest posterior density (HPD) level to calculate. Defaults to `0.95` (95% HPD interval).
+        The highest posterior density (HPD) level to calculate. Defaults
+        to ``0.95`` (95% HPD interval).
 
     precision : int, optional
-        The number of points used to calculate the kernel density estimate (KDE). Defaults to `100`.
+        The number of points used to calculate the kernel density estimate
+        (KDE). Defaults to ``100``.
 
     kdeWidth : float, optional
-        The width of the KDE plot. Defaults to `3`.
+        The width of the KDE plot. Defaults to ``3``.
 
     orientation : {'horizontal', 'vertical'}, optional
-        The orientation of the plot. Defaults to `'horizontal'`.
+        The orientation of the plot. Defaults to ``'horizontal'``.
 
     connectNode : bool, optional
-        If `True`, connect the mean of the posterior distribution to the specified node with a dotted line.
-        Defaults to `False`.
+        If ``True``, connect the mean of the posterior distribution to the
+        specified node with a dotted line.
+        Defaults to ``False``.
 
     node : :class:`.Node`, optional
-        The node to which the mean of the posterior distribution will be connected. Required if `connectNode` is `True`.
+        The node to which the mean of the posterior distribution will be
+        connected. Required if ``connectNode`` is ``True``.
 
     violinKwargs : dict, optional
-        Additional keyword arguments passed to the `fill_between` or `fill_betweenx` function for the violin plot.
+        Additional keyword arguments passed to the *fill_between* or
+        *fill_betweenx* function for the violin plot.
 
     outlineKwargs : dict, optional
-        Additional keyword arguments passed to the `plot` function for the outline of the violin plot.
+        Additional keyword arguments passed to the *plot* function for
+        the outline of the violin plot.
 
     Returns
     -------
     :obj:`matplotlib.axes.Axes`
-        The modified matplotlib `Axes` object.
+        The modified matplotlib Axes object.
 
     Notes
     -----
     - The TMRCA posterior distribution is estimated using a kernel density estimate (KDE).
     - The HPD interval is calculated and displayed in the plot.
-    - If `connectNode` is `True`, the mean of the posterior distribution is connected to the specified node with a dotted line.
-    - If both `yCoord` and `node` are provided, `yCoord` takes precedence for positioning the plot.
+    - If *connectNode* is ``True``, the mean of the posterior distribution
+      is connected to the specified node with a dotted line.
+    - If both *yCoord* and *node* are provided, *yCoord* takes precedence
+      for positioning the plot.
 
     Raises
     ------
     ValueError
-        If `connectNode` is `True` but `node` is not specified.
+        If *connectNode* is ``True`` but *node* is not specified.
 
     Warnings
     --------
-    - If `burnin` is not specified, a default value of `10,000,000` states is used.
-    - If both `yCoord` and `node` are provided, a warning is issued, and `yCoord` is used.
+    - If *burnin* is not specified, a default value of ``10,000,000`` states is used.
+    - If both *yCoord* and *node* are provided, a warning is issued, and *yCoord* is used.
 
     Examples
     --------
@@ -966,8 +980,73 @@ def plot_tmrca_posterior(
     return ax
 
 
-def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
+def plot_time_grid(
+        ax,
+        timeline,
+        dateFmt='%Y-%m-%d',
+        colourFxn=None,
+        colour=None,
+        edgeColourFxn=None,
+        edgeColour=None,
+        axis='x',
+        **kwargs
+    ):
+    """
+    Plot a time grid on the given axes, highlighting alternating time intervals.
 
+    Parameters
+    ----------
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes on which the time grid will be plotted.
+
+    timeline : list[str] or range
+        A list of dates (as strings) or a range of decimal dates defining the time intervals.
+
+    dateFmt : str, optional
+        The format of the input dates in the timeline. Defaults to `'%Y-%m-%d'`.
+
+    colourFxn : function, optional
+        A function that determines the fill color for each time interval. If not provided, defaults to black.
+
+    colour : str, optional
+        A single color to use for all time intervals. If provided, it overrides *colourFxn*.
+
+    edgeColourFxn : function, optional
+        A function that determines the edge color for each time interval. If not provided, defaults to ``'none'``.
+
+    edgeColour : str, optional
+        A single edge color to use for all time intervals. If provided, it overrides *edgeColourFxn*.
+
+    axis : {'x', 'y'}, optional
+        The axis along which the time grid will be plotted. Defaults to ``'x'``.
+
+    kwargs : dict, optional
+        Additional keyword arguments passed to the :obj:`matplotlib.axes.Axes.axvspan` or :obj:`matplotlib.axes.Axes.axhspan` function.
+
+    Returns
+    -------
+    :obj:`matplotlib.axes.Axes`
+        The modified matplotlib Axes object.
+
+    Notes
+    -----
+    - The `timeline` can be a list of dates (in `dateFmt` format) or a range of decimal dates.
+    - If both `colour` and `colourFxn` are provided, a `ValueError` is raised.
+    - If both `edgeColour` and `edgeColourFxn` are provided, a `ValueError` is raised.
+    - Alternating time intervals are highlighted, starting with the first interval in the timeline.
+
+    Raises
+    ------
+    ValueError
+        If both `colour` and `colourFxn` are provided, or if both `edgeColour` and `edgeColourFxn` are provided.
+
+    Examples
+    --------
+    >>> fig, ax = plt.subplots(figsize=(8, 6))
+    >>> timeline = ['2020-01-01', '2020-02-01', '2020-03-01']
+    >>> plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colour='lightgray', axis='x')
+    >>> plt.show()
+    """
     if colour is not None and colourFxn is not None:
         raise ValueError(
             "Cannot specify both colour and colourFxn. Please use only one."

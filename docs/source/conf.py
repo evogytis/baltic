@@ -29,3 +29,9 @@ exclude_patterns = []
 
 html_theme = 'python_docs_theme'
 html_static_path = ['_static']
+
+# Source - https://stackoverflow.com/a
+# Posted by shry, modified by community. See post 'Timeline' for change history
+# Retrieved 2025-12-08, License - CC BY-SA 3.0
+
+html_sidebars = { '**': ['globaltoc.html', 'relations.html', 'sourcelink.html', 'searchbox.html'] }

@@ -2796,7 +2796,7 @@ class Tree:
         Returns
         -------
         :obj:`matplotlib.axes.Axes`
-            The modified matplotlib ``Axes`` object.
+            The modified matplotlib Axes object.
 
         Notes
         -----
@@ -3050,7 +3050,7 @@ class Tree:
         Returns
         -------
         :obj:`matplotlib.axes.Axes`
-            The modified matplotlib ``Axes`` object.
+            The modified matplotlib Axes object.
         """
         valid_treeTypes = ['rectangular','circular','unrooted']
         assert treeType in valid_treeTypes, f"Tree type {treeType} not recognised. Options are {valid_treeTypes}"
@@ -3114,7 +3114,7 @@ class Tree:
         Parameters
         ----------
         ax : :obj:`matplotlib.axes.Axes`
-            Matplotlib ``Axes`` object to plot on.
+            Matplotlib Axes object to plot on.
 
         xSpace : float, optional
             X-coordinate spacing from the tips to the label, by default 0.005.
