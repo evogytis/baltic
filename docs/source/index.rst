@@ -47,7 +47,7 @@ The resultant ``baltic`` tree can be examined via the ``treeStats`` method.
 
 .. toctree::
    :hidden:
-   :maxdepth: 2
+   :maxdepth: 3
 
    baltic
    io
