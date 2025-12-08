@@ -1002,8 +1002,10 @@ def plot_time_grid(
     timeline : list[str] or range
         A list of dates (as strings) or a range of decimal dates defining the time intervals.
 
+        Can be a list of dates (in *dateFmt* format) or a range of decimal dates.
+
     dateFmt : str, optional
-        The format of the input dates in the timeline. Defaults to `'%Y-%m-%d'`.
+        The format of the input dates in the timeline. Defaults to ``'%Y-%m-%d'``.
 
     colourFxn : function, optional
         A function that determines the fill color for each time interval. If not provided, defaults to black.
@@ -1012,7 +1014,7 @@ def plot_time_grid(
         A single color to use for all time intervals. If provided, it overrides *colourFxn*.
 
     edgeColourFxn : function, optional
-        A function that determines the edge color for each time interval. If not provided, defaults to ``'none'``.
+        A function that determines the edge color for each time interval. If not provided, defaults to no coloration.
 
     edgeColour : str, optional
         A single edge color to use for all time intervals. If provided, it overrides *edgeColourFxn*.
@@ -1030,15 +1032,13 @@ def plot_time_grid(
 
     Notes
     -----
-    - The `timeline` can be a list of dates (in `dateFmt` format) or a range of decimal dates.
-    - If both `colour` and `colourFxn` are provided, a `ValueError` is raised.
-    - If both `edgeColour` and `edgeColourFxn` are provided, a `ValueError` is raised.
-    - Alternating time intervals are highlighted, starting with the first interval in the timeline.
+    - Alternating time intervals are highlighted, starting with the first
+      interval in the timeline.
 
     Raises
     ------
     ValueError
-        If both `colour` and `colourFxn` are provided, or if both `edgeColour` and `edgeColourFxn` are provided.
+        If both *colour* and *colourFxn* are provided, or if both *edgeColour* and *edgeColourFxn* are provided.
 
     Examples
     --------
