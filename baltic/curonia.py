@@ -1,9 +1,13 @@
+import logging
 import warnings
+import os
+from collections import Counter
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
 from baltic.bt_utils import calendar_to_decimal_date
 
+logger = logging.getLogger("baltic.curonia")
 
 def indexObs(node, count = 0):
     """
@@ -641,3 +645,631 @@ def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = 
                                filterFxn = filterFxn, orientation = orientation, clipThreshold = clipThreshold, **kwargs) ## draw frequency for each child, padding as you go
         
     return [bottom[t] + ys[t] for t in xs] ## new bottom is bottom+this node's values
+
+
+#### convex hulls around clades
+#### alignment + tree
+#### matrix + tree
+#### LBI
+#### layering function for colouring (e.g. marking discovery paths)
+
+
+def position_Bezier_control(pointA, pointB, height, frac):
+    """ 
+    Given a line defined by 2 points A & B, 
+    find a third point at a given distance (height) that defines a line perpendicular to line AB which intercepts AB at fraction (frac) along AB.
+    Equation derived by Luiz Max Fagundes de Carvalho (University of Edinburgh).
+    """
+    x1, y1 = pointA
+    x2, y2 = pointB
+
+    sign = 1
+    if x1 > x2:
+        sign = -1
+
+    slope = (y2 - y1) / (x2 - x1)
+    d=np.sqrt((y2 - y1)**2 + (x2 - x1)**2) ## distance between points
+    
+    h=np.sqrt(height**2 + (d * frac)**2) ## distance between desired height and point along line
+
+    n1 = x1 + h * np.cos(np.arctan(height / float(d) / frac) + np.arctan(slope)) * sign ## magic
+    n2 = y1 + h * np.sin(np.arctan(height / float(d) / frac) + np.arctan(slope)) * sign
+
+    return (n1, n2) ## return third point's coordinate
+##########################
+
+def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fasta'):
+    """
+    Computes consensus from an alignment file provided.
+    Optionally can compute SNP consensus
+    """
+    from collections import Counter
+    from Bio import SeqIO
+    
+    alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt))
+    
+    if validNucleotideFxn is None: validNucleotideFxn = lambda nt: nt.upper() in ['A','C','T','U','G','-']
+
+    if SNPs is None:
+        positions = range(len(alnDict[list(alnDict.keys())[0]])) ## get length of first sequence == alignment length
+    else:
+        assert isinstance(SNPs, list), f"Parameter SNPs is of type {type(SNPs)}, not list"
+        positions = SNPs
+
+    consensus = []
+    for i in positions: ## iterate over positions (either range or list of pre-computed variable sites)
+
+        clean_column = [alnDict[seq][i] for seq in alnDict if validNucleotideFxn(alnDict[seq][i].upper())] ## filter to valid nucleotides
+        assert len(clean_column) > 0, f"Position {i+1} (1-based indexing) contains no valid nucleotides"
+        consensusNt = clean_column[0] if len(set(clean_column)) == 1 else Counter(clean_column).most_common(1)[0][0]
+        
+        consensus.append(consensusNt)
+    
+    return ''.join(consensus)
+
+def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refSeqFmt=None):
+    """
+    Retrieve reference sequence - compute consensus from alignment, fetch from alignment file or grab from path.
+    Returns sequence as str
+    """
+    from Bio import SeqIO
+    
+    summarySeq = None
+    if refSeq == 'consensus': ## compute consensus
+        assert alnFile is not None and validNucleotideFxn is not None and alnFmt is not None, f"Computing consensus requires alnFile, alnFmt, validNucleotidesFxn to be set."
+        if refSeqFmt:
+            logger.warning(f"Using consensus sequence as reference, refSeqFmt parameter ({refSeqFmt}) will be ignored.")
+        summarySeq = _compute_consensus(alnFile=alnFile, validNucleotideFxn=validNucleotideFxn, alnFmt=alnFmt)
+    elif os.path.exists(refSeq):
+        assert refSeqFmt is not None, f"Loading an external reference requires refSeqFmt to be set."
+        summarySeq = str(SeqIO.read(refSeq, refSeqFmt).seq)
+    else:
+        assert alnFmt is not None, f"Identifying a reference in alignment requires alnFmt to be set."
+        alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt)) ## load sequence
+        assert refSeq in alnDict, f"refSeq {refSeq} not found in alignment {alnFile} provided."
+        if refSeqFmt:
+            logger.warning(f"Using sequence in alnDict as reference, refSeqFmt parameter ({refSeqFmt}) will be ignored.")
+        summarySeq = str(alnDict[refSeq].seq) ## grab reference sequence without filtering invalid nucleotides
+
+    if summarySeq is None:
+        raise Exception(f"Could not retrieve reference sequence.")
+    
+    return summarySeq
+
+def _default_variable_site_selection_fxn(columnDict, validNtFxn, refNt):
+    """
+    Takes a dict of {seq name: nucleotide}, validNtFxn to identify whether a nucleotide is valid, and nucleotide at reference sequence
+    This function identifies whether the column dict contains variable sites (at least 2 unique values) and that the 2nd most common allele is found it at least 2 sequences.
+    """
+    variable = False
+    clean_column = [columnDict[seq] for seq in columnDict if validNtFxn(columnDict[seq])] ## filter to valid nucleotides
+    
+    if len(set(clean_column)) >= 2 and Counter(clean_column).most_common()[1][1] >= 2: ## column must be variable AND second most common element is found more than once
+        variable = True
+
+    return variable
+
+def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, validNucleotideFxn=None, alnFmt='fasta', refSeqFmt=None, trimStart=0, trimEnd=None):
+    """
+    Takes an alignment file path.
+    refSeq is consensus (computed from alignment provided), a specific sequence in the alignment or an external file.
+    selectionFxn is a function that takes: a dict of {seq name: nucleotide} at a given alignment column, default: _default_variable_site_selection_fxn that filters column down to valid nucleotides, and nucleotide at reference sequence; default: True for columns where the 2nd most common nt is found in >=2 seqs
+    validNucleotideFxn is a function that determines whether a nucleotide is valid (default is nt == A, C, T, U, G or -)
+    alnFmt is sequence format of alnFile (default: 'fasta')
+    refSeqFmt is sequence format of external reference file (default: 'fasta')
+    trimStart, trimEnd is how many positions to ignore at either end of the alnFile
+    returns indices of sites that pass selectionFxn
+    """
+    from collections import Counter
+    from Bio import SeqIO
+    
+    alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt)) ## load sequence
+    
+    if validNucleotideFxn is None: validNucleotideFxn = lambda nt: nt.upper() in ['A','C','T','U','G','-']
+    
+    if selectionFxn is None: selectionFxn = _default_variable_site_selection_fxn
+    
+    if trimStart is None: trimStart = 0
+
+    alnLs = [len(seq) for seq in alnDict.values()]
+    assert len(set(alnLs)) == 1, f"Sequences in alignment have different lengths implying they're not aligned. Unique sequence lengths in alignment: {set(alnLs)}."
+    alnL = alnLs[0] ## all seqs have same length, get first seq length
+    
+    if trimEnd is None:
+        trimEnd = alnL
+    else:
+        trimEnd = alnL - trimEnd
+
+    assert refSeq == 'consensus' or refSeq in alnDict or os.path.exists(refSeq), f"refSeq {refSeq} is not 'consensus', a sequence available in alnDict or a recognised path."
+    if os.path.exists(refSeq) and refSeqFmt is None: ## external reference without provided format, assume fasta
+        refSeqFmt = 'fasta'
+    summarySeq = _get_refSeq(refSeq=refSeq, alnFile=alnFile, alnFmt=alnFmt, refSeqFmt=refSeqFmt, validNucleotideFxn=validNucleotideFxn)
+    
+    assert len(summarySeq) == alnL, f"External reference sequence length {len(summarySeq)} does not match alignment sequence length"
+    
+    columns = [{s: str(alnDict[s].seq)[i] for s in alnDict} for i in range(alnL)] ## extract every column as a {seq: nt} dict
+    SNPs = [i for i in range(alnL) if selectionFxn(columns[i], validNucleotideFxn, summarySeq[i]) and trimStart <= i <= trimEnd] ## identify indices that satisfy filterFxn and are within desired range
+    
+    return SNPs
+
+def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours=None, textKwargs={}, 
+                       rectangleKwargs={}, treeAx=None, fmtSeqNamesFxn=None, treeKwargs={}, alnFmt='fasta', 
+                       validNucleotideFxn=None, coding=False, gffFile=None, featType=None, geneName=None, refSeqFmt=None, 
+                       plotORFs=False, minFeatLen=1000, offsetORFs=0.1):
+    """
+    takes alnAx axes object where the alignment will be plotted
+    SNPs is a list of variable sites to be included (0-indexed)
+    alnFile is the alignment file
+    tree is the tree, used to sort alignment in tree y-axis order; ## NOTE - should assert that number of sequences matches number of tips in tree
+    refSeq is the reference sequence to be used to highlight sequence differences:
+    - if 'consensus', then a consensus sequence will be computed from the alignment provided and used as a reference
+    - if refSeq is a sequence in the alignment, that sequence becomes the reference
+    - if refSeq is a path, it's assumed that an external reference file was provided (must contain a single record!)
+    ntColours is a dict that maps every nucleotide state to a colour; note, don't forget ambiguous state (N, K, M, R, etc.) colours if using your own
+    textKwargs is a kwargs dict for text labels at changed nucleotides (or reference)
+    rectangleKwargs is a kwargs dict for rectangles that represent each nucleotide in each sequence
+    treeAx is an axes object for placing a tree; can be None if you don't want the tree plotted
+    fmtSeqNamesFxn is a function that takes sequence name from a tree and returns a modified version (e.g. you want to remove extraneous information)
+    treeKwargs is a kwargs dict used when plotting a tree (e.g. you want to change branch colours)
+    alnFmt is the format of the alignment file (default: 'fasta')
+    validNucleotideFxn is a function that filters alignment columns down to valid states; default {A, C, T, U, G, -} are considered as valid 
+    coding is a Boolean for whether the alignment is coding or not; if a GFF file is provided the features in the file will be used to infer aa changes, otherwise it's assumed the entire alignment is a single coding sequence
+    gffFile is a path (or handle) to a GFF file that defines sequence features; ## NOTE - should assert that alignment length equals 'nuc' feature
+    featType is a string used for fetching features from the GFF file; if not specified assumed to be 'gene'
+    geneName is a string used for getting feature names from the GFF file; if not specified assumed to be 'gene_name'
+    refSeqFmt is the format of an external reference file (i.e. if refSeq is a path)
+    plotORFs is a Boolean for whether to plot a schematic diagram of the alignment with feature annotations; errors if set to True without a GFF file
+    minFeatLen is minimum feature length for adding text to sequence schematic
+    offsetORFs is a float that represents a fraction of the tree's y-axis height to be used for positioning GFF file features below the alignment
+    """ 
+    from matplotlib.patches import Rectangle
+    from matplotlib.collections import PatchCollection, LineCollection
+    from Bio import SeqIO
+    
+    alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt))
+    
+    height = 0.95
+    width = 1.0
+    localTextKwargs = dict(textKwargs)
+    localRectangleKwargs = dict(rectangleKwargs)
+    localTreeKwargs = dict(treeKwargs)
+    
+    if 'color' not in localTextKwargs: localTextKwargs['color'] = 'k'
+    if 'size' not in localTextKwargs: localTextKwargs['size'] = 10
+    if 'zorder' not in localTextKwargs: localTextKwargs['zorder'] = 100
+    if 'ha' not in localTextKwargs and 'horizontalalignment' not in localTextKwargs: localTextKwargs['ha'] = 'center'
+    if 'va' not in localTextKwargs and 'verticalalignment' not in localTextKwargs: localTextKwargs['va'] = 'center'
+    
+    if ntColours is None: ## default nt colours
+        ntColours={'A': '#D0694A', 'C': '#77BEDB', 'T': '#48A365', 'U': '#48A365', 'G': '#E1C72F', 
+                 '-': 'white', 'N':'dimgrey', 
+                 'K': 'dimgrey', 'Y': 'dimgrey', 'M': 'dimgrey', 'W': 'dimgrey', 'R': 'dimgrey'}
+    
+    ###### check refSeq is valid, grab reference sequence accordingly
+    assert refSeq == 'consensus' or refSeq in alnDict or os.path.exists(refSeq), f"refSeq {refSeq} is not 'consensus', a sequence available in alnDict or a recognised path."
+    if validNucleotideFxn is None: validNucleotideFxn = lambda nt: nt in ['A','C','T','U','G','-']
+    summarySeq = _get_refSeq(refSeq=refSeq, alnFile=alnFile, alnFmt=alnFmt, refSeqFmt=refSeqFmt, validNucleotideFxn=validNucleotideFxn)
+    ######
+    if gffFile:
+        seqFeatures = _load_gff(gffFile)
+        if featType is None: featType = 'gene'
+        if geneName is None: geneName = 'gene_name'
+    else:
+        seqFeatures = None
+        if coding:
+            logger.warning("Alignment is coding but no GFF file provided.")
+    ###### compute xtick positions for alignment columns
+    window = 3
+    storeSite = SNPs[0]
+    xticks = []
+    cumulativeX = -1
+    for i, pos in enumerate(SNPs):
+        if storeSite + window < pos: ## next site is beyond window
+            cumulativeX += 1 + (pos - storeSite) * 0.0002 ## add a bit of extra space once we're far enough away
+        else:
+            cumulativeX += 1
+
+        xticks.append(cumulativeX)
+        storeSite = pos
+    ###########
+    patches = []
+    patchFaceColours = []
+    patchEdgeColours = []
+    
+    for k in sorted(tree.get_external(), key = lambda leaf: leaf.y):
+        assert k.name in alnDict, f"Tip name {k.name} not present in alnDict."
+        
+        y = k.y - 0.5
+
+        for i, pos in enumerate(SNPs):
+            x = xticks[i]
+            
+            curNt = str(alnDict[k.name][pos]).upper() ## grab current sequence's nt
+            refNt = summarySeq[pos] ## grab consensus (at SNP index) or reference sequence nucleotide (at entire seq index)
+            
+            nt_block = Rectangle((x, y), width = width, height = height)
+            
+            if refNt != curNt: ## not matching with reference sequence - highlight, add text
+                fc = ntColours[curNt]
+                ec = 'w'
+                alnAx.text(x + 0.5, y + 0.5, curNt, **localTextKwargs)
+            elif refNt == '-': ## reference sequence has a gap - there's insertions elsewhere, so no marker
+                fc = 'none' ## invisible block
+                ec = 'none'
+            else: ## match with reference/consensus
+                fc = 'lightgray'
+                ec = 'none'
+                if k.name == refSeq: ## add text for reference seq
+                    alnAx.text(x + 0.5, y + 0.5, curNt, **localTextKwargs)
+            
+            patches.append(nt_block)
+            patchFaceColours.append(fc)
+            patchEdgeColours.append(ec)
+
+        if refSeq in alnDict and refSeq == k.name:
+            alnAx.add_patch(Rectangle((0, k.y - height/2), width=max(xticks) + width, height=height, facecolor='none', edgecolor='k', lw=1, zorder=10000, clip_on=False)) ## outline reference
+    
+    ###### plot consensus or external reference sequence if provided underneath alignment
+    if refSeq == 'consensus' or os.path.exists(refSeq):
+        y = -1
+        for i, pos in enumerate(SNPs):
+            x = i
+            nt_block = Rectangle((xticks[i], y), width = width, height = height, fc = 'lightgray', ec = 'none')
+            
+            alnAx.text(xticks[i] + 0.5, y + 0.5, summarySeq[pos].upper(), color = 'k', size = 10, ha = 'center', va = 'center')
+            
+            patches.append(nt_block)
+            patchFaceColours.append(fc)
+            patchEdgeColours.append(ec)
+
+        alnAx.add_patch(Rectangle((0, y), width=max(xticks) + width, height=height, facecolor='none', edgecolor='k', lw=1, zorder=10000, clip_on=False)) ## outline reference
+    ############ dump all rectangles, adjust axes
+    alnAx.add_collection(PatchCollection(patches, facecolors = patchFaceColours, edgecolors = patchEdgeColours))
+
+    ######
+    alnAx.xaxis.tick_top()
+    alnAx.set_xticks([x + width/2 for x in xticks])
+
+    xTickLabels = []
+
+    for i, pos in enumerate(SNPs):
+        if coding:
+            fmtPosition = _format_coding_aln_column(site=pos, alnDict=alnDict, referenceSeq=summarySeq, seqFeatures=seqFeatures, featType=featType)
+        else:
+            fmtPosition = pos + 1 ## convert to 1-indexed
+
+        xTickLabels.append(fmtPosition)
+    
+    if len(xTickLabels) == 0: print(f"xTickLabels not set")
+    alnAx.set_xticklabels(xTickLabels, rotation = 90)
+    alnAx.tick_params(size = 0)
+
+    alnBottom = -1 if (refSeq == 'consensus' or os.path.exists(refSeq)) else 0
+    ######## plotting representative sequence features
+    if plotORFs:
+
+        # adjust x-axis shoulder position
+        repulsionStrength = 0.01
+        xs = np.array(xticks, float)
+        for _ in range(12):  # 10 iterations of simple repulsion
+            diffs = xs[:,None] - xs[None,:]
+            xs += repulsionStrength * np.tanh(1 / (diffs + 1e-6)).sum(axis=1)
+        
+        spread = dict(zip(SNPs, xs))
+        ###
+        
+        assert gffFile, f"Must provide gffFile for plotting ORFs."
+        ORFwidth = min([tree.ySpan * 0.05, 1])
+        ORFwidth = max([ORFwidth, tree.ySpan * 0.05])
+        rescaleORFs = len(summarySeq) / (max(xticks) + width)
+        offsetOrfY = tree.ySpan * offsetORFs ## y-axis coordinate where genome sits, offset by a fraction of tree length
+        maxORFheight = plot_seq_features(alnAx, gffFile=gffFile, xy=(0, -offsetOrfY), width=ORFwidth, rescale=rescaleORFs, geneName='gene_name', minFeatLen=minFeatLen)
+        alnAx.eventplot([i / rescaleORFs for i in SNPs], lineoffsets=-offsetOrfY, linelengths=ORFwidth*0.4, color='k', clip_on=False)
+        yBottom = alnBottom - offsetOrfY - maxORFheight - ORFwidth * 0.5 ## adjust bottom to show ORFs starting for bottom of alignment
+        
+        connections = []
+        for i, pos in enumerate(SNPs):
+            shoulder_x = spread[pos] #/ rescaleORFs
+            connections.append(((xticks[i] + width / 2, alnBottom), ## bottom middle of alignment column
+                                (shoulder_x + width / 2, alnBottom - offsetOrfY * 0.3 + ORFwidth * 0.2), ## retain x position, move halfway down y-axis
+                                (pos / rescaleORFs, -offsetOrfY + ORFwidth * 0.2))) ## connect to sequence position
+        
+        alnAx.add_collection(LineCollection(connections, color='gray', lw=0.5, clip_on=False))
+        if coding == False:
+            logger.warning(f"plotORFs == True, but coding == False; Alignment columns will not be formatted with amino acid changes to ORFs.")
+    else: ## not plotting ORFs, bottom of plot is where alignment ends
+        yBottom = alnBottom
+    ###### tree part
+    if treeAx:
+        tree.plot_tree(treeAx, **localTreeKwargs)
+        
+        for k in tree.get_external():
+            treeAx.plot([k.x, tree.treeHeight * 1.01], [k.y, k.y], color = 'gray', ls = '--', lw = 0.5)
+
+        treeAx.xaxis.tick_top()
+        treeAx.tick_params(rotation=90)
+        treeAx.set_xlim(-tree.treeHeight * 0.01, max(tree.get_parameter_list('x')) * 1.01)
+        treeAx.set_ylim(yBottom - 0.05, tree.ySpan + 0.05)
+
+        from baltic import bt_utils
+        bt_utils.clean_axes(treeAx, hideSpines = ['bottom', 'left', 'right'], removeTickLabels='y')
+    #######
+    if fmtSeqNamesFxn is None: fmtSeqNamesFxn = lambda k: f"{k.name}"
+    yticks = [k.y for k in tree.get_external()]
+    yTickLabels = [fmtSeqNamesFxn(k) for k in tree.get_external()]
+
+    if refSeq == 'consensus':
+        yticks.insert(0, -height/2)
+        yTickLabels.insert(0, 'consensus sequence')
+    elif os.path.exists(refSeq):
+        yticks.insert(0, -height/2)
+        yTickLabels.insert(0, 'reference sequence')
+    
+    alnAx.yaxis.tick_right()
+    alnAx.set_yticks(yticks)
+    alnAx.set_yticklabels(yTickLabels)
+    #######
+    
+    alnAx.set_ylim(yBottom - 0.05, tree.ySpan + 0.05)
+    alnAx.set_xlim(-0.1, max(xticks) + width + 0.05)
+    [alnAx.spines[loc].set_visible(False) for loc in alnAx.spines]
+    
+    return alnAx
+
+def _identify_gene(site, seqFeatures, featType, geneName):
+    """
+    Identifies which feature (if any) a given sequence position is in and the index of where the feature begins.
+    If sequence position is within a feature, returns feature name and its starting position; otherwise returns None, None 
+    Site is 0-indexed position in alignment.
+    seqFeatures is a list of Biopython seq features (assumed loaded from a GFF file earlier)
+    featType and geneName are the feature type and feature key for extraction from GFF file
+    """
+    hits = []
+
+    for feat in seqFeatures:
+        start = int(feat.location.start)
+        end   = int(feat.location.end)
+
+        if start <= site < end and feat.type == featType:
+            name = feat.qualifiers.get(geneName, ['?'])[0]
+            geneStart = site - start
+            hits.append((name, geneStart))
+
+    return hits   # may be empty, 1, or many
+
+
+def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, featType='gene', geneName='gene_name'):
+    """
+    site: 0-indexed alignment column
+    alnDict: {name: SeqRecord} dict
+    referenceSeq: str (same length as alignment)
+    seqFeatures: optional list of SeqFeatures from GFF
+    featType and geneName are the feature type (default 'gene') and feature key (default 'gene_name') for extraction from GFF file
+    returns the label for a given alignment column, e.g.:
+    - "1410 nt" if site was outside of a coding feature
+    - "23012 nt S: E484K (A) / E484A (C)" for a site that changes the amino acid sequence (lists all aa variants and nucleotide change associated with each outcome)
+    - "24853 nt S: 1097 aa" for a site that's within a coding feature but the mutation is synonymous
+    """
+    from Bio.Seq import Seq
+
+    # Identify all overlapping ORFs
+    hits = []
+    if seqFeatures is not None:
+        hits = _identify_gene(site, seqFeatures, featType, geneName)
+
+    # Outside coding — no ORF overlaps
+    if not hits:
+        return f"{site + 1} nt"
+
+    annotations = []
+
+    for gene, geneStart in hits:
+
+        # Compute codon position within this ORF
+        aaSite   = geneStart // 3
+        codonPos = geneStart % 3
+        codonStart = site - codonPos
+
+        refCodon = referenceSeq[codonStart: codonStart + 3].upper()
+
+        if len(refCodon) != 3:
+            annotations.append(f"{gene}: {site+1} nt")
+            continue
+
+        aaRef = "-" if refCodon == "---" else str(Seq(refCodon).translate())
+
+        # Collect codons from all sequences
+        allCodons = [
+            str(alnDict[name].seq[codonStart: codonStart + 3]).upper()
+            for name in alnDict
+        ]
+        varCodons = {c for c in allCodons if len(c) == 3 and c[codonPos] != refCodon[codonPos]}
+
+        fmtAAsite = aaSite + 1
+        aaChanges = {}
+
+        for altCodon in varCodons:
+            altNt = altCodon[codonPos]
+
+            if 0 < altCodon.count("-") < 3: ## 1 or 2 gaps in codon - frameshift
+                aaNew = "frmShft"
+            elif altCodon == "---":
+                aaNew = "-"
+            else:
+                aaNew = str(Seq(altCodon).translate())
+
+            if aaNew == "X":
+                continue
+
+            fmtRefAA = r"$\Delta$" if aaRef == "-" else aaRef
+            fmtNewAA = r"$\Delta$" if aaNew == "-" else aaNew
+
+            if fmtRefAA == fmtNewAA:
+                continue
+
+            key = (fmtRefAA, fmtAAsite, fmtNewAA)
+            aaChanges.setdefault(key, set()).add(altNt)
+
+        if aaChanges:
+            effects = " / ".join(
+                f"{ref}{pos}{new} ({','.join(sorted(ntSet))})"
+                for (ref, pos, new), ntSet in sorted(aaChanges.items())
+            )
+        else:
+            effects = f"{fmtAAsite} aa"  # synonymous
+
+        annotations.append(f"{gene}: {effects}")
+
+    # Combine ORF annotations, separated by " | "
+    return f"{site + 1} nt " + " | ".join(annotations)
+
+
+def _load_gff(gffFile):
+    """
+    Loads and returns features from a GFF file.
+    """
+    try:
+        from BCBio import GFF
+    except ImportError:
+        raise ImportError(f"BCBio-GFF needs to be installed for processing GFF files. Install with: pip install bcbio-gff")
+
+    handle = open(gffFile, 'r') if isinstance(gffFile, str) else gffFile
+
+    features = []
+    for rec in GFF.parse(gffFile):
+        features.extend(rec.features)
+
+    return features
+
+def _assign_tracks(features):
+    """
+    Assign minimal y-level tracks to features such that overlapping CDSs 
+    do not share a track.
+
+    features: list of (feat_obj, start, end)
+    Returns: dict {feature_index: track_index}
+    """
+    # Give each feature a stable index
+    indexed = [(i, feat, start, end) for i, (feat, start, end) in enumerate(features)]
+    # Sort by start coordinate
+    indexed.sort(key=lambda x: x[2])
+
+    tracks = []   # list of lists of (start,end)
+    assignment = {}
+
+    for idx, feat, start, end in indexed:
+        placed = False
+
+        # Try existing tracks
+        for t_idx, intervals in enumerate(tracks):
+            if all(end <= s or start >= e for (s, e) in intervals):
+                intervals.append((start, end))
+                assignment[idx] = t_idx
+                placed = True
+                break
+
+        if not placed:
+            tracks.append([(start, end)])
+            assignment[idx] = len(tracks) - 1
+
+    return assignment
+
+def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='gene_name', arrowKwargsFxn=None, textArgsFxn=None, textKwargsFxn=None, minFeatLen=1000):
+    """
+    Takes axes and GFF file and plots arrows
+    xy is position where annotations start
+    rescale is a parameter that controls the length of annotation - if aln is 100nt long, rescale set to 100.0 will plot all annotations within interval [0.0, 1.0]
+    geneName is the field name of a feature in the GFF file
+    arrowKwargsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and creates a kwargs dict to be used when plotting feature arrows
+    textKwargsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns a kwargs dict to be used to modify text that's plotted
+    textArgsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns an args dict to be used for adding text
+    minFeatLen is a threshold for adding text to features - no text is plotted for features less than this length
+    """
+    from matplotlib.patches import FancyArrow
+    
+    if xy is None: xy = (0, 0)
+    if rescale is None: rescale = 1.0
+    if width is None: width = 1.0
+    
+    start_x, start_y = xy
+    
+    features = _load_gff(gffFile) ## load GFF annotations
+    
+    cds_intervals = []
+    for feat in features:
+        start = int(feat.location.start)
+        end = int(feat.location.end)
+        cds_intervals.append((feat, start, end))
+    
+    track_assignment = _assign_tracks(cds_intervals) ## position ORFs so they don't overlap
+    
+    ys = []
+    for i, (feat, start, end) in enumerate(cds_intervals):
+
+        rescaled_start = start / rescale
+        rescaled_end = end / rescale
+        
+        name = feat.qualifiers.get(geneName, ['?'])[0]
+        track = -track_assignment[i]
+
+        length = end - start
+        rescaled_length = length / rescale
+        
+        head_length = 300 if length > 300 else max(20, int(length * 0.3))
+        rescaled_head_length = head_length / rescale
+        
+        y = start_y - width * 0.1 + (track * width)
+        ys.append(y)
+        if name == 'nuc':
+            # Genome backbone on track 0
+            ax.plot([start_x + rescaled_start, start_x + rescaled_end], [start_y, start_y], color='k', lw=3, zorder=0, clip_on=False)
+            ax.text(start_x + rescaled_end * 1.01, start_y, f"{end}", ha='left', va='center', color='k', clip_on=False)
+            continue
+    
+        ##############
+        defaultArrowKwargs = {'width': width, 'head_width': width, 'head_length': rescaled_head_length, 
+                              'length_includes_head': True, 'facecolor': 'lightgray', 'edgecolor': 'k', 
+                              'zorder': 10}
+        
+        localArrowKwargs = dict(defaultArrowKwargs) ## copy defaults
+        
+        if arrowKwargsFxn is not None:
+            arrowFxnDict = arrowKwargsFxn(name) ## grab dict returned by function
+            if 'fc' in arrowFxnDict: arrowFxnDict['facecolor'] = arrowFxnDict['fc']; arrowFxnDict.pop('fc')
+            if 'ec' in arrowFxnDict: arrowFxnDict['edgecolor'] = arrowFxnDict['ec']; arrowFxnDict.pop('ec')
+            
+            for key in arrowFxnDict: ## overwrite values
+                localArrowKwargs[key] = arrowFxnDict[key]
+        
+        arrow = FancyArrow(x = start_x + rescaled_start, y = y, 
+                           dx = rescaled_length, dy = 0, **localArrowKwargs)
+        ax.add_patch(arrow)
+        ###############
+        defaultTextArgs = {'x': start_x + rescaled_start + rescaled_length/2, 'y': y , 's': name}
+        localTextArgs = dict(defaultTextArgs)
+        
+        if textArgsFxn is not None:
+            textFxnDict = textArgsFxn(name) ## grab dict returned by function
+            if 'fc' in textFxnDict: textFxnDict['facecolor'] = textFxnDict['fc']; textFxnDict.pop('fc')
+            if 'ec' in textFxnDict: textFxnDict['edgecolor'] = textFxnDict['ec']; textFxnDict.pop('ec')
+
+            for key in textFxnDict: ## overwrite values
+                localTextArgs[key] = textFxnDict[key]
+        #############
+        defaultTextKwargs = {'ha': 'center', 'va': 'center', 'zorder': 100, 'rotation': 0, 'rotation_mode': 'anchor'}
+        localTextKwargs = dict(defaultTextKwargs)
+        
+        if textKwargsFxn is not None:
+            textFxnDict = textKwargsFxn(name) ## grab dict returned by function
+            if 'fc' in textFxnDict: textFxnDict['facecolor'] = textFxnDict['fc']; textFxnDict.pop('fc')
+            if 'ec' in textFxnDict: textFxnDict['edgecolor'] = textFxnDict['ec']; textFxnDict.pop('ec')
+
+            for key in textFxnDict: ## overwrite values
+                localTextKwargs[key] = textFxnDict[key]
+
+        if minFeatLen <= length:
+            ax.text(**localTextArgs, **localTextKwargs)
+
+    maxHeight = abs(min(ys) - start_y)
+    
+    return maxHeight
