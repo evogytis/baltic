@@ -13,8 +13,6 @@ from matplotlib.collections import LineCollection
 
 logger = logging.getLogger("baltic.bt_utils")
 
-
-
 def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
     Convert calendar date into decimal year.
@@ -144,6 +142,33 @@ def convert_date_format(dateString,startFormat,endFormat):
     except ValueError as e:
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
+def state_collapse_tree(tree, switchFxn):
+    """
+    Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
+    Also known by the name of Phylotype maps/trees.
+    """
+    import copy
+
+    local_tree = copy.deepcopy(tree)
+
+    _partition_tree(local_tree, partitionFxn = switchFxn) ## run tree labelling
+
+    labels = set(local_tree.get_parameter_list('partition',useTraitsDict=True)) ## get all unique labels in tree
+    sortingFxn = lambda k: k.absoluteTime if local_tree.treeType == 'time' else k.height ## determine whether to sort by height or absoluteTime
+
+    label_to_branches = {label: [k for k in local_tree.get_external() if k.traits['partition'] == label] for label in labels} ## map each unique label to the furthest tip with that label
+    label_counts = {label: len(label_to_branches[label]) for label in labels}
+
+    label_to_last_branch = {label: sorted(label_to_branches[label], key = sortingFxn)[-1] for label in labels if label_counts[label] > 0}
+
+    local_tree = local_tree.reduce_tree(label_to_last_branch.values()) ## keep a single tip for each unique label
+
+    for k in local_tree.get_external():
+        k.traits['size'] = label_counts[k.traits['partition']] ## assign tip counts of this label to representative branch
+        k.traits['members'] = label_to_branches[k.traits['partition']] ## remember descendants with label that may no longer be present
+
+    return local_tree
+
 def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
     assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
 
@@ -161,16 +186,17 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
         currentTime = startTime
         dateStr = dt.datetime.strftime(currentTime, dateFmt)
         # timeline.append(dateStr)
-    
+
     while currentTime < endTime:
 
         if startTime <= currentTime:
             dateStr = dt.datetime.strftime(currentTime, dateFmt)
-            timeline.append(dateStr)
+            if dateStr not in timeline:
+                timeline.append(dateStr)
 
         if isinstance(spacing,int):
             skip = dt.timedelta(days = spacing)
-        
+
         elif spacing == 'weekly':
             skip = dt.timedelta(days = 7)
             if currentTime.month != (currentTime + skip).month: ## next month starts in a week
@@ -179,19 +205,19 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
                 dateStr = dt.datetime.strftime(lastDateOfMonth,dateFmt)
                 if startTime < currentTime and currentTime != lastDateOfMonth and roundDates == True:
                     timeline.append(dateStr)
-            
+
         if spacing == 'monthly':
             daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
             skip = dt.timedelta(days = daysInMonth)
 
         if spacing == 'yearly':
             skip = dt.timedelta(365 + calendar.isleap(currentTime.year))
-    
+
         currentTime += skip
 
     dateStr = dt.datetime.strftime(currentTime,dateFmt)
     timeline.append(dateStr)
-    
+
     return timeline
 
 def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
@@ -276,21 +302,22 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
     return ax
 
 
-def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None, style = 'simple', orientation = 'horizontal', ySpan = None, lineKwargs = None, textKwargs = None):
+def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None,
+    style = 'simple', orientation = 'horizontal', ySpan = None, fancyWidth = 0.1, lineKwargs = None, textKwargs = None):
     """
     Plots a scale bar at given coordinates, can plot a scale bar of required length L or inferred automatically from the tree or just defaults to 0.001.
     """
 
     assert style in ['simple', 'fancy'], f"Scale bar style {style} not recognised. Must be 'simple' or 'fancy'."
     assert orientation in ['horizontal', 'vertical'], f"Scale bar orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
-    
+
     if tree is None and ySpan is None:
         ySpan = 2e2
     elif tree is not None:
         if ySpan is not None:
             warnings.warn("Both tree and ySpan provided; using tree.ySpan.")
         ySpan = tree.ySpan
-    
+
     localLineKwargs = dict(lineKwargs) if lineKwargs else {}
     localTextKwargs = dict(textKwargs) if textKwargs else {}
 
@@ -365,7 +392,7 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     if tree is not None and tree.treeType == 'time' and alnL is not None:
         warnings.warn("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
-    
+
     if unitText is None:
         if tree is None:
             if alnL is None:
@@ -391,32 +418,32 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     xs = [x, x + L]
     ys = [y, y]
-    
+
     if orientation == 'vertical':
-        xs, ys = ys, xs
-    
+        xs = [x, x]
+        ys = [y, y + L]
+
     ax.plot(xs, ys, **localLineKwargs)
-    
+
     if style == 'fancy':
-        width = 0.005 * ySpan
+        width = L * fancyWidth ## fancyWidth is a scalar of scale bar length
         left_xs, left_ys = [x, x], [y - width, y + width]
         right_xs, right_ys = [x + L, x + L], [y - width, y + width]
 
         if orientation == 'vertical':
-            left_xs, left_ys = left_ys, left_xs
-            right_xs, right_ys = right_ys, right_xs
-        
+            left_xs, left_ys = [x - width, x + width], [y, y]
+            right_xs, right_ys = [x - width, x + width], [y + L, y + L]
+
         ax.plot(left_xs, left_ys, **localLineKwargs)
         ax.plot(right_xs, right_ys, **localLineKwargs)
 
     if textXY is None: ## set text position defaults / might be worth turning these coordinates as fractions in relation to the bar itself
         textX, textY = (x + L/2, y - ySpan * 0.02)
+        if orientation == 'vertical':
+            textX, textY = (x + ySpan * 0.002, y + L/2)
     else:
         textX, textY = textXY
-    
-    if orientation == 'vertical':
-        textX, textY = textY, textX
-    
+
     if alnL is not None and tree is not None and tree.treeType == "divergence":
         # Label in mutations if we know alnL
         if n_mutations is None:
@@ -435,17 +462,158 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     return ax
 
-def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True, 
+def _process_trait_prob_set(node, traitName):
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+
+    stateSet = node.traits[f"{traitName}.set"]
+    stateProbs = node.traits[f"{traitName}.set.prob"]
+
+    stateSetDict = {key: value for key, value in zip(stateSet, stateProbs)}
+
+    return stateSetDict
+
+def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 10, width = 0.2, other_thres = 0.0, connectNode = True, connectingCorner = 'lower middle', orientation = 'vertical', **kwargs):
+    from matplotlib.patches import Rectangle
+
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    if xyFxn is None: xyFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+
+    localKwargs = dict(kwargs)
+
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    for i, (state, prob) in enumerate(zip(stateOrder, probs)):
+        x, y = xyFxn(node)
+
+        cumulativeProb = sum(probs[:i])
+        rectHeight = height * prob
+
+        if 'zorder' not in localKwargs: localKwargs['zorder'] = 1
+
+        if orientation == 'horizontal':
+            rectBottom = x + height * cumulativeProb
+            rect = Rectangle((rectBottom, y), width = rectHeight, height = width, fc = traitColourDict[state], **localKwargs)
+
+        elif orientation == 'vertical':
+            rectBottom = y + height * cumulativeProb
+            rect = Rectangle((x, rectBottom), width = width, height = rectHeight, fc = traitColourDict[state], **localKwargs)
+
+        ax.add_patch(rect)
+
+    if connectNode:
+        vaCorner, haCorner = connectingCorner.split(' ')
+        assert vaCorner in ['upper', 'lower'], f"Vertical corner connection parameter {vaCorner} not recognised. Must be 'lower' or 'upper'"
+        assert haCorner in ['left', 'middle', 'right'], f"Horizontal corner connection parameter {haCorner} not recognised. Must be 'left', 'middle' or 'right'"
+
+        x, y = xyFxn(node)
+
+        if vaCorner == 'upper':
+            y += height if orientation == 'vertical' else width
+
+        if haCorner == 'right':
+            x += width if orientation == 'vertical' else height
+        elif haCorner == 'middle':
+            x += width/2 if orientation == 'vertical' else height/2
+
+        xs, ys = zip(*[(x, y), (x, node.y), (node.x, node.y)])
+
+        ax.plot(xs, ys, ls = '--', color = 'dimgray', zorder = 0)
+
+
+def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, centerFxn = None, area = 1.0, other_thres = 0.0, **kwargs):
+
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    import squarify
+    from matplotlib.patches import Rectangle
+
+    if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    x, y = centerFxn(node)
+
+    x -= width/2
+    y -= height/2
+
+    values = squarify.normalize_sizes(probs, width, height)
+    rects = squarify.squarify(values, x, y, width, height)
+
+    for i,rect in enumerate(rects):
+        rectPatch = Rectangle((rect['x'], rect['y']), rect['dx'], rect['dy'], fc = cs[i], **kwargs)
+        ax.add_patch(rectPatch)
+
+    ax.autoscale()
+    return ax
+
+def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, radius = 0.5, other_thres = 0.0, **kwargs):
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    ax.pie(x = probs, colors = cs, radius = radius, center = centerFxn(node), **kwargs)
+
+    ax.autoscale()
+    return ax
+
+def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True,
                          hpdLvl = 0.95, precision = 100, kdeWidth = 3, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}):
-    
+
     ### certain tree orientations will require xCoord too
     ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
     import csv
     from scipy.stats import gaussian_kde
-    from baltic.bt_utils import hpd, decimal_to_calendar_date
+    # from baltic.bt_utils import hpd, decimal_to_calendar_date
 
 
-    func_logger = logging.getLogger("baltic.tree.plot_tmrca_posterior")
+    func_logger = logging.getLogger("baltic.bt_utils.plot_tmrca_posterior")
     func_logger.setLevel(logging.INFO)
     func_logger.propagate = False
 
@@ -455,13 +623,13 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         handler.setFormatter(logging.Formatter("[plot_tmrca_posterior] %(message)s"))
         handler.setLevel(logging.INFO)
         func_logger.addHandler(handler)
-    
+
     tmrcaPosterior = []
-    
+
     if burnin == None:
         burnin = 10e6
         warnings.warn('No burnin set, defaulting to 10M states.')
-    
+
     handle = open(tmrcaFile,'r')
 
     for l in csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t'):
@@ -470,14 +638,14 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
             tmrcaPosterior.append(float(l[tmrcaName])) ## grab column with tmrca stat
 
     handle.close()
-    
+
     if yCoord is None and node is None:
         yCoord = 0.0
     elif yCoord is None and node:
         yCoord = node.y
     elif yCoord is not None and node is not None:
         warnings.warn(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
-    
+
     localViolinKwargs = dict(violinKwargs)
     if 'fc' in localViolinKwargs:
         localViolinKwargs['facecolor'] = localViolinKwargs['fc']
@@ -489,12 +657,12 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     if 'edgecolor' not in localViolinKwargs and 'ec' not in localViolinKwargs: localViolinKwargs['edgecolor'] = 'none'
     if 'alpha' not in localViolinKwargs: localViolinKwargs['alpha'] = 0.1
     if 'zorder' not in localViolinKwargs: localViolinKwargs['zorder'] = 1
-    
+
     localOutlineKwargs = dict(outlineKwargs)
     if 'color' not in localOutlineKwargs: localOutlineKwargs['color'] = 'gray'
     if 'linewidth' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
     if 'zorder' not in localOutlineKwargs: localOutlineKwargs['zorder'] = 2
-    
+
     kde = gaussian_kde(tmrcaPosterior)
     hpdLo, hpdHi = hpd(tmrcaPosterior, hpdLvl)
     x_grid = np.linspace(hpdLo, hpdHi, precision)
@@ -504,7 +672,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
     func_logger.info(f"Node {tmrcaName} mean TMRCA: {meanTmrca:.3f} ({decimal_to_calendar_date(meanTmrca)}) median TMRCA: {medianTmrca:.3f} ({decimal_to_calendar_date(medianTmrca)})")
     func_logger.info(f"Node {tmrcaName} TMRCA 95% HPD: {hpdLo:.3f} - {hpdHi:.3f} / {decimal_to_calendar_date(hpdLo)} - {decimal_to_calendar_date(hpdHi)}")
-    
+
     y_grid = kde(x_grid)
     y_max = y_grid.max()
     y_grid /= y_max ## normalise KDE to peak at 1.0
@@ -513,14 +681,14 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     upper_ys = [yCoord + y for y in y_grid]
     lower_ys = [yCoord - y for y in y_grid]
     constant_ys = [yCoord for _ in y_grid]
-    
+
     if orientation == 'horizontal':
         plotKDE = ax.fill_between
     elif orientation == 'vertical':
         plotKDE = ax.fill_betweenx
 
     xs, uys, lys = x_grid, upper_ys, lower_ys
-    
+
     if fullViolin:
         plotKDE(xs, uys, lys, **localViolinKwargs)
     else:
@@ -548,15 +716,15 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         else:
             mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
             mean_ys = np.array(mean_ys, dtype=float).tolist()
-        
+
         elbow_xs = [meanTmrca, meanTmrca, node.absoluteTime]
         elbow_ys = [yCoord, node.y, node.y]
-        
+
         if orientation == 'vertical':
             x, y = y, x
             mean_xs, mean_ys = mean_ys, mean_xs
             elbow_xs, elbow_ys = elbow_ys, elbow_xs
-        
+
         ax.scatter(x, y, s = 40, fc = localViolinKwargs['facecolor'], ec = 'none', zorder = 10)
         ax.scatter(x, y, s = 80, fc = localViolinKwargs['edgecolor'], ec = 'none', zorder = 9)
 
@@ -564,7 +732,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
     elif node is None:
         warnings.warn(f"Need to specify node to connect to.")
-    
+
     return ax
 
 def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
@@ -589,10 +757,10 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
 
     localKwargs = dict(kwargs)
     if 'alpha' not in localKwargs: localKwargs['alpha'] = 0.08
-    
+
     if isinstance(timeline,list):
         try:
-            timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to 
+            timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to
         except:
             warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
     else:
@@ -607,9 +775,9 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
 def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, labelPosition='mid', axis='x', **kwargs):
     assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
-    
+
     if outputFmtFxn is None:
-        outputFmtFxn = lambda date: bt_utils.convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if bt_utils.convert_date_format(date, '%Y-%m-%d', '%m') == '01' else bt_utils.convert_date_format(date, '%Y-%m-%d', '%b')
+        outputFmtFxn = lambda date: convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if convert_date_format(date, '%Y-%m-%d', '%m') == '01' else convert_date_format(date, '%Y-%m-%d', '%b')
 
     localKwargs = dict(kwargs)
 
@@ -629,6 +797,26 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
 
     ax.tick_params(axis=axis, size=0)
+    return ax
+
+def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLabels = 'both'):
+    """
+    Remove selected spines, suppress ticks and ticklabels on x, y or both axes.
+    """
+    validSpines = ['left', 'top', 'right', 'bottom']
+    assert set(validSpines) >= set(hideSpines), f"Spine {[val for val in hideSpines if val not in validSpines]} not recognised. Must belong to the set {validSpines}."
+
+    validRemoveTickLabels = ['x', 'y', 'both']
+    assert removeTickLabels in validRemoveTickLabels, f"removeTickLabels value {removeTickLabels} not recognised. Must be one of {', '.join(validRemoveTickLabels)}"
+
+    if removeTickLabels in ['x', 'both']:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+    if removeTickLabels in ['y', 'both']:
+        ax.set_yticks([])
+        ax.set_yticklabels([])
+
+    [ax.spines[loc].set_visible(False) for loc in hideSpines]
     return ax
 
 def untangle(trees,costFxn=None,iterations=None):
@@ -667,8 +855,8 @@ def untangle(trees,costFxn=None,iterations=None):
     return trees
 
 def unnest(nodeList, towardsRoot = True):
-    assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f'nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}'
-    
+    assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f"nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}"
+
     while any([A.leaves.isdisjoint(B.leaves) == False for A in nodeList for B in nodeList if A != B]): ## continue looping for as long as any pair of nodes are nested
         remove = set() ## store nodes for removal
         for A in nodeList: ## iterate over nodes once (A variable)
@@ -678,10 +866,10 @@ def unnest(nodeList, towardsRoot = True):
                         remove.add(B if B.leaves.issubset(A.leaves) else A) ## keep nodes deeper in the tree - remove B if node B is subset of node A (remove nodes closer to tips)
                     else:
                         remove.add(A if B.leaves.issubset(A.leaves) else B) ## keep nodes closer to tips - remove A if node B is subset of node A (removing nodes deeper in the tree)
-                    
+
         for r in remove:
             nodeList.remove(r) ## remove designated nodes from list
-            
+
     return nodeList ## when done return list of remaining nodes
 
 def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
@@ -703,18 +891,7 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     invalidateRegression = True if forcePositive and slope < 0 else False
 
     if (localStat < optStat if stat in ['sum of squares'] else localStat > optStat): ## minimise sum of squares or maximise correlation/r^2
-        # if forcePositive and slope < 0: ## force positive True and slope<0
-        #     pass ## if forcing positive root, slope must be positive; do nothing
-        #     res['correlation'] = -np.inf
-        #     res['sum of squares'] = np.inf
-        #     res['slope'] = slope
-        #     res['intercept'] = intercept
-        #     res['r^2'] = -np.inf
-        #     res['root'] = rootCandidate
-        #     if frac is not None: res['frac'] = frac
-        # else: ## force_positive is False or true and slope>0
         optStat = localStat ## better root found
-#             new_root = [w for w in self.Objects if w.index==k.index][0]
         res['correlation'] = -np.inf if invalidateRegression else corr
         res['sum of squares'] = np.inf if invalidateRegression else ssq
         res['slope'] = slope
@@ -727,91 +904,398 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
 
 def _rtt_worker(args):
     """
-    Worker for root_by_regression.
+    Worker for root_by_regression, using deterministic iterative refinement
+    of uncertain tip dates instead of Monte Carlo sampling.
 
     args = (
         tree,                # a picklable copy of the tree
         root_index,          # candidate root node index
-        fixed_times,         # dict: tip.index -> fixed date
-        uncertain_ranges,    # dict: tip.index -> (min_date, max_date)
-        n_mc,                # number of Monte Carlo iterations
+        tipDates,            # dict: tip.name -> initial date (float)
+        uncertainDateRanges, # dict: tip.name -> (min_date, max_date)
+        max_iters,           # formerly n_mc: now max refinement iterations
         stat,                # 'r^2', 'correlation', or 'sum of squares'
         forcePositive,       # as in your original function
     )
     """
+
     (tree,
      root_index,
      tipDates,
      uncertainDateRanges,
-     n_mc,
+     max_iters,
      stat,
      forcePositive) = args
 
+    # deep-copy tree and reroot on candidate
     tree_copy = copy.deepcopy(tree)
-
-    # find candidate root node inside worker copy
     candidate = next(obj for obj in tree_copy.Objects if obj.index == root_index)
-
-    # Reroot on this candidate for this sample
     cll = tree_copy.reroot(candidate)
+
     tips = cll.get_external()
+    uncertainTips = [k for k in tips if k.name in uncertainDateRanges]
 
-    rootDistances = {k.name: k.height for k in tips} ## these don't change
+    # root-to-tip distances are fixed for a given root
+    rootDistances = {k.name: k.height for k in tips}
 
+    # start from a local copy of tipDates
+    # (each worker gets its own copy due to pickling, but we clone anyway to be explicit)
+    currentDates = dict(tipDates)
+
+    # storage for the best result across iterations
     best_res = None
     best_score = None
     best_dates = None
-    best_branch_frac = None
 
-    rng = np.random.default_rng()
+    # tolerance for date convergence
+    tol = 1e-6
 
-    for _ in range(n_mc): ## Monte Carlo iterations
+    # main refinement loop
+    for _ in range(max(1, int(max_iters))):
 
-        for k in uncertainDateRanges:
-            tipDates[k] = rng.uniform(*uncertainDateRanges[k]) ## for uncertain tips sample from possible date range randomly
+        # build regression inputs with current dates
+        xs = [currentDates[k.name] for k in tips]               # dates
+        ys = [rootDistances[k.name] for k in tips]               # heights
 
-        xs = [tipDates[k.name] for k in tips]
-        ys = [rootDistances[k.name] for k in tips]
-
-        # Run root-to-tip regression
         res_local = {}
         res_local = _root_to_tip(
             candidate, xs, ys, res_local,
             stat=stat, forcePositive=forcePositive
         )
 
-        if res_local: ## valid regression (when forcePositive == True but slope is negative res_local is None)
-            # Compute a scalar score, taking into account direction of optimisation
-            if stat == "sum of squares":
-                # Smaller is better
-                score = -res_local["sum of squares"]
-            else:
-                # Larger is better for r^2 or correlation
-                score = res_local[stat]
+        # if regression is invalid (e.g., negative slope with forcePositive=True), bail out
+        if not res_local:
+            break
 
-            if best_score is None or score > best_score:
-                best_res = res_local
-                best_score = score
-                best_dates = {k: tipDates[k] for k in uncertainDateRanges}
+        # compute scalar score (same logic as before)
+        if stat == "sum of squares":
+            score = -res_local["sum of squares"]  # smaller SSE is better
+        else:
+            score = res_local[stat]               # larger r^2 / correlation is better
 
+
+        # track best iteration so far
+        if best_score is None or score > best_score:
+            best_score = score
+            best_res = res_local
+            # store only the uncertain ones (like before with monte_carlo_dates)
+            best_dates = {name: currentDates[name] for name in uncertainDateRanges}
+
+        # if there are no uncertain dates, we are done after one regression
+        if not uncertainDateRanges:
+            break
+
+        # update uncertain dates by projecting onto the regression line
+        slope = res_local["slope"]
+        intercept = res_local["intercept"]
+
+        # if slope is zero, projection is undefined – nothing to refine
+        if abs(slope) < 1e-12:
+            break
+
+        newDates = _adjust_tip_dates_by_regression(uncertainTips, slope, intercept)
+        delta = 0.0
+        for tipName in newDates:
+            delta += abs(currentDates[tipName] - newDates[tipName])
+            currentDates[tipName] = newDates[tipName]
+
+        # stop if updates are tiny (converged)
+        if delta < tol:
+            break
+
+
+    # if we never got a valid regression, return an empty-ish record
     if best_res is None:
         best_res = {}
+        best_score = None
+        best_dates = None
 
+    # attach metadata expected by root_by_regression
     best_res["root_index"] = root_index
     best_res["score"] = best_score
-    best_res["monte_carlo_dates"] = best_dates
+    best_res["assigned_uncertain_dates"] = best_dates
 
-    # IMPORTANT: we replace 'root' with index so we don't leak deep-copied nodes
+    # IMPORTANT: replace 'root' node reference with index so we don't leak deep-copied nodes
     best_res["root"] = root_index
 
     return best_res
 
+def _adjust_tip_dates_by_regression(
+    uncertainTips,
+    slope: float,
+    intercept: float):
+    """
+    Receives a list of tips with uncertain dates and regression parameters, adjusts .absoluteTime (within uncertainty range .absoluteTimeRange) to be as close to regression line as possible.
+    """
+    adjustedDates = {}
+
+    for k in uncertainTips:
+        regressionDate = (k.height - intercept) / slope ## interpolate date of tip based on subs/site height
+        minD, maxD = k.absoluteTimeRange ## get clamp
+
+        adjustedDates[k.name] = min(max(regressionDate, minD), maxD) ## clamp tip date
+
+    return adjustedDates
+
+def plot_root_to_tip(ax, tree,
+                     colour = None, colourFxn = None,
+                     pointSize = None, pointSizeFxn = None,
+                     outline = True, outlineColour = None, outlineColourFxn = None,
+                     outlineSize = None, outlineSizeFxn = None,
+                     orientation = 'horizontal',
+                     targetFxn = None,
+                     plotRegression = True, plotTree = False,
+                     highlightOutliers = False, outlierThres = None, outlierColour = None,
+                     pointKwargs = {}, lineKwargs = {}, treeKwargs = {}):
+
+    import math
+    # from baltic.bt_utils import desaturate_cmap, calendar_to_decimal_date, decimal_to_calendar_date
+    from scipy.stats import linregress
+
+    assert tree.treeType == 'divergence', f"Cannot run root-to-tip regression on a time tree. Branch lengths must be in substitution space."
+    assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
+
+    func_logger = logging.getLogger("baltic.bt_utils.plot_root_to_tip")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[root_to_tip] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+
+    if targetFxn is None: targetFxn = lambda k: k.is_leaf()
+
+    localPointKwargs = dict(pointKwargs)
+    localLineKwargs = dict(lineKwargs)
+    localTreeKwargs = dict(treeKwargs)
+
+    tipOrder = tree.get_external(targetFxn)
+
+    ys = [k.height for k in tipOrder]
+    xs = [k.absoluteTime for k in tipOrder if k.absoluteTime]
+
+    assert len(xs) > 0, f"Tips do not have an assigned `absoluteTime` attribute that represents tip collection dates."
+    assert len(xs) == len(ys), f"Some branches missing collection dates. Branhes with heights: {len(ys)}; with collection dates: {len(xs)}."
+    #################
+
+    # Colour logic
+    if colour is not None and colourFxn is not None:
+        raise ValueError(
+            "Cannot specify both colour and colourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if colour is None and colourFxn is None:
+        cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
+        norm = mpl.colors.Normalize(min(xs), max(xs))
+        colourFxn = lambda k: cmap(norm(k.absoluteTime))
+
+    elif colourFxn is None:
+        colourFxn = lambda k: colour
+
+    if outlineColour is None and outlineColourFxn is None:
+        outlineColourFxn = lambda k: "k"
+    elif outlineColourFxn is None:
+        outlineColourFxn = lambda k: outlineColour
+
+    # Point size logic
+    if pointSize is not None and pointSizeFxn is not None:
+        raise ValueError(
+            "Cannot specify both pointSize and pointSizeFxn. Please use only one."
+        )
+    if pointSize is None and pointSizeFxn is None:
+        pointSizeFxn = lambda k: 60
+    elif pointSizeFxn is None:
+        pointSizeFxn = lambda k: pointSize
+
+    # Outline size logic
+    if outlineSize is not None and outlineSizeFxn is not None:
+        raise ValueError(
+            "Cannot specify both outlineSize and outlineSizeFxn. Please use only one."
+        )
+    if outlineSize is None and outlineSizeFxn is None:
+        outlineSizeFxn = lambda k: ((2+math.sqrt(pointSizeFxn(k)/math.pi))**2)*math.pi
+    elif outlineSizeFxn is None:
+        outlineSizeFxn = lambda k: outlineSize
+
+    slope, intercept, rval, _, std_err = linregress(xs, ys) ## run linear regression
+
+    tmrca = -intercept / slope
+    func_logger.info(f"Root-to-tip regression parameters: slope = {slope:.4e} intercept = {intercept:.4g} TMRCA = {tmrca:.3f} "
+                f"({decimal_to_calendar_date(tmrca, fmt='%Y-%b-%d')})")
+
+    sizes = [pointSizeFxn(k) for k in tipOrder]
+    cs = [colourFxn(k) for k in tipOrder]
+
+    if outlierThres is None: ## default outlier threshold is residual standard deviation
+        residuals = {k.name: float(k.height - (k.absoluteTime * slope + intercept)) for k in tipOrder}
+        justResiduals = [residuals[k.name] for k in tipOrder]
+        sigma = np.sqrt(np.sum(np.pow(justResiduals,2)) / (len(tipOrder) - 2))
+        outlierThres = 2 * sigma
+
+    outliers = [k for k in tipOrder if abs(k.height - (k.absoluteTime * slope + intercept)) >= outlierThres]
+
+    if plotRegression:
+
+        x_grid = np.linspace(min(xs), max(xs))
+        y_grid = [x * slope + intercept for x in x_grid]
+
+        if orientation == 'vertical':
+            x_grid, y_grid = y_grid, x_grid
+
+        if 'color' not in localLineKwargs: localLineKwargs['color'] = 'k'
+        if 'lw' not in localLineKwargs and 'linewidth' not in localLineKwargs: localLineKwargs['lw'] = 3
+        if 'ls' not in localLineKwargs and 'linestyle' not in localLineKwargs: localLineKwargs['ls'] = '--'
+        ax.plot(x_grid, y_grid, **localLineKwargs)
+
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+
+    if 'zorder' not in localPointKwargs: localPointKwargs['zorder'] = 4
+    if 'edgecolor' not in localPointKwargs: localPointKwargs['edgecolor'] = 'none'
+    ax.scatter(
+            xs,
+            ys,
+            s=sizes,
+            facecolor=cs,
+            **localPointKwargs,
+        )  ## put a circle at each tip
+    if outline:
+        os = [outlineSizeFxn(k) for k in tipOrder]
+        outlierColour = 'darkred' if outlierColour is None else outlierColour
+        ocs = [outlierColour if (highlightOutliers and k in outliers) else outlineColourFxn(k) for k in tipOrder]
+        localPointKwargs['zorder'] -= 1 ## decrease zorder for outlines
+        ax.scatter(
+            xs,
+            ys,
+            s=os,
+            facecolor=ocs,
+            **localPointKwargs,
+        )  ## put a circle at each tip
+
+    for k in tipOrder:
+        if np.diff(k.absoluteTimeRange)[0] > 1e-10:
+            uxs, uys = k.absoluteTimeRange, [k.height, k.height]
+            if orientation == 'vertical':
+                uxs, uys = uys, uxs
+            ax.plot(uxs, uys, color = 'k')
+
+    if plotTree:
+
+        xFxn = lambda k: k.absoluteTime if k.is_leaf() else (k.height - intercept) / slope
+        yFxn = lambda k: k.height
+
+        if orientation == 'vertical':
+            xFxn, yFxn = yFxn, xFxn
+
+        if 'connectionType' in localTreeKwargs and localTreeKwargs['connectionType'] != 'direct':
+            warnings.warn(f"plot_root_to_tip does not support connectionType other than 'direct'.")
+        localTreeKwargs['connectionType'] = 'direct'
+        if 'alpha' not in localTreeKwargs: localTreeKwargs['alpha'] = 0.05
+
+        tree.plot_tree(ax, xCoordinateFxn = xFxn, yCoordinateFxn = yFxn, **localTreeKwargs)
+
+    return (outliers, slope, intercept, residuals)
+
+def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.95, orientation = 'horizontal', log = True, **kwargs):
+    ### need to add assertions that there's 'skygrid.logPopSize' and 'skygrid.cutOff' in log file
+    localKwargs = dict(kwargs)
+
+    import csv
+
+    assert mostRecent in ['logfile', None] or isinstance(mostRecent, float), f"mostRecent value {mostRecent} not recognised. Must be 'logfile', None or float"
+    assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'"
+
+    func_logger = logging.getLogger("baltic.bt_utils.plot_skygrid")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[plot_skygrid] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+
+    if burnin == None:
+        burnin = 10e6
+        warnings.warn('No burnin set, defaulting to 10M states.')
+
+    handle = open(logFile,'r')
+    reader = csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t')
+    header = reader.fieldnames
+
+    skygridPopSizes = sorted([key for key in header if key.startswith('skygrid.logPopSize')], key = lambda f: int(f.replace('skygrid.logPopSize', '')))
+
+    skygrid = {key: [] for key in skygridPopSizes}
+    rootAge = []
+    cutoff = None
+
+    def compute_root(lineDict):
+        if mostRecent == 'logfile':
+            rootDate = float(lineDict['age(root)'])
+        elif mostRecent is None:
+            rootDate = float(-lineDict['age(root)'])
+        elif isinstance(mostRecent, float):
+            rootDate = mostRecent - float(lineDict['rootHeight'])
+
+        return rootDate
+
+    for l in reader:
+        state = int(l['state'])
+        if state >= burnin:
+            for key in skygridPopSizes:
+                popSize = float(l[key])
+                skygrid[key].append(popSize)
+
+            rootAgeParam = compute_root(l)
+            rootAge.append(rootAgeParam)
+
+            if mostRecent == 'logfile':
+                mostRecentDate = float(l['age(root)']) + float(l['rootHeight'])
+
+            if cutoff is None:
+                cutoff = float(l['skygrid.cutOff'])
+    handle.close()
+
+    if isinstance(mostRecent, float): mostRecentDate = mostRecent
+
+    start = -cutoff if mostRecent is None else mostRecentDate - cutoff
+    end = 0.0 if mostRecent is None else mostRecentDate
+
+    xs = np.linspace(start, end, len(skygridPopSizes))
+
+    ys = [np.pow(np.e, np.mean(skygrid[key])) for key in skygridPopSizes[::-1]]
+    y_lower, y_upper = zip(*[np.pow(np.e, hpd(skygrid[key], hpdLvl)) for key in skygridPopSizes[::-1]])
+
+    fillPlotFxn = ax.fill_between
+    if orientation == 'vertical':
+        fillPlotFxn = ax.fill_betweenx
+
+    if 'facecolor' not in localKwargs and 'fc' not in localKwargs: localKwargs['facecolor'] = 'lightskyblue'
+    fillPlotFxn(xs, y_lower, y_upper, zorder = 9, **localKwargs)
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+
+    ax.plot(xs, ys, color = 'k', lw = 2, zorder = 10)
+
+    rootPlotFxn = ax.axvline
+    if orientation == 'vertical':
+        rootPlotFxn = ax.axhline
+    rootPlotFxn(np.mean(rootAge), color = 'dimgray', zorder = 10)
+    rootPlotFxn(hpd(rootAge, hpdLvl)[-1], color = 'dimgray', ls = '--', zorder = 10)
+    rootPlotFxn(hpd(rootAge, hpdLvl)[0], color = 'dimgray', ls = '--', zorder = 10)
+
+    if log:
+        if orientation == 'horizontal':
+            ax.set_yscale('log')
+        elif orientation == 'vertical':
+            ax.set_xscale('log')
 
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
     # circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
-    
+
     # rads = circle_start_radians + (circle_fraction_radians * y / yRange) ## compute position along circle
     rads = (circleStart + (circleFraction * y / yRange)) * 2*math.pi ## compute position along circle
 
@@ -873,6 +1357,60 @@ def desaturate(colour, desat = 0.65, out = "auto"):
     else:
         raise ValueError(f"out {out} invalid, must be one of {'auto','hex','rgb','rgba'}.")
 
+def make_cmap(colours, position=None, name="custom_cmap"):
+    """
+    Create a colormap from mixed color formats:
+        - RGB float tuples (0–1)
+        - RGB int tuples (0–255)
+        - Hex strings "#RRGGBB" or "RRGGBB"
+        - HTML/CSS names ("red", "steelblue")
+        - Matplotlib shorthand ("r", "C0")
+    """
+
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
+    normalized = []
+    for c in colours:
+
+        # tuple/list: could be float or int RGB
+        if isinstance(c, (tuple, list)) and len(c) == 3:
+            if all(isinstance(v, float) for v in c) and all(0 <= v <= 1 for v in c):
+                normalized.append(tuple(c))
+            elif all(isinstance(v, int) for v in c) and all(0 <= v <= 255 for v in c):
+                normalized.append(tuple(v / 255.0 for v in c))
+            else:
+                raise ValueError(f"Invalid RGB tuple: {c}")
+
+        # string: hex, HTML name, or mpl shorthand
+        elif isinstance(c, str):
+            # allow "ffaa00" without "#"
+            if len(c) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in c):
+                c = "#" + c
+            try:
+                normalized.append(to_rgb(c))
+            except ValueError:
+                raise ValueError(f"Unrecognized color string: {c}")
+
+        else:
+            raise TypeError(f"Unsupported color format: {c}")
+
+    if position is None:
+        position = np.linspace(0, 1, len(colours))
+    else:
+        position = np.asarray(position, float)
+        if len(position) != len(colours):
+            raise ValueError("position must be same length as colors")
+        if position[0] != 0 or position[-1] != 1:
+            raise ValueError("position must start at 0 and end at 1")
+
+    cdict = {"red": [], "green": [], "blue": []}
+    for p, (r, g, b) in zip(position, normalized):
+        cdict["red"].append((p, r, r))
+        cdict["green"].append((p, g, g))
+        cdict["blue"].append((p, b, b))
+
+    return LinearSegmentedColormap(name, cdict)
+
 def desaturate_cmap(cmap, desat = 0.65):
     from matplotlib.colors import ListedColormap
 
@@ -897,7 +1435,7 @@ def hpd(data, level = 0.95):
     if nIn < 2 :
         return None
     #raise RuntimeError("Not enough data. N data: %s"%(len(data)))
- 
+
     i = 0
     r = d[i+nIn-1] - d[i]
     for k in range(len(d) - (nIn - 1)) :
@@ -907,5 +1445,5 @@ def hpd(data, level = 0.95):
             i = k
 
     assert 0 <= i <= i+nIn-1 < len(d)
- 
+
     return (d[i], d[i+nIn-1])
