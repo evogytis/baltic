@@ -3,9 +3,10 @@ import warnings
 import os
 from collections import Counter
 import numpy as np
+import matplotlib as mpl
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
-from baltic.bt_utils import calendar_to_decimal_date
+from baltic.bt_utils import calendar_to_decimal_date, desaturate_cmap
 
 logger = logging.getLogger("baltic.curonia")
 
@@ -648,7 +649,6 @@ def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = 
 
 
 #### convex hulls around clades
-#### alignment + tree
 #### matrix + tree
 #### LBI
 #### layering function for colouring (e.g. marking discovery paths)
@@ -677,6 +677,420 @@ def position_Bezier_control(pointA, pointB, height, frac):
 
     return (n1, n2) ## return third point's coordinate
 ##########################
+def plot_root_to_tip(ax, tree,
+                     colour = None, colourFxn = None,
+                     pointSize = None, pointSizeFxn = None,
+                     outline = True, outlineColour = None, outlineColourFxn = None,
+                     outlineSize = None, outlineSizeFxn = None,
+                     orientation = 'horizontal',
+                     targetFxn = None,
+                     plotRegression = True, plotTree = False,
+                     highlightOutliers = False, outlierThres = None, outlierColour = None,
+                     pointKwargs = {}, lineKwargs = {}, treeKwargs = {}):
+
+    import math
+    from baltic.bt_utils import desaturate_cmap, calendar_to_decimal_date, decimal_to_calendar_date
+    from scipy.stats import linregress
+
+    assert tree.treeType == 'divergence', f"Cannot run root-to-tip regression on a time tree. Branch lengths must be in substitution space."
+    assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
+
+    func_logger = logging.getLogger("baltic.bt_utils.plot_root_to_tip")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[root_to_tip] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+
+    if targetFxn is None: targetFxn = lambda k: k.is_leaf()
+
+    localPointKwargs = dict(pointKwargs)
+    localLineKwargs = dict(lineKwargs)
+    localTreeKwargs = dict(treeKwargs)
+
+    tipOrder = tree.get_external(targetFxn)
+
+    ys = [k.height for k in tipOrder]
+    xs = [k.absoluteTime for k in tipOrder if k.absoluteTime]
+
+    assert len(xs) > 0, f"Tips do not have an assigned `absoluteTime` attribute that represents tip collection dates."
+    assert len(xs) == len(ys), f"Some branches missing collection dates. Branhes with heights: {len(ys)}; with collection dates: {len(xs)}."
+    #################
+
+    # Colour logic
+    if colour is not None and colourFxn is not None:
+        raise ValueError(
+            "Cannot specify both colour and colourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if colour is None and colourFxn is None:
+        cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
+        norm = mpl.colors.Normalize(min(xs), max(xs))
+        colourFxn = lambda k: cmap(norm(k.absoluteTime))
+
+    elif colourFxn is None:
+        colourFxn = lambda k: colour
+
+    if outlineColour is None and outlineColourFxn is None:
+        outlineColourFxn = lambda k: "k"
+    elif outlineColourFxn is None:
+        outlineColourFxn = lambda k: outlineColour
+
+    # Point size logic
+    if pointSize is not None and pointSizeFxn is not None:
+        raise ValueError(
+            "Cannot specify both pointSize and pointSizeFxn. Please use only one."
+        )
+    if pointSize is None and pointSizeFxn is None:
+        pointSizeFxn = lambda k: 60
+    elif pointSizeFxn is None:
+        pointSizeFxn = lambda k: pointSize
+
+    # Outline size logic
+    if outlineSize is not None and outlineSizeFxn is not None:
+        raise ValueError(
+            "Cannot specify both outlineSize and outlineSizeFxn. Please use only one."
+        )
+    if outlineSize is None and outlineSizeFxn is None:
+        outlineSizeFxn = lambda k: ((2+math.sqrt(pointSizeFxn(k)/math.pi))**2)*math.pi
+    elif outlineSizeFxn is None:
+        outlineSizeFxn = lambda k: outlineSize
+
+    slope, intercept, rval, _, std_err = linregress(xs, ys) ## run linear regression
+
+    tmrca = -intercept / slope
+    func_logger.info(f"Root-to-tip regression parameters: slope = {slope:.4e} intercept = {intercept:.4g} TMRCA = {tmrca:.3f} "
+                f"({decimal_to_calendar_date(tmrca, fmt='%Y-%b-%d')})")
+
+    sizes = [pointSizeFxn(k) for k in tipOrder]
+    cs = [colourFxn(k) for k in tipOrder]
+
+    if outlierThres is None: ## default outlier threshold is residual standard deviation
+        residuals = {k.name: float(k.height - (k.absoluteTime * slope + intercept)) for k in tipOrder}
+        justResiduals = [residuals[k.name] for k in tipOrder]
+        sigma = np.sqrt(np.sum(np.pow(justResiduals,2)) / (len(tipOrder) - 2))
+        outlierThres = 2 * sigma
+
+    outliers = [k for k in tipOrder if abs(k.height - (k.absoluteTime * slope + intercept)) >= outlierThres]
+
+    if plotRegression:
+
+        x_grid = np.linspace(min(xs), max(xs))
+        y_grid = [x * slope + intercept for x in x_grid]
+
+        if orientation == 'vertical':
+            x_grid, y_grid = y_grid, x_grid
+
+        if 'color' not in localLineKwargs: localLineKwargs['color'] = 'k'
+        if 'lw' not in localLineKwargs and 'linewidth' not in localLineKwargs: localLineKwargs['lw'] = 3
+        if 'ls' not in localLineKwargs and 'linestyle' not in localLineKwargs: localLineKwargs['ls'] = '--'
+        ax.plot(x_grid, y_grid, **localLineKwargs)
+
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+
+    if 'zorder' not in localPointKwargs: localPointKwargs['zorder'] = 4
+    if 'edgecolor' not in localPointKwargs: localPointKwargs['edgecolor'] = 'none'
+    ax.scatter(
+            xs,
+            ys,
+            s=sizes,
+            facecolor=cs,
+            **localPointKwargs,
+        )  ## put a circle at each tip
+    if outline:
+        os = [outlineSizeFxn(k) for k in tipOrder]
+        outlierColour = 'darkred' if outlierColour is None else outlierColour
+        ocs = [outlierColour if (highlightOutliers and k in outliers) else outlineColourFxn(k) for k in tipOrder]
+        localPointKwargs['zorder'] -= 1 ## decrease zorder for outlines
+        ax.scatter(
+            xs,
+            ys,
+            s=os,
+            facecolor=ocs,
+            **localPointKwargs,
+        )  ## put a circle at each tip
+
+    for k in tipOrder:
+        if np.diff(k.absoluteTimeRange)[0] > 1e-10:
+            uxs, uys = k.absoluteTimeRange, [k.height, k.height]
+            if orientation == 'vertical':
+                uxs, uys = uys, uxs
+            ax.plot(uxs, uys, color = 'k')
+
+    if plotTree:
+
+        xFxn = lambda k: k.absoluteTime if k.is_leaf() else (k.height - intercept) / slope
+        yFxn = lambda k: k.height
+
+        if orientation == 'vertical':
+            xFxn, yFxn = yFxn, xFxn
+
+        if 'connectionType' in localTreeKwargs and localTreeKwargs['connectionType'] != 'direct':
+            warnings.warn(f"plot_root_to_tip does not support connectionType other than 'direct'.")
+        localTreeKwargs['connectionType'] = 'direct'
+        if 'alpha' not in localTreeKwargs: localTreeKwargs['alpha'] = 0.05
+
+        tree.plot_tree(ax, xCoordinateFxn = xFxn, yCoordinateFxn = yFxn, **localTreeKwargs)
+
+    return (outliers, slope, intercept, residuals)
+
+
+
+def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.95, orientation = 'horizontal', log = True, **kwargs):
+    ### need to add assertions that there's 'skygrid.logPopSize' and 'skygrid.cutOff' in log file
+    localKwargs = dict(kwargs)
+
+    import csv
+
+    assert mostRecent in ['logfile', None] or isinstance(mostRecent, float), f"mostRecent value {mostRecent} not recognised. Must be 'logfile', None or float"
+    assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'"
+
+    func_logger = logging.getLogger("baltic.bt_utils.plot_skygrid")
+    func_logger.setLevel(logging.INFO)
+    func_logger.propagate = False
+
+    if not func_logger.handlers:
+        import sys
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[plot_skygrid] %(message)s"))
+        handler.setLevel(logging.INFO)
+        func_logger.addHandler(handler)
+
+    if burnin == None:
+        burnin = 10e6
+        warnings.warn('No burnin set, defaulting to 10M states.')
+
+    handle = open(logFile,'r')
+    reader = csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t')
+    header = reader.fieldnames
+
+    skygridPopSizes = sorted([key for key in header if key.startswith('skygrid.logPopSize')], key = lambda f: int(f.replace('skygrid.logPopSize', '')))
+
+    skygrid = {key: [] for key in skygridPopSizes}
+    rootAge = []
+    cutoff = None
+
+    def compute_root(lineDict):
+        if mostRecent == 'logfile':
+            rootDate = float(lineDict['age(root)'])
+        elif mostRecent is None:
+            rootDate = float(-lineDict['age(root)'])
+        elif isinstance(mostRecent, float):
+            rootDate = mostRecent - float(lineDict['rootHeight'])
+
+        return rootDate
+
+    for l in reader:
+        state = int(l['state'])
+        if state >= burnin:
+            for key in skygridPopSizes:
+                popSize = float(l[key])
+                skygrid[key].append(popSize)
+
+            rootAgeParam = compute_root(l)
+            rootAge.append(rootAgeParam)
+
+            if mostRecent == 'logfile':
+                mostRecentDate = float(l['age(root)']) + float(l['rootHeight'])
+
+            if cutoff is None:
+                cutoff = float(l['skygrid.cutOff'])
+    handle.close()
+
+    if isinstance(mostRecent, float): mostRecentDate = mostRecent
+
+    start = -cutoff if mostRecent is None else mostRecentDate - cutoff
+    end = 0.0 if mostRecent is None else mostRecentDate
+
+    xs = np.linspace(start, end, len(skygridPopSizes))
+
+    ys = [np.pow(np.e, np.mean(skygrid[key])) for key in skygridPopSizes[::-1]]
+    y_lower, y_upper = zip(*[np.pow(np.e, hpd(skygrid[key], hpdLvl)) for key in skygridPopSizes[::-1]])
+
+    fillPlotFxn = ax.fill_between
+    if orientation == 'vertical':
+        fillPlotFxn = ax.fill_betweenx
+
+    if 'facecolor' not in localKwargs and 'fc' not in localKwargs: localKwargs['facecolor'] = 'lightskyblue'
+    fillPlotFxn(xs, y_lower, y_upper, zorder = 9, **localKwargs)
+    if orientation == 'vertical':
+        xs, ys = ys, xs
+
+    ax.plot(xs, ys, color = 'k', lw = 2, zorder = 10)
+
+    rootPlotFxn = ax.axvline
+    if orientation == 'vertical':
+        rootPlotFxn = ax.axhline
+    rootPlotFxn(np.mean(rootAge), color = 'dimgray', zorder = 10)
+    rootPlotFxn(hpd(rootAge, hpdLvl)[-1], color = 'dimgray', ls = '--', zorder = 10)
+    rootPlotFxn(hpd(rootAge, hpdLvl)[0], color = 'dimgray', ls = '--', zorder = 10)
+
+    if log:
+        if orientation == 'horizontal':
+            ax.set_yscale('log')
+        elif orientation == 'vertical':
+            ax.set_xscale('log')
+
+def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjection, targetFxn=None, shoulderPositionFxn=None, colourFxn=None, originProjection=None, **lineKwargs):
+    """
+    treeAx is the Axes object where the tree is plotted already.
+    mapAx is the Axes object where the map is plotted already.
+    tree is a baltic Tree object.
+    tipCoordinates is a dict of {tip_name: (x, y)} coordinates.
+    destinationProjection is a cartopy ccrs projection object used in mapAx Axes.
+    targetFxn is a filtering function for tree tips (default: always True).
+    shoulderPositionFxn is a function that connects the x-axis coordinate provided by this function to the map (default: None, tips are directly connected to the map).
+    colourFxn returns the colour of a tip.
+    originProjection is a cartopy ccrs object used to transform the coordinate system of tipCoordinates (default: ccrs.PlateCarree()).
+    """
+    from matplotlib.patches import ConnectionPatch
+    import cartopy.crs as ccrs
+    from baltic.bt_utils import desaturate_cmap
+    
+    if originProjection is None: originProjection = ccrs.PlateCarree()
+    if targetFxn is None: targetFxn = lambda k: True
+    
+    cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
+    if colourFxn is None: colourFxn = lambda k: cmap(k.y / tree.ySpan)
+
+    localLineKwargs = dict(lineKwargs)
+
+    
+    for k in tree.get_external(targetFxn):
+        assert k.name in tipCoordinates, f"Tip {k.name} coordinates not found in tipCoordinates dict"
+
+        fc = colourFxn(k)
+        
+        lat, lon = tipCoordinates[k.name]
+        latT, lonT = destinationProjection.transform_point(lon, lat, src_crs=originProjection) ## convert to plotted map coordinates
+
+        if shoulderPositionFxn is None:
+            x, y = k.x, k.y
+        else:
+            x, y = shoulderPositionFxn(k), k.y
+        
+        connection = ConnectionPatch(xyA=(x, y), 
+                                     coordsA=treeAx.transData, 
+                                     axesA=treeAx, 
+                                     xyB=(latT, lonT), 
+                                     coordsB=mapAx.transData, 
+                                     axesB=mapAx, 
+                                     color=fc, **localLineKwargs) ## colour, line style, linewidth, order, transparency
+        #### check if connection will be present
+        axA = connection.axesA
+        axB = connection.axesB
+        pA = axA.transData.transform(connection.xy1)
+        pB = axB.transData.transform(connection.xy2)
+        bbA = axA.bbox
+        bbB = axB.bbox
+    
+        if (bbA.contains(*pA) or bbB.contains(*pB)) and shoulderPositionFxn is not None: ## checks if line will be visible
+            treeAx.plot([k.x, x], [y, y], color=fc, **localLineKwargs) ## straight line from the tip to the x-axis coordinate provided by the shoulderPositionFxn
+        
+        mapAx.add_patch(connection)
+
+    return treeAx, mapAx
+
+def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
+    from matplotlib.collections import LineCollection
+
+    localKwargs = dict(kwargs)
+    localTreeKwargs = dict(treeKwargs)
+    localPointKwargs = dict(pointKwargs)
+
+    if treeSpace is not None and treeSpaceFxn is not None: ## treeSpace is how much space is left between consecutive trees, takes current tree if specified as a function
+        raise ValueError(
+            "Cannot specify both treeSpace and treeSpaceFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if treeSpace is None and treeSpaceFxn is None:
+        treeSpaceFxn = lambda k: treeList[0].treeHeight * 0.20 ## 20% of first tree height is space between all trees
+    elif treeSpaceFxn is None:
+        treeSpaceFxn = lambda k: treeSpace
+
+    if padding is None: ## padding is proportion of treeSpace protrudes beyond previous tree and before next tree (0 == line finishes at last tip of current tree and goes to root of next, 0.5 == line goes to middle between consecutive trees and switches abruptly)
+        padding = 0.1
+    else:
+        assert 0.0 <= padding <= 0.5, f"Padding (given as {padding}) should be a float between 0 and 0.5."
+
+    if colourMap is None: ## colourMap is dict that assigns colours to tips according to their y-axis order in first tree
+
+        colourMap = {}
+
+        cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
+        firstTreeTips = treeList[0].get_external()
+
+        for i,k in enumerate(sorted(firstTreeTips, key = lambda q: q.y)):
+            colourMap[k.name] = cmap(i / (len(firstTreeTips) - 1))
+
+    
+    if 'coordinateFxn' in localTreeKwargs: logger.warning(f"Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
+    # if 'xCoordinateFxn' not in localTreeKwargs: localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
+
+    if len(localPointKwargs) > 0: ## tip points are required - override xCoordinateFxn, assign default colours if nothing specified
+        # if 'xCoordinateFxn' in localPointKwargs: logger.warning(f"Custom x coordinate function for points was specified but will be overriden for tangled chain visualisation.")
+        # localPointKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
+        
+        if 'colour' not in localPointKwargs and 'colourFxn' not in localPointKwargs:
+            logger.warning(f"Point colours were not specified, defaulting to tangled chain colour defaults. This may cause issues if targetFxn is not set to identify tips.")
+            localPointKwargs['colourFxn'] = lambda k: colourMap[k.name]
+
+    ## compute tree coordinates in tangled chain organisation
+    cumulativeX = 0 ## tracks x coordinate as we plot consecutive trees
+    for t in range(len(treeList)):
+        spaceUnit = treeSpaceFxn(treeList[t])
+
+        treeList[t]._assign_tree_coordinates()
+
+        for k in treeList[t].Objects:
+            k.x = cumulativeX + k.x
+
+        cumulativeX += treeList[t].treeHeight + spaceUnit ## increment x-axis
+
+
+    connectionCoordinates = []
+    connectionColours = []
+
+    cumulativeX = 0
+    for curTree, nexTree in zip(treeList, treeList[1:]): ## iterate over pairs of consecutive trees
+        curTree.plot_tree(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot current tree
+        if len(localPointKwargs) > 0:
+            curTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## add points if specified
+
+        for curTip in curTree.get_external(): ## iterate over tips in current tree
+            c = colourMap[curTip.name] if curTip.name in colourMap else 'lightgray'
+
+            nexTip = nexTree.get_external(filterFxn = lambda k: k.name == curTip.name) ## identify matching tip
+            if len(nexTip)>0:
+                nexTip = nexTip[0]
+                curX = curTip.x
+                curY = curTip.y
+
+                lineAfterX = cumulativeX + curTree.treeHeight + spaceUnit * padding
+                lineBeforeX = cumulativeX + curTree.treeHeight + spaceUnit * (1 - padding)
+
+                nexX = nexTip.x# + curTree.treeHeight + spaceUnit
+                nexY = nexTip.y
+
+                connectionCoordinates.append([(curX, curY),
+                                              (lineAfterX, curY),
+                                              (lineBeforeX, nexY),
+                                              (nexX, nexY)]) ## coordinates of tangled line
+                connectionColours.append(c) ## colour of tangled line
+
+        cumulativeX += curTree.treeHeight + spaceUnit
+
+    nexTree.plot_tree(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot last tree
+    if len(localPointKwargs) > 0:
+        nexTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## plot its points
+
+    if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
+    ax.add_collection(LineCollection(connectionCoordinates, color=connectionColours, **localKwargs)) ## add tangled lines
+
+    return treeList
+##############
 
 def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fasta'):
     """

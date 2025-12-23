@@ -465,6 +465,10 @@ class Tree: ## tree class
             logger.warning("Rerooting attempted on existing root.")
             return self
 
+        if self.root.length > 0:
+            logger.warning("Current root has non-zero branch length likely set up for visual purposes. This branch length will be suppressed for rerooting.")
+            self.root.length = 0.0
+
         oldTreeLength = sum(self.get_parameter_list("length"))  ## get old tree length
         ###############
         if branch is None:  ## midpoint rooting
@@ -1599,6 +1603,7 @@ class Tree: ## tree class
         inwardSpace=0.0,
         normaliseHeight=None,
         cladeEndAttrFxn=None,
+        recomputeCoordinates=True,
         **kwargs,
     ):
         valid_treeTypes = ['rectangular','circular','unrooted']
@@ -1625,7 +1630,8 @@ class Tree: ## tree class
         if cladeEndAttrFxn is None:
             cladeEndAttrFxn = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
 
-        self._assign_tree_coordinates(padNodes=padNodes)
+        if recomputeCoordinates:
+            self._assign_tree_coordinates(padNodes=padNodes)
 
         if treeType == 'rectangular':
             ax = self._plot_rectangular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,orientation=orientation,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
@@ -2031,6 +2037,7 @@ class Tree: ## tree class
         circFrac=None,
         inwardSpace=None,
         normaliseHeight=None,
+        recomputeCoordinates=True,
         **kwargs,
     ):
         ### Set default values ###
@@ -2102,7 +2109,8 @@ class Tree: ## tree class
         outline_colours=[]
         outline_sizes=[]
 
-        self._assign_tree_coordinates(padNodes=padNodes) ## compute branch coordinates
+        if recomputeCoordinates:
+            self._assign_tree_coordinates(padNodes=padNodes) ## compute branch coordinates
         
         ########## warnings for parameters that were set that do not belong to chosen tree layout
         if treeType=='rectangular':
@@ -2145,8 +2153,8 @@ class Tree: ## tree class
                 ys.append(py)
             
             elif treeType=='unrooted':
-                
-                self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
+                if recomputeCoordinates:
+                    self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
                 xs.append(k.x) ## unrooted trees should already have x and y coordinates computed 
                 ys.append(k.y)
             colours.append(colourFxn(k))
@@ -2472,7 +2480,7 @@ class Tree: ## tree class
                 xCoordinateFxn=None,yCoordinateFxn=None,width=None,widthFxn=None,connectionType=None,
                 colour=None,colourFxn=None,orientation=None,padNodes=None,treeType='rectangular', 
                 circStart=None,circFrac=None,inwardSpace=None,normaliseHeight=None,precision=None, 
-                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.001,**kwargs):
+                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.001,recomputeCoordinates=True,**kwargs):
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
@@ -2515,7 +2523,8 @@ class Tree: ## tree class
         
         localKwargs = dict(kwargs)
 
-        self._assign_tree_coordinates(padNodes=padNodes)
+        if recomputeCoordinates:
+            self._assign_tree_coordinates(padNodes=padNodes)
 
         if treeType != 'unrooted':
             if connectionType is None:
@@ -2581,7 +2590,8 @@ class Tree: ## tree class
             else:
                 warnings.warn('Unrooted trees use a direct connectionType, ignoring')
             
-            self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
+            if recomputeCoordinates:
+                self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
             
             xCoordinateFxn = lambda k: k.x ## using projected x coordinate now
 
