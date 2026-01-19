@@ -1214,3 +1214,107 @@ def hpd(data, level = 0.95):
     assert 0 <= i <= i+nIn-1 < len(d)
 
     return (d[i], d[i+nIn-1])
+
+def five_point_bezier(points, precision=50):
+    """
+    Quartic Bézier curve (5 control points).
+    Returns arrays of x and y coordinates.
+    """
+    p0, p1, p2, p3, p4 = map(lambda x: np.array(x, dtype=float), points)
+
+    t = np.linspace(0, 1, precision)
+
+    Bx = ((1-t)**4 * p0[0] +
+          4*(1-t)**3 * t * p1[0] +
+          6*(1-t)**2 * t**2 * p2[0] +
+          4*(1-t) * t**3 * p3[0] +
+          t**4 * p4[0])
+
+    By = ((1-t)**4 * p0[1] +
+          4*(1-t)**3 * t * p1[1] +
+          6*(1-t)**2 * t**2 * p2[1] +
+          4*(1-t) * t**3 * p3[1] +
+          t**4 * p4[1])
+
+    return Bx, By
+
+def draw_gradient_polygon(
+    ax,
+    polygonXY,
+    extent,
+    colour,
+    minAlpha=0.0,
+    maxAlpha=1.0,
+    n=256,
+    axis='y',
+    origin='lower',
+    reverse=False,
+    zorder=0,
+    interpolation='bicubic',
+    addPatch=True,
+    patchKwargs=None,
+    imshowKwargs=None,
+    ):
+    """
+    Draw an RGBA gradient image and clip it to a polygon.
+    """
+    import numpy as np
+    import matplotlib as mpl
+    from matplotlib.patches import Polygon
+
+    assert 0.0 <= minAlpha <= 1.0 and 0.0 <= maxAlpha <= 1.0, f"minAlpha ({minAlpha}) and maxAlpha ({maxAlpha}) must be in range [0.0, 1.0]."
+    assert n >= 2, f"Insufficient number of colours: {n}, must be >=2."
+    assert axis in ['x', 'y'], f"Unrecognised axis {axis}. Must be 'x' or 'y'."
+
+    polygonXY = np.asarray(polygonXY, dtype=float)
+    if polygonXY.ndim != 2 or polygonXY.shape[1] != 2:
+        raise ValueError("polygonXY must be an array-like of shape (N, 2)")
+
+    xmin, xmax, ymin, ymax = extent
+
+    # Build RGBA image. We keep the non-ramp dimension at 2 pixels because colour/alpha don't vary there.
+    rgb = mpl.colors.colorConverter.to_rgb(colour)
+
+    if axis == 'y':
+        img = np.zeros((n, 2, 4), dtype=float)  # rows vary in y
+    elif axis == 'x':
+        img = np.zeros((2, n, 4), dtype=float)  # cols vary in x
+
+    img[..., 0] = rgb[0]
+    img[..., 1] = rgb[1]
+    img[..., 2] = rgb[2]
+
+    ramp = np.linspace(minAlpha, maxAlpha, n)
+    if reverse: ramp = ramp[::-1]
+    
+    if axis == 'y':
+        img[..., 3] = ramp[:, None]
+    elif axis == 'x':
+        img[..., 3] = ramp[None, :]
+    
+    localImshowKwargs = dict(imshowKwargs) if imshowKwargs else {}
+    im = ax.imshow(
+        img,
+        extent=[xmin, xmax, ymin, ymax],
+        origin=origin,
+        aspect='auto',
+        interpolation=interpolation,
+        zorder=zorder,
+        **localImshowKwargs,
+    )
+
+    localPatchKwargs = dict(patchKwargs) if patchKwargs else {}
+    # Default: invisible patch used only for clipping
+    patch = Polygon(
+        polygonXY,
+        facecolor='none',
+        edgecolor='none',
+        closed=localPatchKwargs.pop('closed', True),
+        zorder=localPatchKwargs.pop('zorder', zorder),
+        **localPatchKwargs,
+    )
+    if addPatch:
+        ax.add_patch(patch)
+
+    im.set_clip_path(patch)
+    return im, patch

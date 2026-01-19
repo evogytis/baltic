@@ -1090,6 +1090,149 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
     ax.add_collection(LineCollection(connectionCoordinates, color=connectionColours, **localKwargs)) ## add tangled lines
 
     return treeList
+
+def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=None,
+    colour=None, colourFxn=None,
+    controlPointFraction=0.1,
+    tipLen=0.5,
+    padY=0.5,
+    outlineColour=None, outlineColourFxn=None,
+    minAlpha=0.0, maxAlpha=0.4,
+    outline=True,
+    precision=50,
+    outlineKwargs=None, treeKwargs=None, cladeBranchKwargs=None,
+    ):
+    """
+    Plot tree into axes with designated nodes (via list or function) being shown as a gradient.
+
+    Inspired by JT McCrone's visualisation: https://www.nature.com/articles/s41586-022-05200-3
+    Initially implemented by Karthik Gangavarapu.
+    """
+    from matplotlib.patches import Polygon
+    from matplotlib.collections import LineCollection
+    from baltic.bt_utils import draw_gradient_polygon, five_point_bezier
+
+    if designatedNodes is not None and nodeDesignationFxn is not None:
+        raise ValueError(
+            "Cannot specify both designatedNodes and nodeDesignationFxn. Please use only one."
+        )
+    if designatedNodes is None and nodeDesignationFxn is None:
+        raise ValueError(
+            "Must specify either designatedNodes or nodeDesignationFxn."
+        )
+    if nodeDesignationFxn is None:
+        nodeDesignationFxn = lambda k: k in designatedNodes
+    
+    if colour is not None and colourFxn is not None:
+        raise ValueError(
+            "Cannot specify both colour and colourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if colour is None and colourFxn is None:
+        colourFxn = lambda k: "k"
+    elif colourFxn is None:
+        colourFxn = lambda k: colour
+
+    if outlineColour is not None and outlineColourFxn is not None:
+        raise ValueError(
+            "Cannot specify both outlineColour and outlineColourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if outlineColour is None and outlineColourFxn is None:
+        outlineColourFxn = lambda k: colourFxn(k)
+    elif outlineColourFxn is None:
+        outlineColourFxn = lambda k: outlineColour
+    
+    assert 0.0 <= maxAlpha <= 1.0 and 0.0 <= minAlpha <= 1.0, f"minAlpha ({minAlpha}) and maxAlpha ({maxAlpha}) must be in range [0.0, 1.0]."
+    assert maxAlpha >= minAlpha, f"maxAlpha must be greater than minAlpha. Currently minAlpha is {minAlpha} and maxAlpha is {maxAlpha}"
+    
+    localOutlineKwargs = dict(outlineKwargs) if outlineKwargs else dict()
+    localTreeKwargs = dict(treeKwargs) if treeKwargs else dict()
+    localCladeBranchKwargs = dict(cladeBranchKwargs) if cladeBranchKwargs else dict()
+    if 'linewidth' not in localCladeBranchKwargs and 'lw' not in localCladeBranchKwargs: localCladeBranchKwargs['lw'] = 2
+    assert 'color' not in localCladeBranchKwargs, f"Not allowed to specify 'color' in cladeBranchKwargs, branch colour in gradient clades is handled by either colour or colourFxn parameters."
+    
+    gradientClades = tree.get_internal(nodeDesignationFxn)
+    assert len(gradientClades) > 0, f"No nodes specified."
+    
+    gradientSubtrees = set()
+    done = set()
+    
+    for node in sorted(gradientClades, key=lambda k: len(k.leaves)): ## iterate over designated nodes starting from smallest clades
+
+        startX = node.absoluteTime
+        startY = node.y
+        
+        subtree = tree.traverse_tree(node, includeCondition=lambda k: True)
+        gradientSubtrees = gradientSubtrees.union(subtree)
+        descendants = [leaf for leaf in subtree if leaf.is_leaflike()] ## only keep leaves
+        
+        if len(descendants) == 0:
+            return ax
+        
+        yLo, yHi = node.yRange
+        yLo -= padY
+        yHi += padY
+    
+        endX = max([k.absoluteTime for k in descendants]) ## endX
+        
+        cladeLen = endX - startX
+
+        startingPoint = (startX, startY) ## where clade begins
+        earlyX = startX + cladeLen * controlPointFraction * 0.5
+        midX = startX + cladeLen * controlPointFraction
+        
+        cpLo = [startingPoint, 
+                (earlyX, yLo), 
+                (earlyX, yLo), 
+                (midX, yLo), 
+                (endX, yLo)]
+        
+        cpHi = [startingPoint, 
+                (earlyX, yHi), 
+                (earlyX, yHi), 
+                (midX, yHi), 
+                (endX, yHi)]
+        
+        loXY = list(zip(*five_point_bezier(cpLo, precision=precision)))
+        hiXY = list(zip(*five_point_bezier(cpHi, precision=precision)))
+        
+        xy = np.vstack([[startX, startY], loXY, hiXY[::-1]]) ## gradient clade coordinates: starting point -> lower fan -> upper fan (reversed coords)
+
+        draw_gradient_polygon(ax=ax, polygonXY=xy, extent=[startX, endX, yLo, yHi], axis='x', reverse=True, 
+                              colour=colourFxn(node), minAlpha=minAlpha, maxAlpha=maxAlpha)
+    
+        if outline: ## plotting outline
+            assert 'color' not in localOutlineKwargs, f"Not allowed to specify 'color' in outlineKwargs, outline colour is handled by either outlineColour or outlineColourFxn parameters."
+            ax.plot(*list(zip(*loXY)), color=outlineColourFxn(node), **localOutlineKwargs)
+            ax.plot(*list(zip(*hiXY)), color=outlineColourFxn(node), **localOutlineKwargs)
+        ###############
+        branches = [] ## contains branch coordinates
+        colours = [] ## contains branch colours
+
+        assert 0.0 <= tipLen <= 1.0, f"Provided tipLen ({tipLen}) must be within interval [0.0, 1.0]."
+        fs = np.linspace((1 - tipLen), 1, precision) ## line segments to be plotted with decreasing transparency
+        
+        for b in descendants: ## iterate over node's descendants
+            if b in done: ## only want branches not yet plotted
+                continue
+            
+            x, y = b.absoluteTime, b.y
+            parX = node.absoluteTime
+            coords = [(x - (x - parX) * (f - (1 - tipLen)), y) for f in fs[::-1]]
+    
+            z = np.empty((precision - 1, 4))
+            rgb = mpl.colors.colorConverter.to_rgb(colourFxn(b))
+            z[:,  :3] = rgb
+            z[:,-1] = np.append((np.logspace(0, 1, precision - 2) - 1) / 10, 1)
+            
+            branches.extend([(c1, c2) for c1, c2 in zip(coords, coords[1:])])
+            colours.extend(z)
+            
+            done.add(b) ## designate branch as done
+        ax.add_collection(LineCollection(branches, color=colours, zorder=1, **localCladeBranchKwargs))
+    
+    tree.plot_tree(ax=ax, targetFxn=lambda k: k not in gradientSubtrees or nodeDesignationFxn(k), colourFxn=colourFxn, connectionType='elbow', autoSort=False, zorder=1, **localTreeKwargs)
+
+    return ax
 ##############
 
 def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fasta'):
@@ -1405,8 +1548,8 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
         treeAx.set_xlim(-tree.treeHeight * 0.01, max(tree.get_parameter_list('x')) * 1.01)
         treeAx.set_ylim(yBottom - 0.05, tree.ySpan + 0.05)
 
-        from baltic import bt_utils
-        bt_utils.clean_axes(treeAx, hideSpines = ['bottom', 'left', 'right'], removeTickLabels='y')
+        from baltic.bt_utils import clean_axes
+        clean_axes(treeAx, hideSpines = ['bottom', 'left', 'right'], removeTickLabels='y')
     #######
     if fmtSeqNamesFxn is None: fmtSeqNamesFxn = lambda k: f"{k.name}"
     yticks = [k.y for k in tree.get_external()]
