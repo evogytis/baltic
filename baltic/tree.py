@@ -285,7 +285,7 @@ class Tree: ## tree class
 
         return stats
 
-    def _partition_tree(self, partitionFxn, node = None, partition_label = None):
+    def _partition_tree(self, partitionFxn, node=None, partitionLabel=None):
         """
         Assign a label of 10 random characters to branches depending on partitionFxn.
         If partitionFxn evaluates to True a new label is generated for passing on to descendants, otherwise the label of current node is passed on.
@@ -293,23 +293,23 @@ class Tree: ## tree class
         """
         if node is None: node = self.root
         
-        if partition_label is None:
+        if partitionLabel is None:
             import random,string
             characters = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
-            partition_label = ''.join(random.choices(characters, k = 10))
+            partitionLabel = ''.join(random.choices(characters, k = 10))
         
         generateLabelFxn = lambda k: k == self.root or partitionFxn(k) ## root of the tree also counts as entering a new state
         
         if generateLabelFxn(node): ## if True - generate new label
             import random,string
             characters = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
-            partition_label = ''.join(random.choices(characters, k = 10))
+            partitionLabel = ''.join(random.choices(characters, k = 10))
         
-        node.traits['partition'] = partition_label
+        node.traits['partition'] = partitionLabel
         
         if node.is_node():
             for ch in node.children:
-                _partition_tree(self, partitionFxn = generateLabelFxn, node = ch, partition_label = partition_label)
+                self._partition_tree(partitionFxn = generateLabelFxn, node=ch, partitionLabel=partitionLabel)
         
         return self
 
@@ -1692,52 +1692,6 @@ class Tree: ## tree class
             ax.text(x, y, textContentFxn(k), color=colour, **localKwargs)
         return ax
 
-    # def add_text(self,ax,target=None,xCoordinateFxn=None,yCoordinateFxn=None,text=None,orientation='vertical',**kwargs):
-    #     """
-    #     Add text annotations to the tree plot.
-        
-    #     Parameters:
-    #     ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
-    #     target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
-    #     xCoordinateFxn (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
-    #     yCoordinateFxn (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
-    #     text (function or None): A function to determine the text content. Default is None, which uses the `leaf` name attribute.
-    #     zorder (int or None): The z-order for the text. Default is None, which sets the z-order to 4.
-    #     **kwargs: Additional keyword arguments to pass to the `ax.text` method.
-        
-    #     Returns:
-    #     matplotlib.axes.Axes: The axes with the text annotations added.
-        
-    #     Example:
-    #     >>> tree.addText(ax, target=lambda node: node.is_node(), xCoordinateFxn=lambda node: node.x - 7/365, yCoordinateFxn=lambda node: node.y - 0.25, text=lambda node: node.traits['posterior'], ha='right', va='top') ## adds posterior values to the left and below internal nodes
-        
-    #     Docstring generated with ChatGPT 4o.
-    #     """
-    #     if target==None: target=lambda k: k.is_leaf()
-    #     if xCoordinateFxn==None: xCoordinateFxn=lambda k: k.absoluteTime if self.is_time_tree() else k.height
-    #     if yCoordinateFxn==None: yCoordinateFxn=lambda k: k.y
-    #     if text==None: text=lambda k: k.name
-        
-    #     local_kwargs=dict(kwargs)
-
-    #     if orientation=='vertical':
-    #         if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
-    #     elif orientation=='horizontal':
-    #         if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
-    #         if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='left'
-    #         if 'rotation' not in local_kwargs: local_kwargs['rotation']=90
-
-    #     if 'rotation_mode' not in local_kwargs: local_kwargs['rotation_mode']='anchor'
-    #     if 'zorder' not in local_kwargs: local_kwargs['zorder'] = 4
-
-    #     for k in filter(target,self.Objects):
-    #         x,y=xCoordinateFxn(k),yCoordinateFxn(k)
-    #         if orientation=='horizontal':
-    #             x, y = y, x
-
-    #         ax.text(x,y,text(k),**local_kwargs)
-    #     return ax
-
     def _plot_unrooted_text(
         self,
         ax,
@@ -1751,7 +1705,7 @@ class Tree: ## tree class
     ):
         localKwargs = dict(kwargs)
 
-        if "verticalalignment" not in localKwargs:
+        if 'verticalalignment' not in localKwargs:
             localKwargs["verticalalignment"] = "center"
         if 'rotation_mode' not in localKwargs:
             localKwargs['rotation_mode']='anchor'
@@ -1761,14 +1715,16 @@ class Tree: ## tree class
         for k in filter(targetFxn, self.Objects):    
 
             x, y = xCoordinateFxn(k), yCoordinateFxn(k)
+            xp, yp = xCoordinateFxn(k.parent), yCoordinateFxn(k.parent)
 
-            assert (
-                hasattr(k,"_tau")
-            ), "Branch does not have angle _tau computed by _assign_unrooted_tree_coordinates()."
+            # assert (
+            #     hasattr(k,"_tau")
+            # ), "Branch does not have angle _tau computed by _assign_unrooted_tree_coordinates()."
 
-            textRotation = math.degrees(k._tau) % 360
-            ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
-            textRotation = (textRotation - 180)%360 if 90 <= textRotation%360 <= 270 else textRotation
+
+            textRotation = math.degrees(math.atan2(yp - y, xp - x)) % 360
+            ha = 'left' if 90 <= textRotation % 360 <= 270 else 'right' ## rotate labels to aid readability
+            textRotation = (textRotation - 180) % 360 if 90 <= textRotation % 360 <= 270 else textRotation
             colour = colourFxn(k)
 
             ax.text(
@@ -1782,53 +1738,6 @@ class Tree: ## tree class
             )
 
         return ax
-
-    # def add_unrooted_text(self,ax,target=None,xCoordinateFxn=None,yCoordinateFxn=None,text=None,**kwargs):
-    #     """
-    #     Add text annotations to an unrooted tree plot.
-        
-    #     Parameters:
-    #     ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
-    #     target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
-    #     xCoordinateFxn (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
-    #     yCoordinateFxn (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
-    #     text (function or None): A function to determine the text content. Default is None, which uses the branch's name attribute.
-    #     zorder (int or None): The z-order for the text. Default is None, which sets the z-order to 4.
-    #     **kwargs: Additional keyword arguments to pass to the `ax.text` method.
-        
-    #     Returns:
-    #     matplotlib.axes.Axes: The axes with the text annotations added.
-        
-    #     Example:
-    #     >>> tree.addTextUnrooted(ax) ## adds tip names to the tree
-        
-    #     Docstring generated with ChatGPT 4o.
-    #     """
-    #     if target==None: target=lambda k: k.is_leaf()
-    #     if xCoordinateFxn==None: xCoordinateFxn=lambda k: k.absoluteTime if self.is_time_tree() else k.height
-    #     if yCoordinateFxn==None: yCoordinateFxn=lambda k: k.y
-    #     if text==None: text=lambda k: k.name
-        
-    #     local_kwargs=dict(kwargs)
-
-    #     if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
-    #     if 'rotation_mode' not in local_kwargs: local_kwargs['rotation_mode']='anchor'
-    #     if 'zorder' not in local_kwargs: local_kwargs['zorder'] = 4
-
-    #     for k in filter(target,self.Objects):
-    #         x,y=xCoordinateFxn(k),yCoordinateFxn(k)
-            
-    #         assert hasattr(k,"_tau"), 'Branch does not have angle tau computed by drawUnrooted() stored under attribute "_tau".'
-            
-    #         rot=math.degrees(k._tau)%360
-            
-    #         if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 90<rot<270 else 'left'
-            
-    #         rot=rot+180 if 90<rot<270 else rot
-            
-    #         ax.text(x,y,text(k),rotation=rot,**local_kwargs)
-            
-    #     return ax
 
     def _plot_circular_text(
         self,
@@ -1845,7 +1754,7 @@ class Tree: ## tree class
         colourFxn,
         **kwargs,
     ):
-        assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
+        assert circFrac > 0.0, f"Circular tree layout not given any space (circFrac == {circFrac})"
 
         localKwargs = dict(kwargs)  ## copy global kwargs into a local version
 
@@ -1854,8 +1763,8 @@ class Tree: ## tree class
         # self._assign_tree_coordinates(padNodes=padNodes) ## computes y coordinates with padding
         total_y = self.ySpan ## plot_text already made a call to compute coordinates
 
-        if "verticalalignment" not in localKwargs:
-            localKwargs["verticalalignment"] = "center"
+        if 'verticalalignment' not in localKwargs and 'va' not in localKwargs:
+            localKwargs['verticalalignment'] = "center"
         if 'rotation_mode' not in localKwargs:
             localKwargs['rotation_mode'] = 'anchor'
         if 'zorder' not in localKwargs:
@@ -1869,7 +1778,11 @@ class Tree: ## tree class
 
             rotationRadians = (circStart + (circFrac * y/total_y)) * 2*math.pi
             textRotation = (90 - math.degrees(rotationRadians))%360
-            ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
+            if 'horizontalalignment' not in localKwargs and 'ha' not in localKwargs:
+                ha = 'right' if 90 <= textRotation%360 <= 270 else 'left' ## rotate labels to aid readability
+            else:
+                ha = localKwargs['horizontalalignment'] if 'horizontalalignment' in localKwargs else localKwargs['ha']
+
             textRotation = (textRotation - 180)%360 if 90 <= textRotation%360 <= 270 else textRotation
 
             colour = colourFxn(k)
@@ -1887,72 +1800,6 @@ class Tree: ## tree class
             )
 
         return ax
-
-
-    # def add_circular_text(self,ax,target=None,text=None,xCoordinateFxn=None,yCoordinateFxn=None,circStart=0.0,circFrac=1.0,inwardSpace=0.0,normaliseHeight=None,pad_nodes=None,clade_end_attr=None,**kwargs):
-    #     """
-    #     Add text annotations to a circular tree plot.
-
-    #     Parameters:
-    #     ax (matplotlib.axes.Axes): The matplotlib axes to add the text to.
-    #     target (function or None): A function to select which branches to annotate. Default is None, which selects all `leaf` nodes.
-    #     text (function or None): A function to determine the text content. Default is None, which uses the `leaf` name attribute.
-    #     xCoordinateFxn (function or None): A function to determine the x-coordinate for the text. Default is None, which uses the branch's x attribute.
-    #     yCoordinateFxn (function or None): A function to determine the y-coordinate for the text. Default is None, which uses the branch's y attribute.
-    #     circStart (float): The starting angle (in fractions of 2*pi, i.e. radians) for the circular layout. Default is 0.0.
-    #     circFrac (float): The fraction of the full circle to use for the layout. Default is 1.0.
-    #     inwardSpace (float): Amount of space to leave in the middle of the tree (can be negative for inward-facing trees). Default is 0.0.
-    #     normaliseHeight (function or None): A function to normalize the x-coordinates. Default is None, creates a normalisation that returns 0.0 at root and 1.0 at the most diverged tip.
-    #     zorder (int or None): The z-order for the text. Default is None, which sets the z-order to 4.
-    #     **kwargs: Additional keyword arguments to pass to the `ax.text` method.
-        
-    #     Returns:
-    #     matplotlib.axes.Axes: The axes with the text annotations added.
-        
-    #     Example:
-    #     >>> tree.addTextCircular(ax) ## adds `leaf` names to a circular tree plot
-        
-    #     Docstring generated with ChatGPT 4o.
-    #     """
-
-    #     if target==None: target=lambda k: k.is_leaf()
-    #     if xCoordinateFxn==None: xCoordinateFxn=lambda k:k.absoluteTime if self.is_time_tree() else k.height
-    #     if yCoordinateFxn==None: yCoordinateFxn=lambda k:k.y
-    #     if text==None: text=lambda k: k.name
-    #     if pad_nodes is None: pad_nodes = {}
-
-
-    #     if clade_end_attr is None: clade_end_attr = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])
-
-    #     if inwardSpace<0: inwardSpace-=self.treeHeight
-
-    #     local_kwargs=dict(kwargs) ## copy global kwargs into a local version
-        
-    #     self._drawTree(pad_nodes=pad_nodes) ## computes y coordinates with padding
-    #     total_y = self.ySpan
-
-    #     allXs=list(map(xCoordinateFxn,self.Objects)) + list(map(clade_end_attr,[w for w in self.Objects if isinstance(w,Clade)])) ## look at both branch heights and last heights of clades
-    #     if normaliseHeight==None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
-        
-    #     if 'verticalalignment' not in local_kwargs: local_kwargs['verticalalignment']='center'
-    #     if 'rotation_mode' not in local_kwargs: local_kwargs['rotation_mode']='anchor'
-    #     if 'zorder' not in local_kwargs: local_kwargs['zorder'] = 4
-
-    #     for k in filter(target,self.Objects): ## iterate over branches
-    #         x=normaliseHeight(xCoordinateFxn(k)+inwardSpace) ## get branch x position
-    #         y=yCoordinateFxn(k) ## get y position
-            
-    #         x,y=project_to_polar(x=x,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac)
-
-    #         rot=math.degrees((circStart + (circFrac * y/total_y)) * 2*math.pi)%360
-            
-    #         if 'horizontalalignment' not in local_kwargs: local_kwargs['horizontalalignment']='right' if 180<rot<360 else 'left' ## rotate labels to aid readability
-            
-    #         rot=360-rot-90 if 180<rot<360 else 360-rot+90
-            
-    #         ax.text(x,y,text(k),rotation=rot,**local_kwargs)
-        
-    #     return ax
 
     def plot_aligned_tip_labels(self, ax, xSpace=0.005, connectingLines=True, **kwargs):
         ## need to implement orientation
@@ -2480,7 +2327,7 @@ class Tree: ## tree class
                 xCoordinateFxn=None,yCoordinateFxn=None,width=None,widthFxn=None,connectionType=None,
                 colour=None,colourFxn=None,orientation=None,padNodes=None,treeType='rectangular', 
                 circStart=None,circFrac=None,inwardSpace=None,normaliseHeight=None,precision=None, 
-                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.001,recomputeCoordinates=True,**kwargs):
+                plotClades=True,cladeColour=None,cladeEndAttrFxn=None,cladeStyle='equal',cladeShape=None,cladeBaseWidth=0.001,recomputeCoordinates=True,autoSort=True,**kwargs):
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
@@ -2523,6 +2370,9 @@ class Tree: ## tree class
         
         localKwargs = dict(kwargs)
 
+        if autoSort == True:
+            self.sort_branches()
+        
         if recomputeCoordinates:
             self._assign_tree_coordinates(padNodes=padNodes)
 

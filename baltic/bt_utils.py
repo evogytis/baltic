@@ -146,28 +146,29 @@ def state_collapse_tree(tree, switchFxn):
     """
     Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
     Also known by the name of Phylotype maps/trees.
+    NOTE - should add a mode that keeps the earliest-diverging branch, with its height set to be the last known tip
     """
     import copy
 
-    local_tree = copy.deepcopy(tree)
+    localTree = copy.deepcopy(tree)
 
-    _partition_tree(local_tree, partitionFxn = switchFxn) ## run tree labelling
+    localTree._partition_tree(partitionFxn = switchFxn) ## run tree labelling
 
-    labels = set(local_tree.get_parameter_list('partition',useTraitsDict=True)) ## get all unique labels in tree
-    sortingFxn = lambda k: k.absoluteTime if local_tree.treeType == 'time' else k.height ## determine whether to sort by height or absoluteTime
+    labels = set(localTree.get_parameter_list('partition', useTraitsDict=True)) ## get all unique labels in tree
+    sortingFxn = lambda k: k.absoluteTime if localTree.treeType == 'time' else k.height ## determine whether to sort by height or absoluteTime
 
-    label_to_branches = {label: [k for k in local_tree.get_external() if k.traits['partition'] == label] for label in labels} ## map each unique label to the furthest tip with that label
-    label_counts = {label: len(label_to_branches[label]) for label in labels}
+    labelToBranches = {label: [k for k in localTree.get_external() if k.traits['partition'] == label] for label in labels} ## map each unique label to the furthest tip with that label
+    labelCounts = {label: len(labelToBranches[label]) for label in labels}
 
-    label_to_last_branch = {label: sorted(label_to_branches[label], key = sortingFxn)[-1] for label in labels if label_counts[label] > 0}
+    labelToLastBranch = {label: sorted(labelToBranches[label], key=sortingFxn)[-1] for label in labels if labelCounts[label] > 0}
 
-    local_tree = local_tree.reduce_tree(label_to_last_branch.values()) ## keep a single tip for each unique label
+    localTree = localTree.reduce_tree(labelToLastBranch.values()) ## keep a single tip for each unique label
 
-    for k in local_tree.get_external():
-        k.traits['size'] = label_counts[k.traits['partition']] ## assign tip counts of this label to representative branch
-        k.traits['members'] = label_to_branches[k.traits['partition']] ## remember descendants with label that may no longer be present
+    for k in localTree.get_external():
+        k.traits['size'] = labelCounts[k.traits['partition']] ## assign tip counts of this label to representative branch
+        k.traits['members'] = labelToBranches[k.traits['partition']] ## remember descendants with label that may no longer be present
 
-    return local_tree
+    return localTree
 
 def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
     assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
@@ -727,7 +728,7 @@ def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLa
     validSpines = ['left', 'top', 'right', 'bottom']
     assert set(validSpines) >= set(hideSpines), f"Spine {[val for val in hideSpines if val not in validSpines]} not recognised. Must belong to the set {validSpines}."
 
-    validRemoveTickLabels = ['x', 'y', 'both']
+    validRemoveTickLabels = ['x', 'y', 'both', 'none']
     assert removeTickLabels in validRemoveTickLabels, f"removeTickLabels value {removeTickLabels} not recognised. Must be one of {', '.join(validRemoveTickLabels)}"
 
     if removeTickLabels in ['x', 'both']:
@@ -874,6 +875,7 @@ def untangle_trees(
 
 
 def unnest(nodeList, towardsRoot = True):
+    nodeList = list(nodeList) ## make sure removal of nested nodes is not in-place
     assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f"nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}"
 
     while any([A.leaves.isdisjoint(B.leaves) == False for A in nodeList for B in nodeList if A != B]): ## continue looping for as long as any pair of nodes are nested

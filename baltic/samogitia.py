@@ -6,9 +6,9 @@ from baltic.bt_utils import calendar_to_decimal_date
 
 logger = logging.getLogger("baltic.samogitia")
 
-def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRegex, dateFmt, treestringRegex):
+def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt, treestringRegex):
     """
-    Takes a treePath (path to .trees file), burnin, outputPath (output name), mostRecentDate (for most recent tip date), tipRegex (for figuring out collection dates), dateFmt (for parsing calendar dates), treestringRegex (for identifying lines with trees and their MCMC state number).
+    Takes a treePath (path to .trees file), burnin, mostRecentDate (for most recent tip date), tipRegex (for figuring out collection dates), dateFmt (for parsing calendar dates), treestringRegex (for identifying lines with trees and their MCMC state number).
     Parses .trees file, yields each treestring (and tip name map + most recent date) after burnin is passed.
     Each treestring is passed onto a separate parallel worker elsewhere.
     ### there might be ways to make this parsing more efficient and still need to fix identifying most recent tip dates and determine how dummy most recent dates are handled in the .trees file.
@@ -53,12 +53,13 @@ def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRe
 
                 maxDate = max(tip_dates)
                 
-            if state >= burnin:
+            if state < burnin:
+                continue
 
-                yield treeCounter, state, l[treeString_start:], tips, maxDate
-                treeCounter += 1
-                
-                logger.debug('Identified tree string')
+            yield treeCounter, state, l[treeString_start:], tips, maxDate
+            treeCounter += 1
+            
+            logger.debug('Identified tree string')
         ##############
         if tip_flag:
             match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
@@ -251,3 +252,18 @@ def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictM
             out += [tmrca]
     
     return i, state, out
+
+def tree_length_worker(**args, headerMode = False):
+    # i, state, treeString, tipRenameDict, maxDate
+    assert 'treeString' in args, f""
+    tree = make_tree(treeString, 'time')
+    tree.traverse_tree()
+
+    out = [state] if headerMode == False else ['state']
+    
+    if headerMode == False:
+        out.append(sum(tree.get_parameter_list('length')))
+    else:
+        out.append('tree length')
+
+    return out

@@ -45,7 +45,7 @@ def load_newick(treePath,
         l = line.strip('\n')
         if '(' in l:
             treeStringStart = l.index('(')
-            ll = make_tree(l[treeStringStart:],treeType) ## send tree string to make_tree function
+            ll = make_tree(l[treeStringStart:], treeType) ## send tree string to make_tree function
             logger.debug('Identified tree string')
 
     assert ll, 'Regular expression failed to find tree string'
@@ -87,7 +87,7 @@ def load_nexus(treePath,
         match = re.search(treestringRegex,l)
         if match:
             treeString_start = l.index('(')
-            ll = make_tree(l[treeString_start:],treeType) ## send tree string to make_tree function
+            ll = make_tree(l[treeString_start:], treeType) ## send tree string to make_tree function
             logger.debug('Identified tree string')
 
         if tip_flag:
