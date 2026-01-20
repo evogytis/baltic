@@ -1268,7 +1268,7 @@ class Tree: ## tree class
                                 val, list
                             ):  ## list of lists, example complete history annotated on tree
                                 rangeComment.append("{{{}}}".format(",".join(val)))
-                        comment.append(f"{tr}={','.join(rangeComment)}")
+                        comment.append(f"{tr}={{{','.join(rangeComment)}}}")
                         logger.debug(f"adding range comment {comment[-1]}")
                 else:
                     logger.debug(f"trait {tr} unavailable for {curNode.index} ({curNode.branchType})")
