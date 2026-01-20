@@ -120,6 +120,14 @@ def load_nexus(treePath,
     if isinstance(treePath,str):
         handle.close()
 
+    if any(k.name.endswith('_ancestor_taxon') for k in ll.get_external()):
+        ancestorTaxa = [k for k in ll.get_external() if k.name.endswith('_ancestor_taxon')]
+        regularTaxa = [k for k in ll.get_external() if k.name.endswith('_ancestor_taxon') == False]
+        
+        logger.warning(f"{len(ancestorTaxa)} ancestral taxa ('_ancestor_taxon' suffix) from travel-aware phylogeographic analysis detected. They will be removed whilst preserving phylogenetic relationships, resulting in a multitype tree.")
+
+        ll = ll.reduce_tree(regularTaxa)
+    
     ll.traverse_tree() ## traverse tree
     return ll
 
