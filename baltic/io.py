@@ -11,22 +11,26 @@ logger = logging.getLogger("baltic.io")
 
 
 def process_tip_dates(tree, tipRegex, dateFmt, variableDate):
-    tip_dates = []
-    tip_names = []
+    tipDates = []
+    tipNames = []
     tipDateUncertainties = {}
     for k in tree.get_external():
-        tip_names.append(k.name)
+        tipNames.append(k.name)
         match = re.search(tipRegex, k.name)
         if match:
             date = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate)
-            tip_dates.append(date[0] if variableDate else date) ## date will be tuple of (date, (dateMin,dateMax)) if variableDate == True
+            if variableDate and (date[1][1] - date[1][0]) == 0: ## only keep dates that are certain for setting absolute time
+                tipDates.append(date[0]) ## date will be tuple of (date, (dateMin,dateMax)) if variableDate == True
+            elif variableDate == False:
+                tipDates.append(date)
+            
             tipDateUncertainties[k.name] = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = True) ## logic around here might need more thinking
         else:
-            warnings.warn(f"Collection date of leaf {k.name} was not captured by regex {tipRegex}.")
+            logger.warning(f"Collection date of leaf {k.name} was not captured by regex {tipRegex}.")
 
-    assert len(tip_dates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
-
-    tree.set_absolute_time(max(tip_dates), justLeaves = True if tree.treeType == 'divergence' else False)
+    assert len(tipDates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
+    
+    tree.set_absolute_time(max(tipDates), justLeaves = True if tree.treeType == 'divergence' else False)
     if variableDate:
         tree._assign_date_uncertainty(tipDateUncertainties)
 

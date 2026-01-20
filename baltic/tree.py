@@ -220,7 +220,13 @@ class Tree: ## tree class
 
     def _assign_date_uncertainty(self, dateUncertainties):
         for k in self.get_external():
-            k.absoluteTime, k.absoluteTimeRange = dateUncertainties[k.name]
+            date, uncertainty = dateUncertainties[k.name]
+            # if abs(np.diff(uncertainty)) > 0:
+            #     k.absoluteTime = uncertainty[0]
+            # else:
+            #     k.absoluteTime = date
+            
+            k.absoluteTimeRange = uncertainty
 
     def rescale(self, factor):
         logger.debug(f"Rescaling tree by factor of {factor}.")
