@@ -142,11 +142,10 @@ def convert_date_format(dateString,startFormat,endFormat):
     except ValueError as e:
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
-def state_collapse_tree(tree, switchFxn):
+def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False):
     """
     Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
     Also known by the name of Phylotype maps/trees.
-    NOTE - should add a mode that keeps the earliest-diverging branch, with its height set to be the last known tip
     """
     import copy
 
@@ -162,11 +161,31 @@ def state_collapse_tree(tree, switchFxn):
 
     labelToLastBranch = {label: sorted(labelToBranches[label], key=sortingFxn)[-1] for label in labels if labelCounts[label] > 0}
 
-    localTree = localTree.reduce_tree(labelToLastBranch.values()) ## keep a single tip for each unique label
+    if keepLast: ## keeping last tip
+        localTree = localTree.reduce_tree(labelToLastBranch.values()) ## keep a single last tip for each unique label
+        if keepLast and adjustEarlyHeights:
+            logger.warning(f"Keeping last descendant of partition, adjustEarlyHeights parameter will be ignored, it is only used when keepLast == False.")
+    else: ## keeping earliest tip
+        labelToFirstBranch = {label: sorted(labelToBranches[label], key=sortingFxn)[0] for label in labels if labelCounts[label] > 0} ## get earliest branch
 
-    for k in localTree.get_external():
-        k.traits['size'] = labelCounts[k.traits['partition']] ## assign tip counts of this label to representative branch
-        k.traits['members'] = labelToBranches[k.traits['partition']] ## remember descendants with label that may no longer be present
+        localTree = localTree.reduce_tree(labelToFirstBranch.values()) ## keep a single earliest tip for each unique label
+
+    
+    for k in localTree.get_external(): ## iterate over remaining tips
+        partition = k.traits['partition'] ## get partition label
+
+        if keepLast == False and adjustEarlyHeights: ## kept earliest branch but want it adjusted
+            lastBranch = labelToLastBranch[partition]
+
+            k.length = lastBranch.height - k.parent.height ## new branch length is last height - current tip's parent height
+
+            if localTree.treeType == 'time' and k.absoluteTime: ## absoluteTime set already, adjust too
+                k.absoluteTime += lastBranch.absoluteTime - k.absoluteTime
+
+        k.traits['size'] = labelCounts[partition] ## assign tip counts of this label to representative branch
+        k.traits['members'] = labelToBranches[partition] ## remember descendants with label that may no longer be present
+
+    localTree.traverse_tree()
 
     return localTree
 
