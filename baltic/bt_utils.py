@@ -1324,3 +1324,12 @@ def draw_gradient_polygon(
 
     im.set_clip_path(patch)
     return im, patch
+
+def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineWeight=4):
+
+    import matplotlib.patheffects as path_effects
+
+    effects = [path_effects.Stroke(linewidth=outlineWeight, foreground=outlineColour), 
+               path_effects.Stroke(linewidth=mainWeight, foreground=mainColour)]
+
+    return effects
