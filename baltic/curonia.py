@@ -1089,7 +1089,8 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
 
     cumulativeX = 0
     for curTree, nexTree in zip(treeList, treeList[1:]): ## iterate over pairs of consecutive trees
-        curTree.plot_tree(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot current tree
+        curTree.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot current tree
+
         if len(localPointKwargs) > 0:
             curTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## add points if specified
 
@@ -1116,7 +1117,7 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
 
         cumulativeX += curTree.treeHeight + spaceUnit
 
-    nexTree.plot_tree(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot last tree
+    nexTree.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot last tree
     if len(localPointKwargs) > 0:
         nexTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## plot its points
 
@@ -1572,7 +1573,7 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
         yBottom = alnBottom
     ###### tree part
     if treeAx:
-        tree.plot_tree(treeAx, **localTreeKwargs)
+        tree.plot_tree(treeAx, autoSort=False, **localTreeKwargs)
         
         for k in tree.get_external():
             treeAx.plot([k.x, tree.treeHeight * 1.01], [k.y, k.y], color = 'gray', ls = '--', lw = 0.5)
