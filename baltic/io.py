@@ -10,7 +10,7 @@ from baltic.bt_utils import calendar_to_decimal_date
 logger = logging.getLogger("baltic.io")
 
 
-def process_tip_dates(tree, tipRegex, dateFmt, variableDate):
+def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
     tipDates = []
     tipNames = []
     tipDateUncertainties = {}
@@ -30,7 +30,13 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate):
 
     assert len(tipDates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
     
-    tree.set_absolute_time(max(tipDates), justLeaves = True if tree.treeType == 'divergence' else False)
+    if setNodes:
+        tree.set_absolute_time(max(tipDates), justLeaves=True if tree.treeType == 'divergence' else False)
+    else:
+        for k in tree.get_external():
+            mean, interval = tipDateUncertainties[k.name]
+            k.absoluteTime = mean
+    
     if variableDate:
         tree._assign_date_uncertainty(tipDateUncertainties)
 
@@ -40,7 +46,8 @@ def load_newick(treePath,
                 dateFmt='%Y-%m-%d',
                 variableDate=True,
                 absoluteTime=False,
-                sortBranches=True):
+                sortBranches=True, 
+                setNodes=False):
     ll = None
 
     handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
@@ -57,7 +64,7 @@ def load_newick(treePath,
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime:
-        process_tip_dates(tree = ll, tipRegex = tipRegex, dateFmt = dateFmt, variableDate = variableDate)
+        process_tip_dates(tree=ll, tipRegex=tipRegex, dateFmt=dateFmt, variableDate=variableDate, setNodes=setNodes)
 
     if isinstance(treePath, str):
         handle.close()
@@ -72,7 +79,8 @@ def load_nexus(treePath,
                 treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
                 variableDate=True,
                 absoluteTime=True,
-                sortBranches=True):
+                sortBranches=True, 
+                setNodes=True):
     tip_flag = False
     tips = {}
     tip_num = 0
