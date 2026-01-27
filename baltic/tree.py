@@ -221,11 +221,6 @@ class Tree: ## tree class
     def _assign_date_uncertainty(self, dateUncertainties):
         for k in self.get_external():
             date, uncertainty = dateUncertainties[k.name]
-            # if abs(np.diff(uncertainty)) > 0:
-            #     k.absoluteTime = uncertainty[0]
-            # else:
-            #     k.absoluteTime = date
-            
             k.absoluteTimeRange = uncertainty
 
     def rescale(self, factor):
@@ -715,9 +710,6 @@ class Tree: ## tree class
         best_node = next(obj for obj in self.Objects if obj.index == best_root_index)
         self = self.reroot(best_node)
 
-        # ---------------------------------------------------------------
-        # Optional branch-fraction optimization (unchanged logic)
-        # ---------------------------------------------------------------
         if len(self.root.children) == 2:
             from baltic.bt_utils import _adjust_tip_dates_by_regression
 
@@ -777,10 +769,7 @@ class Tree: ## tree class
                          if np.diff(k.absoluteTimeRange)[0] > 1e-12]
             uncertainRanges = {k.name: k.absoluteTimeRange for k in uncertainTips}
             _adjust_tip_dates_by_regression(uncertainTips, best_res['slope'], best_res['intercept'])
-            
-        # ---------------------------------------------------------------
-        # Reporting
-        # ---------------------------------------------------------------
+        
         slope = best_res.get("slope", None)
         intercept = best_res.get("intercept", None)
         r2 = best_res.get("r^2", None)
@@ -801,8 +790,7 @@ class Tree: ## tree class
                 f"Intercept: {intercept:.4g} TMRCA = {tmrca:.3f} "
                 f"({decimal_to_calendar_date(tmrca, fmt='%Y-%b-%d')})"
             )
-
-        # Final return
+        
         if returnRefinedDates:
             return self, refined_dates
         else:
@@ -1477,7 +1465,7 @@ class Tree: ## tree class
                 node.parent.children.remove(node)
                 self.Objects.remove(node)
 
-    def explode_tree(self,trait=None,customFxn=None,stem=True):
+    def explode_tree(self, trait=None, customFxn=None, stem=True):
         
         if trait is not None and customFxn is not None:
             raise ValueError(

@@ -994,7 +994,7 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
 
     return treeAx, mapAx
 
-def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
+def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
     from matplotlib.collections import LineCollection
 
     localKwargs = dict(kwargs)
@@ -1015,16 +1015,17 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
     else:
         assert 0.0 <= padding <= 0.5, f"Padding (given as {padding}) should be a float between 0 and 0.5."
 
-    if colourMap is None: ## colourMap is dict that assigns colours to tips according to their y-axis order in first tree
+    if colourDict is None: ## colourMap is dict that assigns colours to tips according to their y-axis order in first tree
 
-        colourMap = {}
+        colourDict = {}
 
         cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
         firstTreeTips = treeList[0].get_external()
 
         for i,k in enumerate(sorted(firstTreeTips, key = lambda q: q.y)):
-            colourMap[k.name] = cmap(i / (len(firstTreeTips) - 1))
-
+            colourDict[k.name] = cmap(i / (len(firstTreeTips) - 1))
+    else:
+        assert isinstance(colourDict, dict), f"colourDict must be class dict, not {type(colourDict)}"
     
     if 'coordinateFxn' in localTreeKwargs: logger.warning(f"Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
     # if 'xCoordinateFxn' not in localTreeKwargs: localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
@@ -1060,7 +1061,7 @@ def plot_tangled_chain(ax, treeList, colourMap=None, padding=None, treeSpaceFxn=
             curTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## add points if specified
 
         for curTip in curTree.get_external(): ## iterate over tips in current tree
-            c = colourMap[curTip.name] if curTip.name in colourMap else 'lightgray'
+            c = colourDict[curTip.name] if curTip.name in colourDict else 'lightgray'
 
             nexTip = nexTree.get_external(filterFxn = lambda k: k.name == curTip.name) ## identify matching tip
             if len(nexTip)>0:

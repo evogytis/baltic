@@ -394,11 +394,11 @@ def _process_trait_prob_set(node, traitName):
 
     return stateSetDict
 
-def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 10, width = 0.2, other_thres = 0.0, connectNode = True, connectingCorner = 'lower middle', orientation = 'vertical', **kwargs):
+def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 10, width = 0.2, otherThres = 0.0, connectNode = True, connectingCorner = 'lower middle', orientation = 'vertical', **kwargs):
     from matplotlib.patches import Rectangle
 
     assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
-    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+    assert otherThres < 1.0, f"Threshold for assigning state to 'other' category ({otherThres}) should be <1.0."
 
     if xyFxn is None: xyFxn = lambda k: (k.x, k.y)
 
@@ -406,7 +406,7 @@ def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 1
 
     stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
 
-    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= otherThres]
 
     localKwargs = dict(kwargs)
 
@@ -566,7 +566,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     elif yCoord is None and node:
         yCoord = node.y
     elif yCoord is not None and node is not None:
-        warnings.warn(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
+        logger.warning(f"Both yCoord and node were provided, KDE will be positioned at yCoord value.")
 
     localViolinKwargs = dict(violinKwargs)
     if 'fc' in localViolinKwargs:
@@ -894,7 +894,7 @@ def unnest(nodeList, towardsRoot = True):
     return nodeList ## when done return list of remaining nodes
 
 def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
-    slope, intercept, rval, _, _ = linregress(tipDates,tipHeights) ## run linear regression
+    slope, intercept, rval, _, _ = linregress(tipDates, tipHeights) ## run linear regression
     corr = np.corrcoef((tipDates, tipHeights))[0,1] ## correlation coefficient
     ssq = sum([(y - (slope * x + intercept))**2 for x, y in zip(tipDates, tipHeights)]) ## sum of squares
 
@@ -1058,7 +1058,7 @@ def _adjust_tip_dates_by_regression(
     return adjustedDates
 
 
-def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
+def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
     # circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
@@ -1079,7 +1079,7 @@ def project_polar_vector(x,y,radians,length):
     return (new_x,new_y)
 
 
-def desaturate(colour, desat = 0.65, out = "auto"):
+def desaturate(colour, desat=0.65, out="auto"):
     if not (0 <= desat <= 1):
         raise ValueError(f"invalid desat value: {desat}, must be within interval [0, 1].")
 
@@ -1178,7 +1178,7 @@ def make_cmap(colours, position=None, name="custom_cmap"):
 
     return LinearSegmentedColormap(name, cdict)
 
-def desaturate_cmap(cmap, desat = 0.65):
+def desaturate_cmap(cmap, desat=0.65):
     from matplotlib.colors import ListedColormap
 
     assert isinstance(cmap, mpl.colors.LinearSegmentedColormap) or isinstance(cmap, mpl.colors.ListedColormap), f"cmap type {type(cmap)} invalid, must be mpl.colors.LinearSegmentedColormap or mpl.colors.ListedColormap."
@@ -1187,7 +1187,7 @@ def desaturate_cmap(cmap, desat = 0.65):
 
     return ListedColormap(desat_colours)
 
-def hpd(data, level = 0.95):
+def hpd(data, level=0.95):
     """
     Return highest posterior density interval from a list,
     given the posterior density interval required.
