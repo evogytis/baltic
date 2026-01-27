@@ -112,6 +112,9 @@ def make_tree(data, treeType, tre=None):
                     val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
                 tre.curNode.traits[tr]=val.strip('"')
 
+                if tre.curNode.traits[tr] in ['true', 'false']:
+                    tre.curNode.traits[tr] = True if tre.curNode.traits[tr] == 'true' else False ## convert to actual Boolean
+
             for vals in numerics: ## assign all parsed annotations to traits of current branch
                 tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
                 tr=tr[1:]
