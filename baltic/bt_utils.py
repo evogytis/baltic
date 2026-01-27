@@ -532,7 +532,7 @@ def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, r
     return ax
 
 def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True,
-                         hpdLvl = 0.95, precision = 100, kdeWidth = 3, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}):
+                         hpdLvl = 0.95, precision = 100, kdeWidth = 3, normalise=True, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}, connectionLineKwargs = {}):
 
     ### certain tree orientations will require xCoord too
     ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
@@ -556,8 +556,9 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
     if burnin == None:
         burnin = 10e6
-        warnings.warn('No burnin set, defaulting to 10M states.')
+        logger.warning('No burnin set, defaulting to 10M states.')
 
+    if node: assert (node.is_leaflike() or node.is_node()), f"Provided node object is {type(node)}, not a baltic branchLike object."
     handle = open(tmrcaFile,'r')
 
     for l in csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t'):
@@ -588,8 +589,14 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
     localOutlineKwargs = dict(outlineKwargs)
     if 'color' not in localOutlineKwargs: localOutlineKwargs['color'] = 'gray'
-    if 'linewidth' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
+    if 'linewidth' not in localOutlineKwargs and 'lw' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
     if 'zorder' not in localOutlineKwargs: localOutlineKwargs['zorder'] = 2
+
+    localConnectionLineKwargs = dict(connectionLineKwargs)
+    if 'color' not in localConnectionLineKwargs: localConnectionLineKwargs['color'] = 'dimgray'
+    if 'linewidth' not in localConnectionLineKwargs and 'lw' not in localConnectionLineKwargs: localConnectionLineKwargs['linewidth'] = 2
+    if 'zorder' not in localConnectionLineKwargs: localConnectionLineKwargs['zorder'] = 1
+    if 'linestyle' not in localConnectionLineKwargs and 'ls' not in localConnectionLineKwargs: localConnectionLineKwargs['linestyle'] = '--'
 
     kde = gaussian_kde(tmrcaPosterior)
     hpdLo, hpdHi = hpd(tmrcaPosterior, hpdLvl)
@@ -603,7 +610,9 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
     y_grid = kde(x_grid)
     y_max = y_grid.max()
-    y_grid /= y_max ## normalise KDE to peak at 1.0
+    if normalise:
+        y_grid /= y_max ## normalise KDE to peak at 1.0
+
     y_grid *= kdeWidth ## rescale
 
     upper_ys = [yCoord + y for y in y_grid]
@@ -640,9 +649,16 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
         mean_xs = [meanTmrca, meanTmrca]
         if fullViolin:
-            mean_ys = [yCoord - kde(meanTmrca) / y_max * kdeWidth, yCoord + kde(meanTmrca) / y_max * kdeWidth]
+            if normalise:
+                mean_ys = [yCoord - kde(meanTmrca) / y_max * kdeWidth, yCoord + kde(meanTmrca) / y_max * kdeWidth]
+            else:
+                mean_ys = [yCoord - kde(meanTmrca) * kdeWidth, yCoord + kde(meanTmrca) * kdeWidth]
         else:
-            mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
+            if normalise:
+                mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
+            else:
+                mean_ys = [yCoord, yCoord + kde(meanTmrca).item() * kdeWidth]    
+
             mean_ys = np.array(mean_ys, dtype=float).tolist()
 
         elbow_xs = [meanTmrca, meanTmrca, node.absoluteTime]
@@ -656,10 +672,10 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         ax.scatter(x, y, s = 40, fc = localViolinKwargs['facecolor'], ec = 'none', zorder = 10)
         ax.scatter(x, y, s = 80, fc = localViolinKwargs['edgecolor'], ec = 'none', zorder = 9)
 
-        ax.plot(mean_xs, mean_ys, color = 'dimgray', ls = '-', zorder = 2)
-        ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
-    elif node is None:
-        warnings.warn(f"Need to specify node to connect to.")
+        ax.plot(mean_xs, mean_ys, **localConnectionLineKwargs)
+        ax.plot(elbow_xs, elbow_ys, **localConnectionLineKwargs)
+    elif connectNode and node is None:
+        logger.warning(f"Need to specify node to connect to.")
 
     return ax
 
