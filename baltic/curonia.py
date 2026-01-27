@@ -839,13 +839,13 @@ def plot_root_to_tip(ax, tree,
 
 
 
-def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.95, orientation = 'horizontal', log = True, **kwargs):
-    ### need to add assertions that there's 'skygrid.logPopSize' and 'skygrid.cutOff' in log file
+def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orientation='horizontal', logAxis=True, plotRootHPD=True, **kwargs):
     localKwargs = dict(kwargs)
 
     import csv
-
-    assert mostRecent in ['logfile', None] or isinstance(mostRecent, float), f"mostRecent value {mostRecent} not recognised. Must be 'logfile', None or float"
+    from baltic.bt_utils import hpd
+    
+    assert mostRecent is None or isinstance(mostRecent, float) or isinstance(mostRecent, int), f"mostRecent value '{mostRecent}' not recognised. Must be None, float or int"
     assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'"
 
     func_logger = logging.getLogger("baltic.bt_utils.plot_skygrid")
@@ -861,28 +861,48 @@ def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.
 
     if burnin == None:
         burnin = 10e6
-        warnings.warn('No burnin set, defaulting to 10M states.')
+        # logger.warning('No burnin set, defaulting to 10M states.')
 
     handle = open(logFile,'r')
     reader = csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t')
     header = reader.fieldnames
 
+    assert any(k.startswith('skygrid.logPopSize') for k in header), "Missing skygrid.logPopSize columns"
+    assert 'skygrid.cutOff' in header, "Missing skygrid.cutOff column"
+
+    def compute_skygrid_interval(lineDict):
+        """
+        Computes root date and most recent date from log file or provided most recent date (otherwise time is years before most recent date)
+        """
+        rootHeightCandidates = ['treeModel.rootHeight', 'rootHeight']
+
+        rootDate, mostRecentDate = None, None
+        
+        if mostRecent is None and 'age(root)' in lineDict: ## determining most recent date from rootDate
+            rootDate = float(lineDict['age(root)'])
+            mostRecentDate = rootDate + next((float(lineDict[candidate]) for candidate in rootHeightCandidates if candidate in lineDict), None)
+            assert mostRecentDate is not None, f"Unable to identify most recent tip date from log file provided. None of the expected parameters required for calculation ({', '.join(rootHeightCandidates)}) found in log file."
+            
+        elif mostRecent is None or isinstance(mostRecent, float) or isinstance(mostRecent, int): ## 
+            rootDate = next((float(lineDict[candidate]) for candidate in rootHeightCandidates if candidate in lineDict), None)
+            assert rootDate is not None and rootDate != '', f"Unable to identify root / tree height from log file provided. None of the expected parameters {', '.join(rootHeightCandidates)} found in log file."
+            
+            if mostRecent is None:
+                rootDate *= -1 ## not most recent date provided, root date will be in years before most recent tip
+                mostRecentDate = 0.0
+            else:
+                mostRecentDate = mostRecent
+        
+        return rootDate, mostRecentDate
+    
     skygridPopSizes = sorted([key for key in header if key.startswith('skygrid.logPopSize')], key = lambda f: int(f.replace('skygrid.logPopSize', '')))
 
     skygrid = {key: [] for key in skygridPopSizes}
     rootAge = []
     cutoff = None
 
-    def compute_root(lineDict):
-        if mostRecent == 'logfile':
-            rootDate = float(lineDict['age(root)'])
-        elif mostRecent is None:
-            rootDate = float(-lineDict['age(root)'])
-        elif isinstance(mostRecent, float):
-            rootDate = mostRecent - float(lineDict['rootHeight'])
-
-        return rootDate
-
+    storeMostRecent = None
+    
     for l in reader:
         state = int(l['state'])
         if state >= burnin:
@@ -890,20 +910,20 @@ def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.
                 popSize = float(l[key])
                 skygrid[key].append(popSize)
 
-            rootAgeParam = compute_root(l)
-            rootAge.append(rootAgeParam)
+            rootAgeParam, mostRecentDate = compute_skygrid_interval(l)
 
-            if mostRecent == 'logfile':
-                mostRecentDate = float(l['age(root)']) + float(l['rootHeight'])
+            if storeMostRecent:
+                assert mostRecentDate == storeMostRecent, f"Estimated recent date ({mostRecentDate}) differs from previous MCMC state ({storeMostRecent}). This can happen when tip dates sampled during MCMC become the most recent tip dates. Check the XML that produced the log file."
+            rootAge.append(rootAgeParam)
 
             if cutoff is None:
                 cutoff = float(l['skygrid.cutOff'])
+
+            storeMostRecent = mostRecentDate
     handle.close()
-
-    if isinstance(mostRecent, float): mostRecentDate = mostRecent
-
-    start = -cutoff if mostRecent is None else mostRecentDate - cutoff
-    end = 0.0 if mostRecent is None else mostRecentDate
+    
+    start = mostRecentDate - cutoff
+    end = mostRecentDate
 
     xs = np.linspace(start, end, len(skygridPopSizes))
 
@@ -919,20 +939,33 @@ def plot_skygrid(ax, logFile, burnin = None, mostRecent = 'logfile', hpdLvl = 0.
     if orientation == 'vertical':
         xs, ys = ys, xs
 
-    ax.plot(xs, ys, color = 'k', lw = 2, zorder = 10)
+    ax.plot(xs, ys, color = 'k', lw = 2, zorder = 10) ## plot mean
 
-    rootPlotFxn = ax.axvline
-    if orientation == 'vertical':
-        rootPlotFxn = ax.axhline
-    rootPlotFxn(np.mean(rootAge), color = 'dimgray', zorder = 10)
-    rootPlotFxn(hpd(rootAge, hpdLvl)[-1], color = 'dimgray', ls = '--', zorder = 10)
-    rootPlotFxn(hpd(rootAge, hpdLvl)[0], color = 'dimgray', ls = '--', zorder = 10)
+    if plotRootHPD: ## plotting root HPD lines
+        rootPlotFxn = ax.axvline
+        if orientation == 'vertical':
+            rootPlotFxn = ax.axhline
 
-    if log:
+        rootMean = np.mean(rootAge)
+        rootLo, rootHi = hpd(rootAge, hpdLvl)
+
+        if isinstance(mostRecent, float) or isinstance(mostRecent, int):
+            rootMean = end - rootMean
+            rootLo = end - rootLo
+            rootHi = end - rootHi
+
+        rootPlotFxn(rootMean, color = 'dimgray', zorder = 10)
+        rootPlotFxn(rootLo, color = 'dimgray', ls = '--', zorder = 10)
+        rootPlotFxn(rootHi, color = 'dimgray', ls = '--', zorder = 10)
+
+    if logAxis:
         if orientation == 'horizontal':
             ax.set_yscale('log')
         elif orientation == 'vertical':
             ax.set_xscale('log')
+
+    return ax
+
 
 def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjection, targetFxn=None, shoulderPositionFxn=None, colourFxn=None, originProjection=None, **lineKwargs):
     """
