@@ -1506,12 +1506,12 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
         y = -1
         for i, pos in enumerate(SNPs):
             x = i
-            nt_block = Rectangle((xticks[i], y), width = width, height = height, fc = 'lightgray', ec = 'none')
+            nt_block = Rectangle((xticks[i], y), width = width, height = height)
             
             alnAx.text(xticks[i] + 0.5, y + 0.5, summarySeq[pos].upper(), color = 'k', size = 10, ha = 'center', va = 'center')
             
             patches.append(nt_block)
-            patchFaceColours.append(fc)
+            patchFaceColours.append('lightgray')
             patchEdgeColours.append(ec)
 
         alnAx.add_patch(Rectangle((0, y), width=max(xticks) + width, height=height, facecolor='none', edgecolor='k', lw=1, zorder=10000, clip_on=False)) ## outline reference
