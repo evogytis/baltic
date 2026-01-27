@@ -417,6 +417,8 @@ def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 1
             stateOrder.remove(state)
         stateOrder.append('other')
 
+    if 'other' not in traitColourDict: traitColourDict['other'] = '#f5f5f5'
+
     probs = [stateSetDict[state] for state in stateOrder]
     cs = [traitColourDict[state] for state in stateOrder]
 
@@ -480,6 +482,8 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
             stateOrder.remove(state)
         stateOrder.append('other')
 
+    if 'other' not in traitColourDict: traitColourDict['other'] = '#f5f5f5'
+
     probs = [stateSetDict[state] for state in stateOrder]
     cs = [traitColourDict[state] for state in stateOrder]
 
@@ -516,6 +520,8 @@ def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, r
             stateSetDict.pop(state)
             stateOrder.remove(state)
         stateOrder.append('other')
+    
+    if 'other' not in traitColourDict: traitColourDict['other'] = '#f5f5f5'
 
     probs = [stateSetDict[state] for state in stateOrder]
     cs = [traitColourDict[state] for state in stateOrder]
