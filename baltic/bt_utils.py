@@ -909,7 +909,7 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     elif stat=='sum of squares':
         localStat = ssq
     elif stat=='r^2':
-        localStat = rval
+        localStat = math.pow(rval, 2)
     else:
         raise ValueError(f'Unknown stat {stat} to optimise')
 
@@ -923,7 +923,7 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
         res['sum of squares'] = np.inf if invalidateRegression else ssq
         res['slope'] = slope
         res['intercept'] = intercept
-        res['r^2'] = -np.inf if invalidateRegression else rval
+        res['r^2'] = -np.inf if invalidateRegression else math.pow(rval, 2)
         res['root'] = rootCandidate
         if frac is not None: res['frac'] = frac
 
