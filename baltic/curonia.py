@@ -7,6 +7,7 @@ import matplotlib as mpl
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
 from baltic.bt_utils import calendar_to_decimal_date, desaturate_cmap
+from baltic import Reticulation
 
 logger = logging.getLogger("baltic.curonia")
 
@@ -1268,6 +1269,186 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
     tree.plot_tree(ax=ax, targetFxn=lambda k: k not in gradientSubtrees or nodeDesignationFxn(k), colourFxn=colourFxn, connectionType='elbow', autoSort=False, zorder=1, **localTreeKwargs)
 
     return ax
+
+def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', width=0.5, lastTipDate=None, **kwargs):
+    """
+    Plot 95% height HPDs on branches with trait.
+    """
+    from matplotlib.patches import Rectangle
+
+    localKwargs = dict(kwargs)
+
+    if 'fc' not in localKwargs and 'facecolor' not in localKwargs: localKwargs['facecolor'] = 'lightgray'
+    if 'ec' not in localKwargs and 'edgecolor' not in localKwargs: localKwargs['edgecolor'] = 'dimgray'
+    if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
+    if 'alpha' not in localKwargs: localKwargs['alpha'] = 0.4
+    
+    if targetFxn is None: targetFxn = lambda k: True
+    if lastTipDate is None: lastTipDate = tree.mostRecent
+    
+    for k in tree.Objects:
+        if targetFxn(k) == False or traitName not in k.traits:
+            continue
+
+        x, y = k.absoluteTime, k.y
+        lo, hi = [lastTipDate - stat for stat in k.traits[traitName]] ## expect two entries
+        barWidth = hi - lo
+        barHeight = width ## more intuitive to think of bars as having width, but it'll correspond to height parameter of mpl Rectangle
+        
+        ax.add_patch(Rectangle((lo, y - barHeight / 2), width=barWidth, height=barHeight, **localKwargs))
+    
+    return ax
+
+def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, plotSegMatrix=False, segMatrixDist=1.1, segNames=None, segOrder=None, segWidth=1, segHeight=1, **kwargs):
+    """
+    Add a little matrix at the end of the reassortment network to indicate which segments are reassorting.
+    """
+    from matplotlib.collections import LineCollection
+
+    if excludeFxn is None: excludeFxn = lambda k: False
+    
+    if colour is not None and colourFxn is not None:
+        raise ValueError(
+            "Cannot specify both colour and colourFxn. Please use only one."
+        ) ## should be a warning, since this eventuality is handled in the next line
+    if colour is None and colourFxn is None:
+        colourFxn = lambda k: "gray"
+    elif colourFxn is None:
+        colourFxn = lambda k: colour
+    
+    if plotSegMatrix == False and segNames is not None: ## check for superfluous parameters
+        logger.warning(f"Provided segment names {segNames} will be ignored because plotSegMatrix is set to False.")
+    
+    if plotSegMatrix: ## identifies segment numbers in network, checks if names are available for renaming
+        import re
+        from matplotlib.patches import Rectangle
+        
+        segFind = re.compile('^seg([0-9]+)$') ## typical CoalRe formatting of segment names
+        segments = []
+        for trait in tree.root.traits: ## iterate over root's traits
+            match = segFind.match(trait) ## check if trait key is formatted like a CoalRe segment
+            if match:
+                segments.append(int(match.group(1))) ## remember segment
+
+        if segNames is not None: ## check that provided dicts are the right format
+            assert isinstance(segNames, dict), f"segNames should be dict ({type(segNames)} provided) with integers [0, 1, ..., N] as keys mapping trait entries 'seg0', 'seg1', ..., 'segN' in reassortment network to segment names."
+            assert all(seg in segNames for seg in segments), f"Could not find names for following segments in segNames: {', '.join(str(seg) for seg in segments if seg not in segNames)}"
+            if segOrder is None:
+                segOrder = sorted(segNames.values())
+            else:
+                assert len(segOrder) == len(segNames), f"segOrder has different number of entries ({len(segOrder)}) than segNames ({len(segNames)})"
+                assert all(seg in segOrder for seg in segNames.values()), f"Could not find order for following segments in segOrder: {', '.join(str(seg) for seg in segNames.values() if seg not in segOrder)}"
+
+    branches = []
+    colours = []
+
+    pointerLine = []
+    pointerLineColours = []
+    
+    treeEnd = tree.root.absoluteTime + tree.treeHeight * segMatrixDist ## get x coordinate at some position after the tree
+
+    reassortmentCounter = 0 ## count reassortments
+    
+    for k in sorted(tree.Objects, key=lambda q: -q.y): ## iterate over all branches from top to bottom along y-axis
+        if isinstance(k, Reticulation) and excludeFxn(k) == False: ## is a reassortment edge or excluded
+            x, y = k.absoluteTime, k.y ## get reassortment origin coordinate
+            xd, yd = k.target.absoluteTime, k.target.y ## get reassortment destination coordinate
+
+            branches.append(((x, y), (xd, yd))) ## add to list of branches
+
+            marker = '^' if yd > y else 'v' ## marker up if reticulation target (destination) is above origin, downward otherwise
+
+            fc = colourFxn(k)
+       
+            ax.scatter(xd, yd, s=50, fc='w', ec='none', marker=marker, zorder=10) ## add arrow-like ending of reassortment edge
+            ax.scatter(xd, yd, s=120, fc='k', ec='none', marker=marker, zorder=9)
+
+            colours.append('k')
+
+            reassortmentCounter += 1
+            
+            if plotSegMatrix:
+                
+                pointerLine.append(((x, y), (treeEnd, y)))
+                pointerLineColours.append('gray')
+
+                for i, seg in enumerate(segOrder): ## iterate over segments
+                    sx = treeEnd + i * segWidth ## find x position, offset by segment index
+
+                    segMatch = [segIdx for segIdx in segments if segNames[segIdx] == seg][-1] ## identify segment in trait dict
+                    segInvolved = k.traits[f"seg{segMatch}"] ## check if segment is marked as present
+                    fc = 'k' if segInvolved else 'w' ## black if segment traveled along edge, white otherwise
+                    
+                    ax.add_patch(Rectangle((sx, y - segHeight / 2), width=segWidth, height=segHeight, fc=fc, ec='k', clip_on=False))
+                    
+                    if i == (len(segOrder) - 1): ## last (horizontally) rectangle, label with number
+                        ax.text(sx + segWidth * 1.05, y, f"#{reassortmentCounter}", ha='left', va='center', size=12)
+                    if reassortmentCounter == 1: ## first (top-most) reassortment, label segment
+                        ax.text(sx + segWidth / 2, y + segHeight, seg, ha='left', va='center', rotation=90, rotation_mode='anchor', size=12)
+
+    ax.add_collection(LineCollection(pointerLine, ls='--', lw=1, color=pointerLineColours, clip_on=False)) ## pointer line that connects end of reticulation to schematic of segment involvement matrix
+    ax.add_collection(LineCollection(branches, ls='--', lw=2, color=colours)) ## plot reticulation (originates as normal branch, heads down to destination branch
+    
+    return ax
+
+def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnOrder=None, width=1.0, **kwargs):
+
+    from matplotlib.patches import Rectangle
+    from matplotlib.collections import PatchCollection
+    
+    tree.plot_tree(treeAx)
+
+    if columnOrder is None:
+        columnOrder = sorted(labelDict.keys())
+    else:
+        assert len(labelDict) == len(columnOrder), f"labelDict has length {len(labelDict)} but columnOrder has length {len(columnOrder)}"
+    localKwargs = dict(kwargs)
+    
+    if colourDict is not None: ## colourDict was provided
+        for col in columnOrder: ## check that column colours are provided
+            assert col in colourDict, f"Column {col} not found in colourDict"
+    
+    cells = []
+    colours = []
+    for i, col in enumerate(columnOrder): ## iterate over matrix columns
+        x = (i * width)
+
+        for j, taxon in enumerate(tree.get_external()): ## iterate over taxa in tree
+            y = taxon.y - 0.5
+
+            if taxon.name in labelDict[col]: ## have label for taxon
+                label = labelDict[col][taxon.name]
+            else:
+                label = '' ## blank label, warn user
+                logger.warning(f"labelDict missing taxon {taxon.name} at column {col}")
+
+            if label in colourDict[col]: ## colour matrix if label available
+                fc = colourDict[col][label]
+            else:
+                fc = 'none'
+                logger.warning(f"Taxon {taxon.name} label '{label}' not assigned a colour, defaulting to invisible")
+            
+            cell = Rectangle((x, y), width=width, height=1.0)
+            cells.append(cell)
+            colours.append(fc)
+    
+    assert 'fc' not in localKwargs and 'facecolor' not in localKwargs, f"Not allowed to set facecolor of matrix cells since they're set via colourDict."
+    matrixAx.add_collection(PatchCollection(cells, color=colours, **localKwargs))
+
+    treeAx.set_ylim(0, tree.ySpan + 0.5)
+    matrixAx.set_ylim(treeAx.get_ylim())
+
+    matrixStart = 0
+    matrixEnd = (len(columnOrder) * width)
+    xticks = np.linspace(matrixStart + width/2, matrixEnd - width/2, len(columnOrder))
+    matrixAx.set_xticks(xticks)
+    matrixAx.set_xticklabels(columnOrder, rotation=90)
+    matrixAx.set_yticks([])
+    matrixAx.set_yticklabels([])
+    
+    matrixAx.set_xlim(matrixStart, matrixEnd)
+
+    return treeAx, matrixAx
 ##############
 
 def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fasta'):
