@@ -1038,10 +1038,19 @@ class Tree: ## tree class
 
     #     # return the most recent branch that is shared across all paths to root
     #     return sorted(reduce(set.intersection, pathsToRoot.values()), key=lambda k: (-len(k.leaves), k.height))[-1]
-    def find_MRCA(self, descendants):
+    def find_MRCA(self, *descendants):
         """
         This is a ChatGPT suggested function that's meant to be much faster.
         """
+        if len(descendants) == 1 and isinstance(descendants[0], list):
+            descendants = descendants[0]
+
+        strInput = all([isinstance(k, str) for k in descendants]) ## check if a number of strings were provided corresponding to tip names
+
+        if strInput:
+            tipBranches = self.get_external(lambda k: k.name in descendants)
+            assert len(tipBranches) == len(descendants), f"Could not find tips amongst branches: {', '.join([k for k in descendants if k not in [k.name for k in self.Objects if k.is_leaf()]])}"
+            descendants = tipBranches
         paths = [k.get_path_to_root()[::-1] for k in descendants]
         mrca = None
 
