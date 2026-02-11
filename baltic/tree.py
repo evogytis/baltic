@@ -640,6 +640,8 @@ class Tree: ## tree class
         tips = self.get_external()
         tipDates = {k.name: k.absoluteTime for k in tips}
 
+        assert [k.absoluteTimeRange for k in tips].count(None) != len(tips), f"Tips don't have absoluteTimeRange attribute. Check whether tree was imported with absoluteTime set to True"
+
         # Identify uncertain date tips (date ranges > tiny threshold)
         uncertainTips = [k for k in tips
                          if np.diff(k.absoluteTimeRange)[0] > 1e-12]
