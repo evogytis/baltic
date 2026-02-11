@@ -1028,7 +1028,7 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
 
     return treeAx, mapAx
 
-def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn=None, treeSpace=None, treeKwargs={}, pointKwargs={}, **kwargs):
+def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn=None, treeSpace=None, normaliseY=True, treeKwargs={}, pointKwargs={}, **kwargs):
     from matplotlib.collections import LineCollection
 
     localKwargs = dict(kwargs)
@@ -1088,12 +1088,20 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
     connectionCoordinates = []
     connectionColours = []
 
+    xCoordinateFxn = lambda k: k.x
     cumulativeX = 0
-    for curTree, nexTree in zip(treeList, treeList[1:]): ## iterate over pairs of consecutive trees
-        curTree.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot current tree
+
+    for curTree, nexTree in zip(treeList, treeList[1:]): ## iterate over pairs of consecutive trees    
+
+        if normaliseY:
+            yCoordinateFxn = lambda k: k.y / curTree.ySpan
+        else:
+            yCoordinateFxn = lambda k: k.y
+
+        curTree.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=xCoordinateFxn, yCoordinateFxn=yCoordinateFxn, **localTreeKwargs) ## plot current tree
 
         if len(localPointKwargs) > 0:
-            curTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## add points if specified
+            curTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=xCoordinateFxn, yCoordinateFxn=yCoordinateFxn, **localPointKwargs) ## add points if specified
 
         for curTip in curTree.get_external(): ## iterate over tips in current tree
             c = colourDict[curTip.name] if curTip.name in colourDict else 'lightgray'
@@ -1107,8 +1115,12 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
                 lineAfterX = cumulativeX + curTree.treeHeight + spaceUnit * padding
                 lineBeforeX = cumulativeX + curTree.treeHeight + spaceUnit * (1 - padding)
 
-                nexX = nexTip.x# + curTree.treeHeight + spaceUnit
+                nexX = nexTip.x
                 nexY = nexTip.y
+
+                if normaliseY: ## tip position is fraction between 0 and 1
+                    curY /= curTree.ySpan
+                    nexY /= nexTree.ySpan
 
                 connectionCoordinates.append([(curX, curY),
                                               (lineAfterX, curY),
@@ -1118,9 +1130,12 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
 
         cumulativeX += curTree.treeHeight + spaceUnit
 
-    nexTree.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=lambda k: k.x, **localTreeKwargs) ## plot last tree
+    if normaliseY:
+        yCoordinateFxn = lambda k: k.y / nexTree.ySpan
+
+    nexTree.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=xCoordinateFxn, yCoordinateFxn=yCoordinateFxn, **localTreeKwargs) ## plot last tree
     if len(localPointKwargs) > 0:
-        nexTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=lambda k: k.x, **localPointKwargs) ## plot its points
+        nexTree.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=xCoordinateFxn, yCoordinateFxn=yCoordinateFxn, **localPointKwargs) ## plot its points
 
     if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
     ax.add_collection(LineCollection(connectionCoordinates, color=connectionColours, **localKwargs)) ## add tangled lines
