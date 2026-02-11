@@ -144,72 +144,88 @@ def load_JSON(jsonObject,
                 jsonTranslation=None,
                 sort=True,
                 stats=True):
+
+    assert treeType in ['divergence', 'time'], f"Unrecognised treeType {treeType}. Must be 'divergence' or 'time'."
+
     if jsonTranslation is None:
-        jsonTranslation={'name':'name','absoluteTime':'num_date'}
+        jsonTranslation = {'name': 'name', 'absoluteTime': 'num_date', 'height': 'div'}
 
+    assert 'name' in jsonTranslation, f"jsonTranslation dict missing translation for baltic leaf attribute 'name' (default expectation: 'name': 'name')."
 
-    lengthKeys = ['absoluteTime', 'length', 'height']
-    # TODO the next line breaks because there is no `required_keys`
-    assert 'name' in jsonTranslation and any(key in jsonTranslation for key in required_keys),f"JSON translation dictionary missing entries: {', '.join([entry for entry in ['name']+lengthKeys if not entry in jsonTranslation])}"
+    if treeType == 'divergence':
+        assert 'div' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'height' (default expectation: 'height': 'div')."
+    elif treeType == 'time':
+        assert 'num_date' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'absoluteTime' (default expectation: 'absoluteTime': 'num_date')."
+    
+    # lengthKeys = ['absoluteTime', 'height']
+    # assert any(key in jsonTranslation for key in lengthKeys), f"JSON translation dictionary missing entries: {', '.join([entry for entry in ['name']+lengthKeys if not entry in jsonTranslation])}"
+    
     logger.debug('Reading JSON')
 
-    if isinstance(jsonObject,str): ## string provided - either nextstrain URL or local path
+    if isinstance(jsonObject, str): ## string provided - either nextstrain URL or local path
         if 'nextstrain.org' in jsonObject: ## nextsrain.org in URL - request it
             logger.debug('Assume URL provided, loading JSON from nextstrain.org')
 
-            auspice_json=json.load(csio(requests.get(jsonObject).content))
+            auspice_json = json.load(csio(requests.get(jsonObject).content))
         else: ## not nextstrain.org URL - assume local path to auspice v2 json
             logger.debug('Loading JSON from local path')
             with open(jsonObject) as json_data:
                 auspice_json = json.load(json_data)
     else: ## not string, assume auspice v2 json object given
         logger.debug('Loading JSON from object given')
-        auspice_json=jsonObject
+        auspice_json = jsonObject
 
-    json_meta=auspice_json['meta']
-    json_tree=auspice_json['tree']
-    ll=make_tree_JSON(json_tree,jsonTranslation,treeType=treeType)
+    json_meta = auspice_json['meta']
+    if 'root_sequence' in auspice_json:
+        json_meta['root_sequence'] = auspice_json['root_sequence'] ## transfer root sequence attribute to meta (by default it's a top level key in auspice json: {version, meta, tree, root_sequence})
 
-    assert ('absoluteTime' in jsonTranslation and ('length' not in jsonTranslation or 'height' not in jsonTranslation)) or ('absoluteTime' not in jsonTranslation and ('length' in jsonTranslation or 'height' in jsonTranslation)),'Cannot use both absolute time and branch length, include only one in json_translation dictionary.'
+    json_tree = auspice_json['tree']
+    ll = make_tree_JSON(json_tree, jsonTranslation, treeType=treeType)
+
+    # assert ('absoluteTime' in jsonTranslation and ('length' not in jsonTranslation or 'height' not in jsonTranslation)) or ('absoluteTime' not in jsonTranslation and ('length' in jsonTranslation or 'height' in jsonTranslation)),'Cannot use both absolute time and branch length, include only one in json_translation dictionary.'
 
     logger.debug('Setting baltic traits from JSON')
     for k in ll.Objects: ## make node attributes easier to access
         for key in k.traits['node_attrs']:
-            if isinstance(k.traits['node_attrs'][key],dict):
+            if isinstance(k.traits['node_attrs'][key], dict):
                 if 'value' in k.traits['node_attrs'][key]:
-                    k.traits[key]=k.traits['node_attrs'][key]['value']
+                    k.traits[key] = k.traits['node_attrs'][key]['value']
                 if 'confidence' in k.traits['node_attrs'][key]:
-                    k.traits[f'{key}_confidence']=k.traits['node_attrs'][key]['confidence']
-            elif key=='div':
-                k.traits['divergence']=k.traits['node_attrs'][key]
+                    k.traits[f'{key}_confidence'] = k.traits['node_attrs'][key]['confidence']
+            elif key == 'div':
+                k.traits['divergence'] = k.traits['node_attrs'][key]
 
     for attr in jsonTranslation: ## iterate through attributes in json_translation
         for k in ll.Objects: ## for every branch
-            if isinstance(jsonTranslation[attr],str):
+            if isinstance(jsonTranslation[attr], str):
                 if jsonTranslation[attr] in k.traits:
-                    setattr(k,attr,k.traits[jsonTranslation[attr]]) ## set attribute value for branch
+                    setattr(k, attr,k.traits[jsonTranslation[attr]]) ## set attribute value for branch
                 elif 'node_attrs' in k.traits and jsonTranslation[attr] in k.traits['node_attrs']:
-                    setattr(k,attr,k.traits['node_attrs'][jsonTranslation[attr]])
+                    setattr(k,attr, k.traits['node_attrs'][jsonTranslation[attr]])
                 elif 'branch_attrs' in k.traits and jsonTranslation[attr] in k.traits['branch_attrs']:
-                    setattr(k,attr,k.traits['branch_attrs'][jsonTranslation[attr]])
+                    setattr(k,attr, k.traits['branch_attrs'][jsonTranslation[attr]])
                 else:
                     raise KeyError(f'String attribute {jsonTranslation[attr]} not found in JSON')
             elif callable(jsonTranslation[attr]):
-                setattr(k,attr,jsonTranslation[attr](k)) ## set attribute value with a function for branch
+                setattr(k, attr, jsonTranslation[attr](k)) ## set attribute value with a function for branch
             else:
                 raise AttributeError(f'Attribute {jsonTranslation[attr]} neither string nor callable')
 
-    for branch_unit in ['height','absoluteTime']: ## iterate between divergence and absolute time
-        if branch_unit in jsonTranslation: ## it's available in tree
-            for k in ll.Objects: ## iterate over all branches
-                cur_branch=getattr(k,branch_unit) ## get parameter for this branch
-                par_branch=getattr(k.parent,branch_unit) ## get parameter for parental branch
-                k.length=cur_branch-par_branch if cur_branch and par_branch else 0.0 ## difference between current and parent is branch length (or, if parent unavailabel it's 0)
+    if treeType == 'divergence':
+        branchUnit = 'height'
+    elif treeType == 'time':
+        branchUnit = 'absoluteTime'
+
+    for k in ll.Objects: ## iterate over all branches
+        curBranch = getattr(k, branchUnit) ## get parameter for this branch
+        parBranch = getattr(k.parent, branchUnit) ## get parameter for parental branch
+        k.length = curBranch - parBranch if curBranch and parBranch else 0.0 ## difference between current and parent is branch length (or, if parent unavailabel it's 0)
 
     logger.debug('Traversing and drawing tree')
 
     ll.traverse_tree()
-    ll.assign_tree_coordinates()
+    ll._assign_tree_coordinates()
+
     if stats:
         ll.treeStats() ## initial traversal, checks for stats
     if sort:
@@ -217,11 +233,11 @@ def load_JSON(jsonObject,
 
     cmap={}
     for colouring in json_meta['colorings']:
-        if colouring['type']=='categorical' and 'scale' in colouring:
-            cmap[colouring['key']]={}
+        if colouring['type'] == 'categorical' and 'scale' in colouring:
+            cmap[colouring['key']] = {}
             for entry in colouring['scale']:
-                key,value=entry
-                cmap[colouring['key']][key]=value
-    setattr(ll,'cmap',cmap)
+                key, value = entry
+                cmap[colouring['key']][key] = value
+    setattr(ll, 'cmap', cmap)
 
-    return ll,json_meta
+    return ll, json_meta

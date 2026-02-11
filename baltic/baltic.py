@@ -177,30 +177,31 @@ def make_tree(data, treeType, tre=None):
         if data[i] == ';': ## look for string end
             return tre
 
-def make_tree_JSON(jsonNode,jsonTranslationDict,treeType,tre=None,):
+def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
     else:
-        newNode=Leaf(name=jsonNode[jsonTranslationDict['name']])
+        newNode=Leaf(name = jsonNode[jsonTranslationDict['name']])
 
     if tre is None:
-        tre=Tree(treeType)
-        tre.root=newNode
+        tre = Tree(treeType)
+        tre.root = newNode
+    
     if 'attr' in jsonNode:
         attr = jsonNode.pop('attr')
         jsonNode.update(attr)
 
-    newNode.parent=tre.curNode ## set parent-child relationships
+    newNode.parent = tre.curNode ## set parent-child relationships
     tre.curNode.children.append(newNode)
-    newNode.index=jsonNode[jsonTranslationDict['name']] ## indexing is based on name
-    newNode.traits={n:jsonNode[n] for n in list(jsonNode.keys()) if n!='children'} ## set traits to non-children attributes
+    newNode.index = jsonNode[jsonTranslationDict['name']] ## indexing is based on name
+    newNode.traits = {n: jsonNode[n] for n in list(jsonNode.keys()) if n != 'children'} ## set traits to non-children attributes
     tre.Objects.append(newNode)
-    tre.curNode=newNode
+    tre.curNode = newNode
 
     if 'children' in jsonNode:
         for child in jsonNode['children']:
-            make_tree_JSON(child,jsonTranslationDict,tre)
-            tre.curNode=tre.curNode.parent
+            make_tree_JSON(jsonNode=child, jsonTranslationDict=jsonTranslationDict, treeType=treeType, tre=tre)
+            tre.curNode = tre.curNode.parent
     return tre
 
 if __name__ == '__main__':
