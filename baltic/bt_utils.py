@@ -578,13 +578,15 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         logger.warning('No burnin set, defaulting to 10M states.')
 
     if node: assert (node.is_leaflike() or node.is_node()), f"Provided node object is {type(node)}, not a baltic branchLike object."
-    handle = open(tmrcaFile,'r')
+    handle = open(tmrcaFile, 'r')
 
     for l in csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t'):
         state = int(l['state'])
         if state >= burnin:
+            assert tmrcaName in l, f"'{tmrcaName}' not found in log file provided. Log file header looks like this: {', '.join(list(l.keys()))}"
             tmrcaPosterior.append(float(l[tmrcaName])) ## grab column with tmrca stat
 
+    assert len(tmrcaPosterior) > 0, f"No TMRCA values loaded. Is burnin of {burnin} too high?"
     handle.close()
 
     if yCoord is None and node is None:
