@@ -1425,6 +1425,14 @@ class Tree: ## tree class
         )
         return externals
 
+    def get_leaf(self, tipName):
+        assert isinstance(tipName, str), f"tipName should be str, not {type(tipName)}"
+
+        matchingTip = [k for k in self.get_external() if k.name == tipName]
+        assert len(matchingTip) == 1, f"Found {len(matchingTip)} matches"
+
+        return matchingTip[0]
+
     def get_internal(self, filterFxn=None):
         internals = list(filter(filterFxn, filter(lambda k: k.is_node(), self.Objects)))
         return internals
