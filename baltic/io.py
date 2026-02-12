@@ -49,7 +49,7 @@ def load_newick(treePath,
             logger.debug('Identified tree string')
 
     assert ll, 'Regular expression failed to find tree string'
-    
+
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime:
@@ -104,7 +104,7 @@ def load_nexus(treePath,
             tip_flag = False
 
     assert ll,'Failed to find tree string using regular expression'
-    
+
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if len(tips) > 0:
@@ -118,6 +118,72 @@ def load_nexus(treePath,
 
     ll.traverse_tree() ## traverse tree
     return ll
+
+
+def load_posterior_nexus(treePath,
+                         treeType,
+                         burnin=0,
+                         tipRegex=r'\|([0-9\-]+)$',
+                dateFmt='%Y-%m-%d',
+                treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
+                variableDate=True,
+                absoluteTime=True,
+                sortBranches=True):
+    tip_flag = False
+    tips = {}
+    tip_num = 0
+    ll = None
+    tree_counter = 0
+
+    handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
+
+    for line in handle:
+        l = line.strip('\n')
+
+        match = re.search('Dimensions ntax=([0-9]+);',l)
+        if match:
+            tip_num = int(match.group(1))
+            logger.debug(f'File should contain {tip_num} taxa')
+
+        if l.startswith('tree STATE'):
+            tree_counter += 1
+            if tree_counter <= burnin:
+                logger.debug(f'Skipping tree {tree_counter} as part of burnin')
+                continue
+            match = re.search(treestringRegex,l)
+            if match:
+                treeString_start = l.index('(')
+                ll = make_tree(l[treeString_start:],treeType) ## send tree string to make_tree function
+                logger.debug('Identified tree string')
+
+            if tip_flag:
+                match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
+                if match:
+                    tips[match.group(1)] = match.group(2).strip('"').strip("'")
+                    logger.debug(f'Identified tip translation {match.group(1)}: {tips[match.group(1)]}')
+                elif ';' not in l:
+                    print('tip not captured by regex:', l.replace('\t',''))
+
+            if 'Translate' in l:
+                tip_flag = True
+            if ';' in l:
+                tip_flag = False
+
+            assert ll,'Failed to find tree string using regular expression'
+
+            if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
+
+            if len(tips) > 0:
+                ll.rename_tips(tips) ## renames tips from numbers to actual names
+                ll.tipMap = tips
+            if absoluteTime:
+                process_tip_dates(tree = ll, tipRegex = tipRegex, dateFmt = dateFmt, variableDate = variableDate)
+
+            ll.traverse_tree() ## traverse tree
+            yield ll
+
+    if isinstance(treePath,str):
+                handle.close()
 
 def load_JSON(jsonObject,
                 treeType,
