@@ -402,14 +402,6 @@ class Tree: ## tree class
             else:
                 raise ValueError("No dictionary provided for renaming tips.")
 
-    def rename_tips(self, tipNameMap=None):
-        if tipNameMap is None:
-            if self.tipMap is not None:
-                logger.debug("No tipNameMap given, using tree.tipMap.")
-                tipNameMap = self.tipMap
-            else:
-                raise ValueError("No dictionary provided for renaming tips.")
-
         for k in self.get_external():  ## iterate through leaf objects in tree
             k.name = tipNameMap[k.name]  ## change its name
 
@@ -1320,13 +1312,11 @@ class Tree: ## tree class
         if len(comment) > 0:
             logger.debug(f"adding comment to {curNode.index}")
             comment = ",".join(comment)
-            comment = "[&" + comment + "]"
-            stringFragment.append(f"{comment}")  ## end of node, add annotations
+            comment = f"[&{comment}]"
+            stringFragment.append(comment)  ## end of node, add annotations
 
         logger.debug(f"adding branch length to {curNode.index}")
-        stringFragment.append(
-            ":%8f" % (curNode.length)
-        )  ## end of node, add branch length
+        stringFragment.append(f":{curNode.length:.15f}")  ## end of node, add branch length
 
         if curNode == self.root:  # .children[-1]:
             stringFragment.append(";")
