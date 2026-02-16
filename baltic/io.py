@@ -28,7 +28,7 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
         else:
             logger.warning(f"Collection date of leaf {k.name} was not captured by regex {tipRegex}.")
 
-    assert len(tipDates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tip_names[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
+    assert len(tipDates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tipNames[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
     
     if setNodes:
         tree.set_absolute_time(max(tipDates), justLeaves=True if tree.treeType == 'divergence' else False)
@@ -139,11 +139,7 @@ def load_nexus(treePath,
     ll.traverse_tree() ## traverse tree
     return ll
 
-def load_JSON(jsonObject,
-                treeType,
-                jsonTranslation=None,
-                sort=True,
-                stats=True):
+def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True):
 
     assert treeType in ['divergence', 'time'], f"Unrecognised treeType {treeType}. Must be 'divergence' or 'time'."
 
@@ -156,9 +152,6 @@ def load_JSON(jsonObject,
         assert 'div' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'height' (default expectation: 'height': 'div')."
     elif treeType == 'time':
         assert 'num_date' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'absoluteTime' (default expectation: 'absoluteTime': 'num_date')."
-    
-    # lengthKeys = ['absoluteTime', 'height']
-    # assert any(key in jsonTranslation for key in lengthKeys), f"JSON translation dictionary missing entries: {', '.join([entry for entry in ['name']+lengthKeys if not entry in jsonTranslation])}"
     
     logger.debug('Reading JSON')
 
@@ -182,8 +175,6 @@ def load_JSON(jsonObject,
     json_tree = auspice_json['tree']
     ll = make_tree_JSON(json_tree, jsonTranslation, treeType=treeType)
 
-    # assert ('absoluteTime' in jsonTranslation and ('length' not in jsonTranslation or 'height' not in jsonTranslation)) or ('absoluteTime' not in jsonTranslation and ('length' in jsonTranslation or 'height' in jsonTranslation)),'Cannot use both absolute time and branch length, include only one in json_translation dictionary.'
-
     logger.debug('Setting baltic traits from JSON')
     for k in ll.Objects: ## make node attributes easier to access
         for key in k.traits['node_attrs']:
@@ -205,7 +196,8 @@ def load_JSON(jsonObject,
                 elif 'branch_attrs' in k.traits and jsonTranslation[attr] in k.traits['branch_attrs']:
                     setattr(k,attr, k.traits['branch_attrs'][jsonTranslation[attr]])
                 else:
-                    raise KeyError(f'String attribute {jsonTranslation[attr]} not found in JSON')
+                    pass
+                    # raise KeyError(f'String attribute {jsonTranslation[attr]} not found in JSON') ## since baltic objects are 'time' or 'divergence', baltic-exported JSONs will be missing one or the other and will raise an error here
             elif callable(jsonTranslation[attr]):
                 setattr(k, attr, jsonTranslation[attr](k)) ## set attribute value with a function for branch
             else:

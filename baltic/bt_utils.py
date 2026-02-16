@@ -413,6 +413,63 @@ def _process_trait_prob_set(node, traitName):
 
     return stateSetDict
 
+def branch_to_json(curNode, treeType, traits, mostRecentDate, treeDict=None):
+    """
+    Formats a baltic branchLike object into a dict that will be converted into auspice JSON
+    """
+
+    if treeDict is None:
+        treeDict = {}
+    
+    nodeDict = {}
+    nodeDict['node_attrs'] = {}
+
+    #####
+    if treeType == 'divergence':
+        nodeDict['node_attrs']['div'] = curNode.height
+    elif treeType == 'time':
+        nodeDict['node_attrs']['num_date'] = {'value': curNode.absoluteTime}
+
+    ##### rename nodes and leaves, recurse through children
+    if curNode.is_node():
+        if 'node_idx' in curNode.traits:
+            nodeDict['name'] = curNode.traits['node_idx']
+        else:
+            logger.warning(f"Node does not have a name derived from pre-order traversal (str expected under trait key 'node_idx'). Importing this JSON into auspice.us will be fine but re-importing in baltic will have issues.")
+
+        nodeDict['children'] = []
+
+        for childNode in curNode.children:
+            nodeDict['children'].append(branch_to_json(curNode=childNode, treeType=treeType, mostRecentDate=mostRecentDate, traits=traits, treeDict=treeDict))
+    
+    elif curNode.is_leaf():
+        nodeDict['name'] = curNode.name
+    
+    else:
+        logger.error(f"Attempted to convert baltic branchLike object of type {type(curNode)} which is not leaf or node which is currently not supported.")
+        raise TypeError()
+    #####
+    
+    for trait in traits: ## format traits
+        if trait in curNode.traits:
+            nodeDict['node_attrs'][trait] = {'value': curNode.traits[trait]}
+
+            ### assign uncertainties
+            if f"{trait}.set.prob" in curNode.traits: ## discrete traits
+                traitProbs = _process_trait_prob_set(curNode, trait)
+                nodeDict['node_attrs'][trait]['confidence'] = traitProbs
+            
+            elif f"{trait}_95%_HPD" in curNode.traits: ## continuous traits
+                nodeDict['node_attrs'][trait]['confidence'] = curNode.traits[f"{trait}_95%_HPD"]
+
+                if trait == 'height' and treeType == 'time' and mostRecentDate: ## special case - working with time tree
+                    nodeDict['node_attrs']['num_date']['confidence'] = [mostRecentDate - value for value in curNode.traits["height_95%_HPD"]]
+            
+            elif trait in curNode.traits:
+                nodeDict['node_attrs'][trait] = {'value': curNode.traits[trait]}
+    ########
+    return nodeDict
+
 def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 10, width = 0.2, otherThres = 0.0, connectNode = True, connectingCorner = 'lower middle', orientation = 'vertical', **kwargs):
     from matplotlib.patches import Rectangle
 

@@ -2605,3 +2605,64 @@ class Tree: ## tree class
 
         ax.autoscale()
         return ax
+
+    
+
+    def to_auspice_json(self, traits=None, mostRecentDate=None):
+        from baltic.bt_utils import branch_to_json
+
+        if traits is None:
+            traits = set([item for k in self.Objects for item in list(k.traits.keys())]) ## extract all traits dict keys across tree
+            logger.warning(f"Traits identified in baltic object that will be included in the auspice JSON: {', '.join(traits)}")
+        else:
+            logger.warning(f"User-provided trait list: {', '.join(traits)}\nNote that uncertainties (e.g. parameter ranges or state probabilities) might not be parsed if you don't include '_95%_HPD' and '.set.prob' traits too.")
+
+        if mostRecentDate is None and self.treeType == 'time':
+            mostRecentDate = self.mostRecent
+            assert mostRecentDate, f"mostRecentDate could not be recovered from time tree, provide it manually"
+
+        assert isinstance(mostRecentDate, float), f"mostRecentDate is of type {type(mostRecentDate)}, not a float"
+        if isinstance(mostRecentDate, float) and self.treeType == 'divergence':
+            logger.warning(f"mostRecentDate set to {mostRecentDate} but treeType is set to {treeType}")
+        
+        #####
+        auspiceJSON = {}
+        auspiceJSON['version'] = 'v2'
+        auspiceJSON['meta'] = {}
+        auspiceJSON['meta']['colorings'] = []
+        
+        #### process traits - create meta field for colouring, reduce trait set to those that can be extracted from the traits dict of branches
+        traitsMeta = {}
+        for trait in traits:
+            if trait.endswith('_95%_HPD'):
+                traitName = trait.split('_95%_HPD')[0]
+                traitsMeta[traitName] = {'key': traitName, 'title': traitName, 'type': 'continuous'}
+
+            elif trait.endswith('.set.prob'):
+                traitName = trait.split('.set.prob')[0]
+                traitsMeta[traitName] = {'key': traitName, 'title': traitName, 'type': 'categorical'}
+
+            elif trait.endswith('_median'):
+                traitsMeta[trait] = {'key': trait, 'title': trait, 'type': 'continuous'}
+
+            elif trait in ['posterior']:
+                traitsMeta[trait] = {'key': trait, 'title': trait, 'type': 'continuous'}
+
+        treeTraits = [traitsMeta[t]['key'] for t in traitsMeta if (traitsMeta[t]['key'].endswith('_95%_HPD') == False and traitsMeta[t]['key'].endswith('.set.prob') == False)]
+        
+        for trait in traitsMeta:
+            auspiceJSON['meta']['colorings'].append(traitsMeta[trait])
+        ####
+        from importlib.metadata import version
+        balticVersion = version('baltic')
+        auspiceJSON['meta']['data_provenance'] = [{'name': 'baltic', 'version': balticVersion, 'url': 'https://pypi.org/project/baltic/'}]
+        ########
+        nodeOrder = self.traverse_tree(includeCondition=lambda k: k.is_node())
+        for k in self.get_internal():
+            k.traits['node_idx'] = f"NODE_{nodeOrder.index(k) + 1:07d}"
+
+        jsonTree = branch_to_json(curNode=self.root, treeType=self.treeType, traits=treeTraits, mostRecentDate=mostRecentDate)
+        auspiceJSON['tree'] = jsonTree
+        
+        return auspiceJSON
+        
