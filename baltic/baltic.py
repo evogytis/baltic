@@ -175,6 +175,30 @@ def make_tree(data, treeType, tre=None):
             tre.curNode=tre.curNode.parent
 
         if data[i] == ';': ## look for string end
+            if sum(tre.get_parameter_list('length')) == 0.0:
+                logger.warning(f"All branch lengths 0.0, setting branch lengths to make tree ultrametric with a height of 1.0")
+
+                maxLvl = 0
+                for k in tre.get_external():
+                    k.height = 1.0
+
+                    pathLen = len(k.get_path_to_root()) - 1
+                    if pathLen > maxLvl:
+                        maxLvl = pathLen
+
+                heightless = tre.get_internal(lambda k: k.height is None)
+
+                while len(heightless) > 0:
+                    for node in heightless:
+                        if len(node.children) == len([ch for ch in node.children if ch.height is not None]):
+                            node.height = min((ch.height - (1.0 / maxLvl)) for ch in node.children)
+                    heightless = tre.get_internal(lambda k: k.height is None)
+
+                for k in tre.Objects:
+                    k.length = (k.height - k.parent.height) if k.parent else 0.0
+
+                tre.traverse_tree()
+
             return tre
 
 def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
