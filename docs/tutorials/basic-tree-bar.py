@@ -26,4 +26,4 @@ bt_utils.plot_node_bar(ax, node = ll.root, traitName = 'location.states', traitC
 
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree-bar.png', bbox_inches='tight')

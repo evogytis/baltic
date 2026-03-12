@@ -41,4 +41,4 @@ ll.plot_points(ax, targetFxn = target_function)
 
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree-text-2.png', bbox_inches='tight')

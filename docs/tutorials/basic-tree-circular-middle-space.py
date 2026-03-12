@@ -21,4 +21,4 @@ ll.plot_points(ax, inwardSpace = inwardSpace, treeType = 'circular')
 
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree-circular-middle-space.png', bbox_inches='tight')

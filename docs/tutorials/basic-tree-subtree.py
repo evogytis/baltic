@@ -45,4 +45,4 @@ bt_utils.plot_scale_bar(ax2, xy = (0.5, 0.1), tree = subtree_ll, style = 'fancy'
 bt_utils.clean_axes(ax)
 bt_utils.clean_axes(ax2)
 
-plt.show()
+plt.savefig('basic-tree-subtree.png', bbox_inches='tight')

@@ -21,4 +21,4 @@ ll.plot_points(ax)
 bt_utils.plot_scale_bar(ax, xy = (0.5, 0.1), tree = ll, style = 'fancy', textKwargs={'fontsize': 18})
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree.png', bbox_inches='tight')

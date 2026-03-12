@@ -20,4 +20,4 @@ ll.plot_points(ax, treeType = 'circular')
 
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree-circular.png', bbox_inches='tight')

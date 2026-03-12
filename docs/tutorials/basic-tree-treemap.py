@@ -25,4 +25,4 @@ bt_utils.plot_node_treemap(ax = ax, node = ll.root, traitName = 'location.states
 
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree-treemap.png', bbox_inches='tight')

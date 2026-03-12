@@ -22,4 +22,4 @@ ll.plot_aligned_tip_labels(ax, xSpace = 0.5, size = 30)
 bt_utils.plot_scale_bar(ax, xy = (0.5, 0.1), tree = ll, style = 'fancy', textKwargs={'fontsize': 18})
 bt_utils.clean_axes(ax)
 
-plt.show()
+plt.savefig('basic-tree-aligned-tips.png', bbox_inches='tight')

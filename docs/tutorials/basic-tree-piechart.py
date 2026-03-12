@@ -24,4 +24,4 @@ ll.plot_tree(ax)
 bt_utils.plot_node_piechart(ax = ax, node = ll.root, traitName = 'location.states', traitColourDict = state_colours, other_thres = 0.005)
 
 bt_utils.clean_axes(ax)
-plt.show()
+plt.savefig('basic-tree-piechart.png', bbox_inches='tight')
