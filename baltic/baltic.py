@@ -13,7 +13,7 @@ sys.setrecursionlimit(9001)
 def make_tree(data, treeType, tre=None):
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
-        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
+        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#,]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
     }
     if not isinstance(data,str): ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
