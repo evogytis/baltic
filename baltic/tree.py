@@ -467,6 +467,8 @@ class Tree: ## tree class
         if branch is None:  ## midpoint rooting
             self = self.midpoint_root(fixSingletons=fixSingletons)
 
+            return self
+
         ##############
         path = branch.get_path_to_root()  ## get path from new root to old root, ignore actual root node
         path = path[-2::-1]  ## invert
