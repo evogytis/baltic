@@ -1959,8 +1959,11 @@ class Tree: ## tree class
         outline_colours=[]
         outline_sizes=[]
 
-        if recomputeCoordinates:
-            self._assign_tree_coordinates(padNodes=padNodes) ## compute branch coordinates
+        if recomputeCoordinates:  ## compute branch coordinates
+            if treeType == 'unrooted':
+                self._assign_unrooted_tree_coordinates(circStart=circStart, padNodes=padNodes)
+            else:
+                self._assign_tree_coordinates(padNodes=padNodes)
         
         ########## warnings for parameters that were set that do not belong to chosen tree layout
         if treeType=='rectangular':
@@ -2003,8 +2006,6 @@ class Tree: ## tree class
                 ys.append(py)
             
             elif treeType=='unrooted':
-                if recomputeCoordinates:
-                    self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
                 xs.append(k.x) ## unrooted trees should already have x and y coordinates computed 
                 ys.append(k.y)
             colours.append(colourFxn(k))
