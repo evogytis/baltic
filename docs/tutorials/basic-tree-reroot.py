@@ -5,6 +5,8 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
+mpl.use("Agg")
+
 treestring = '((("A":1,"B":1):1,"C":1.5):1,"D":0.5);'
 ll = bt.make_tree(treestring, 'divergence')
 ll.treeStats()

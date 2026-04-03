@@ -5,6 +5,8 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
+mpl.use("Agg")
+
 fig = plt.figure(figsize=(5,5),facecolor='w')
 gs = GridSpec(1,1)
 
