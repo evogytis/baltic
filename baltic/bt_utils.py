@@ -1,38 +1,19 @@
-"""This module provides many of the helper functions that are commonly used both in ``baltic`` directly, as well as those used alongside baltic for the generation of figures.
-
-Notes
------
-This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
-
-
-Attributes
-----------
-logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
-"""
-import sys
 import re
 import copy
 import logging
 import datetime as dt
 import calendar
+import warnings
 import math
-import csv
-from itertools import permutations
 import numpy as np
+from itertools import permutations
+from scipy.stats import linregress
 import matplotlib as mpl
 from matplotlib.collections import LineCollection
-from scipy.stats import gaussian_kde, linregress
-from cmcrameri import cm
 
 logger = logging.getLogger("baltic.bt_utils")
 
-
-def calendar_to_decimal_date(
-        date,
-        fmt="%Y-%m-%d",
-        variable=False,
-    ):
+def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
     Convert a calendar date of a specified format into a decimal number.
 
@@ -60,6 +41,7 @@ def calendar_to_decimal_date(
     >>> calendar_to_decimal_date("1253-07-06")
     1253.509589041096
     """
+
     if not fmt:
         return date
 
@@ -140,135 +122,108 @@ def calendar_to_decimal_date(
     return dec, (dec, dec)
 
 
-def decimal_to_calendar_date(
-        date,
-        fmt='%Y-%m-%d',
-    ):
-    """
-    Convert a decimal date to a calendar date.
+# def calendar_to_decimal_date(date,fmt="%Y-%m-%d",variable=False):
+#     if not fmt:
+#         return date
+#     delimiter=re.search('[^0-9A-Za-z%]',fmt) ## search for non-alphanumeric symbols in fmt (should be field delimiter)
+#     delimit=None
+#     if delimiter is not None:
+#         delimit=delimiter.group()
 
-    Parameters
-    ----------
-    date : float
-        Decimal date to be converted.
+#     if variable: ## if date is variable - extract what is available
+#         if delimit is not None:
+#             dateL=len(date.split(delimit)) ## split date based on symbol
+#         else:
+#             dateL=1 ## no non-alphanumeric characters in date, assume dealing with an imprecise date (something like just year)
 
-    fmt : str, default="%Y-%m-%d"
-        String encoding the format of the desired output date. Must be parsable
-        by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
-        module.
+#         if dateL==2:
+#             fmt=delimit.join(fmt.split(delimit)[:-1]) ## reduce fmt down to what's available
+#         elif dateL==1:
+#             fmt=delimit.join(fmt.split(delimit)[:-2])
 
-    Returns
-    -------
-    str
+#     adatetime=dt.datetime.strptime(date,fmt) ## convert to datetime object
+#     year = adatetime.year ## get year
+#     boy = dt.datetime(year, 1, 1) ## get beginning of the year
+#     eoy = dt.datetime(year + 1, 1, 1) ## get beginning of next year
+#     return year + ((adatetime - boy).total_seconds() / ((eoy - boy).total_seconds())) ## return fractional year
 
-    Example
-    -------
-    >>> decimal_to_calendar_date(1918.1260273972603)
-    '1918-02-16'
-    """
-    year = int(date)
-    rem = date - year
+def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
+    year = int(timepoint)
+    rem = timepoint - year
 
     base = dt.datetime(year, 1, 1)
     result = base + dt.timedelta(seconds=(base.replace(year=base.year + 1) - base).total_seconds() * rem)
 
     return dt.datetime.strftime(result,fmt)
 
-
-def convert_date_format(
-        dateString,
-        startFormat,
-        endFormat,
-    ):
-    """Convert the format of a date string.
-
-    Parameters
-    ----------
-    dateString : str
-        The date that will be converted.
-
-    startFormat : str
-        String encoding the format of the input date. Must be
-        parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
-        module.
-
-    endFormat : str
-        String encoding the format of the desired output date. Must be
-        parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
-        module.
-
-    Returns
-    -------
-    str
-
-    Example
-    -------
-    >>> convert_date_format("1990-03-11", "%Y-%m-%d", "%d-%m-%Y")
-    '11-03-1990'
-    """
-
-    try:
-        return dt.datetime.strftime(dt.datetime.strptime(dateString,startFormat),endFormat)
+def convert_date_format(dateString,startFormat,endFormat):
+    return dt.datetime.strftime(dt.datetime.strptime(dateString,startFormat),endFormat)
+    try: #TODO deal with stuff that comes after the return statement
+        date_obj = dt.datetime.strptime(dateString, startFormat)
+        return dt.datetime.strftime(date_obj, endFormat)
     except ValueError as e:
-        logger.error(f'Error converting date "{dateString}" from format "{startFormat}" to "{endFormat}": "{e}"')
+        raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
-
-def generate_calendar_timeline(
-        startDate,
-        endDate,
-        spacing='monthly',
-        dateFmt='%Y-%m-%d',
-        roundDates=True,
-    ):
+def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False):
     """
-    Create a list of spaced dates (by default the first of each month)
-    the half-open interval ``(startDate,endDate]``.
-
-    Parameters
-    ----------
-    startDate : str
-        The starting date (not included in final output).
-
-    endDate : str
-        The ending date (included in final output).
-
-    spacing : {"monthly", "weeky", "yearly", int}
-        The interval between output dates. If an ``int`` is given,
-        encodes a spacing of days.
-
-    dateFmt : str, default="%Y-%m-%d"
-        String encoding the format of the dates (both input and output). Must be
-        parsable by Python's `datetime <https://docs.python.org/3/library/datetime.html#>`__
-        module.
-
-    roundDates : bool, default=True
-        Generate additional breaks in the timeline to correspond with
-        beginnings of months or years.
-
-    Returns
-    -------
-    list[str]
-
-    Examples
-    --------
-    >>> generate_calendar_timeline("2016-10-01", "2017-10-01")
-    ['2016-11-01', '2016-12-01', '2017-01-01', '2017-02-01', '2017-03-01', '2017-04-01', '2017-05-01', '2017-06-01', '2017-07-01', '2017-08-01', '2017-09-01', '2017-10-01']
-
-    >>> generate_calendar_timeline("2016-10-01", "2016-10-31", 6)
-    ['2016-10-03', '2016-10-09', '2016-10-15', '2016-10-21', '2016-10-27', '2016-11-02']
+    Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
+    Also known by the name of Phylotype maps/trees.
     """
+    import copy
+
+    localTree = copy.deepcopy(tree)
+
+    localTree._partition_tree(partitionFxn = switchFxn) ## run tree labelling
+
+    labels = set(localTree.get_parameter_list('partition', useTraitsDict=True)) ## get all unique labels in tree
+    sortingFxn = lambda k: k.absoluteTime if localTree.treeType == 'time' else k.height ## determine whether to sort by height or absoluteTime
+
+    labelToBranches = {label: [k for k in localTree.get_external() if k.traits['partition'] == label] for label in labels} ## map each unique label to the furthest tip with that label
+    labelCounts = {label: len(labelToBranches[label]) for label in labels}
+
+    labelToLastBranch = {label: sorted(labelToBranches[label], key=sortingFxn)[-1] for label in labels if labelCounts[label] > 0}
+
+    if keepLast: ## keeping last tip
+        localTree = localTree.reduce_tree(labelToLastBranch.values()) ## keep a single last tip for each unique label
+        if keepLast and adjustEarlyHeights:
+            logger.warning(f"Keeping last descendant of partition, adjustEarlyHeights parameter will be ignored, it is only used when keepLast == False.")
+    else: ## keeping earliest tip
+        labelToFirstBranch = {label: sorted(labelToBranches[label], key=sortingFxn)[0] for label in labels if labelCounts[label] > 0} ## get earliest branch
+
+        localTree = localTree.reduce_tree(labelToFirstBranch.values()) ## keep a single earliest tip for each unique label
+
+    
+    for k in localTree.get_external(): ## iterate over remaining tips
+        partition = k.traits['partition'] ## get partition label
+
+        if keepLast == False and adjustEarlyHeights: ## kept earliest branch but want it adjusted
+            lastBranch = labelToLastBranch[partition]
+
+            k.length = lastBranch.height - k.parent.height ## new branch length is last height - current tip's parent height
+
+            if localTree.treeType == 'time' and k.absoluteTime: ## absoluteTime set already, adjust too
+                k.absoluteTime += lastBranch.absoluteTime - k.absoluteTime
+
+        k.traits['size'] = labelCounts[partition] ## assign tip counts of this label to representative branch
+        k.traits['members'] = labelToBranches[partition] ## remember descendants with label that may no longer be present
+
+    localTree.traverse_tree()
+
+    return localTree
+
+def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
     assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
 
     timeline = []
-    startTime = dt.datetime.strptime(startDate, dateFmt)
-    endTime = dt.datetime.strptime(endDate, dateFmt)
+    startTime = dt.datetime.strptime(startDateStr, dateFmt)
+    endTime = dt.datetime.strptime(endDateStr, dateFmt)
 
     if roundDates: ## rounding dates - additional breaks will be generated in the timeline to correspond with beginnings of months or years
         currentTime = dt.datetime(startTime.year, 1, 1) ## start from beginning of the year
         if spacing == 'yearly':
             timeline.append(dt.datetime.strftime(currentTime, dateFmt))
         elif isinstance(spacing,int):
-            logger.warning(f"Calendar timeline spacing defined as int (set to {spacing}) so roundDates (True by default) parameter ignored.")
+            warnings.warn(f"Calendar timeline spacing defined as int (set to {spacing}) so roundDates (True by default) parameter ignored.")
     else: ## no rounding - timeline starts at the specified start date and is incremented at specified intervals
         currentTime = startTime
         dateStr = dt.datetime.strftime(currentTime, dateFmt)
@@ -278,22 +233,26 @@ def generate_calendar_timeline(
 
         if startTime <= currentTime:
             dateStr = dt.datetime.strftime(currentTime, dateFmt)
-            timeline.append(dateStr)
+            if dateStr not in timeline:
+                timeline.append(dateStr)
 
         if isinstance(spacing,int):
             skip = dt.timedelta(days = spacing)
+
         elif spacing == 'weekly':
             skip = dt.timedelta(days = 7)
             if currentTime.month != (currentTime + skip).month: ## next month starts in a week
                 daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
                 lastDateOfMonth = dt.datetime(currentTime.year, currentTime.month, daysInMonth)
                 dateStr = dt.datetime.strftime(lastDateOfMonth,dateFmt)
-                if startTime < currentTime and currentTime != lastDateOfMonth and roundDates:
+                if startTime < currentTime and currentTime != lastDateOfMonth and roundDates == True:
                     timeline.append(dateStr)
-        elif spacing == 'monthly':
+
+        if spacing == 'monthly':
             daysInMonth = calendar.monthrange(currentTime.year, currentTime.month)[-1]
             skip = dt.timedelta(days = daysInMonth)
-        else:  # spacing == 'yearly'
+
+        if spacing == 'yearly':
             skip = dt.timedelta(365 + calendar.isleap(currentTime.year))
 
         currentTime += skip
@@ -304,225 +263,10 @@ def generate_calendar_timeline(
     return timeline
 
 
-def initialize_plot(
-        width=6,
-        height=8,
-    ):
-    """
-    Initialize a matplotlib figure and axes for plotting.
-
-    Parameters
-    ----------
-    width : float, optional
-        The width of the figure in inches. Defaults to 6.
-
-    height : float, optional
-        The height of the figure in inches. Defaults to 8.
-
-    Returns
-    -------
-    tuple
-        A tuple containing:
-        - `fig` (:obj:`matplotlib.figure.Figure`): The created matplotlib figure.
-        - `ax` (:obj:`matplotlib.axes.Axes`): The created matplotlib axes.
-
-    Notes
-    -----
-    - This function imports the required plotting libraries, including
-      `matplotlib <matplotlib.org>`__, `seaborn <https://seaborn.pydata.org/>`__,
-      and `numpy <https://numpy.org/>`__.
-    - If there are any import errors, ensure that all dependencies for `baltic` are installed correctly.
-    - The default figure size is set to 6x8 inches, but it can be customized using the `width` and `height` parameters.
-    """
-    logger.info("Importing the following modules: maplotlib, matplotlib.pyplot, seaborn, numpy, cmcrameri.cm")
-    logger.info("If import errors arise, ensure that baltic has been fully installed correctly along with all requirements.")
-    global mpl
-    import matplotlib as mpl
-    logger.info("import matplotlib as mpl")
-    global plt
-    import matplotlib.pyplot as plt
-    logger.info("import matplotlib.pyplot as plt")
-    global sns
-    import seaborn as sns
-    logger.info("import seaborn as sns")
-    global np
-    import numpy as np
-    logger.info("import numpy as np")
-    global cm
-    from cmcrameri import cm
-    logger.info("from cmcrameri import cm")
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(width,height))
-    return fig, ax
-    # TODO: keep this up: options to run
 
 
-def plot_tangled_chain(
-        ax,
-        treeList,
-        colourMap=None,
-        padding=None,
-        treeSpaceFxn=None,
-        treeSpace=None,
-        treeKwargs={},
-        pointKwargs={},
-        **kwargs,
-    ):
-    """
-    Plot a tanglegram visualization of multiple trees, connecting corresponding
-    tips across trees.
-
-    Parameters
-    ----------
-    ax : :obj:`matplotlib.axes.Axes`
-        Axes on which the tangled chain will be plotted.
-
-    treeList : list[:class:`.Tree`]
-        A list of ``baltic`` tree objects to be plotted in sequence.
-
-    colourMap : dict, optional
-        A dictionary mapping tip names to colors. If not provided, a default colormap will be used.
-
-    padding : float, optional
-        Proportion of the space between consecutive trees used for padding. Must be between ``0`` and ``0.5``.
-        Defaults to ``0.1``.
-
-    treeSpaceFxn : function, optional
-        A function that determines the horizontal spacing between consecutive trees. If not provided,
-        the spacing is set to 20% of the height of the first tree.
-
-    treeSpace : float, optional
-        Fixed horizontal spacing between consecutive trees. If provided, it overrides *treeSpaceFxn*.
-
-    treeKwargs : dict, optional
-        Additional keyword arguments passed to the :meth:`.plot_tree` method for each tree.
-
-    pointKwargs : dict, optional
-        Additional keyword arguments passed to the :meth:`.plot_points` method for each tree.
-
-    Returns
-    -------
-    :obj:`matplotlib.axes.Axes`
-        The modified matplotlib Axes object.
-
-    Notes
-    -----
-    - This method connects corresponding tips across consecutive trees using lines, creating a tangled chain visualization.
-    - If both *treeSpace* and *treeSpaceFxn* are provided, *treeSpace* takes precedence.
-    - If *colourMap* is not provided, a default colormap will be generated based on the tips of the first tree.
-    - The *padding* parameter controls how far the connecting lines extend into the space between trees.
-
-    Raises
-    ------
-    ValueError
-        If both *treeSpace* and *treeSpaceFxn* are provided.
-
-    Examples
-    --------
-    >>> fig, ax = plt.subplots(figsize=(10, 6))
-    >>> tree1 = Tree(treeType="divergence")
-    >>> tree2 = Tree(treeType="divergence")
-    >>> treeList = [tree1, tree2]
-    >>> plot_tangled_chain(ax, treeList, padding=0.2)
-    >>> plt.show()
-    """
-    localKwargs = dict(kwargs)
-    localTreeKwargs = dict(treeKwargs)
-    localPointKwargs = dict(pointKwargs)
-
-    if treeSpace is not None and treeSpaceFxn is not None: ## treeSpace is how much space is left between consecutive trees, takes current tree if specified as a function
-        logger.error(
-            "Cannot specify both treeSpace and treeSpaceFxn. Please use only one."
-        ) ## should be a warning, since this eventuality is handled in the next line
-    if treeSpaceFxn is None:
-        if treeSpace is None:
-            treeSpaceFxn = lambda k: treeList[0].treeHeight * 0.20 ## 20% of first tree height is space between all trees
-        treeSpaceFxn = lambda k: treeSpace
-
-    if padding is None: ## padding is proportion of treeSpace protrudes beyond previous tree and before next tree (0 == line finishes at last tip of current tree and goes to root of next, 0.5 == line goes to middle between consecutive trees and switches abruptly)
-        padding = 0.1
-    else:
-        assert 0.0 <= padding <= 0.5, f"Padding (given as {padding}) should be a float between 0 and 0.5."
-
-    if colourMap is None: ## colourMap is dict that assigns colours to tips according to their y-axis order in first tree
-        colourMap = {}
-
-        cmap = cm.Bukavu
-        firstTreeTips = treeList[0].get_external()
-
-        for i,k in enumerate(sorted(firstTreeTips, key = lambda q: q.y)):
-            colourMap[k.name] = cmap(i/(len(firstTreeTips)-1))
-
-    cumulativeX = 0 ## tracks x coordinate as we plot consecutive trees
-    if 'coordinateFxn' in localTreeKwargs:
-        logger.warning("Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
-    if 'xCoordinateFxn' not in localTreeKwargs:
-        localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
-
-    if len(localPointKwargs)>0: ## tip points are required - override xCoordinateFxn, assign default colours if nothing specified
-        if 'xCoordinateFxn' in localPointKwargs:
-            logger.warning("Custom x coordinate function for points was specified but will be overriden for tangled chain visualisation.")
-        localPointKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
-        if 'colour' not in localPointKwargs and 'colourFxn' not in localPointKwargs:
-            logger.warning("Point colours were not specified, defaulting to tangled chain colour defaults. This may cause issues if targetFxn is not set to identify tips.")
-            localPointKwargs['colourFxn'] = lambda k: colourMap[k.name]
-
-    connectionCoordinates = []
-    connectionColours = []
-
-    for curTree, nexTree in zip(treeList,treeList[1:]): ## iterate over pairs of consecutive trees
-        curTree.plot_tree(ax,**localTreeKwargs) ## plot current tree
-        if len(localPointKwargs)>0:
-            curTree.plot_points(ax,**localPointKwargs) ## add points if specified
-
-        spaceUnit = treeSpaceFxn(curTree)
-
-        for curTip in curTree.get_external(): ## iterate over tips in current tree
-            c = colourMap[curTip.name] if curTip.name in colourMap else 'lightgray'
-
-            nexTip = nexTree.get_external(filterFxn = lambda k: k.name == curTip.name) ## identify matching tip
-            if len(nexTip)>0:
-                nexTip = nexTip[0]
-                curX = localTreeKwargs['xCoordinateFxn'](curTip)
-                curY = curTip.y
-
-                lineAfterX = cumulativeX + curTree.treeHeight + spaceUnit*padding
-                lineBeforeX = cumulativeX + curTree.treeHeight + spaceUnit*(1-padding)
-
-                nexX = localTreeKwargs['xCoordinateFxn'](nexTip) + curTree.treeHeight + spaceUnit
-                nexY = nexTip.y
-
-                connectionCoordinates.append([(curX, curY),
-                                              (lineAfterX, curY),
-                                              (lineBeforeX, nexY),
-                                              (nexX, nexY)]) ## coordinates of tangled line
-                connectionColours.append(c) ## colour of tangled line
-
-        cumulativeX += curTree.treeHeight + spaceUnit ## increment x-axis
-
-    nexTree.plot_tree(ax,**localTreeKwargs) ## plot last tree
-    if len(localPointKwargs)>0:
-        nexTree.plot_points(ax,**localPointKwargs) ## plot its points
-
-    if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
-    ax.add_collection(LineCollection(connectionCoordinates,color=connectionColours,**localKwargs)) ## add tangled lines
-
-    return ax
-
-
-def plot_scale_bar(
-        ax,
-        xy,
-        L=None,
-        tree=None,
-        alnL=None,
-        textXY=None,
-        unitText=None,
-        style='simple',
-        orientation='horizontal',
-        ySpan=None,
-        lineKwargs=None,
-        textKwargs=None,
-    ):
+def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, unitText = None,
+    style = 'simple', orientation = 'horizontal', ySpan = None, fancyWidth = 0.1, lineKwargs = None, textKwargs = None):
     """
     Plot a scale bar on the given axes.
 
@@ -588,6 +332,7 @@ def plot_scale_bar(
     - If neither *L* nor *tree* is provided, the scale bar defaults to a length of ``0.001`` with units of "subs/site".
     - If both *tree* and *ySpan* are provided, *ySpan* will be ignored in favor of the tree's *ySpan*.
     """
+
     assert style in ['simple', 'fancy'], f"Scale bar style {style} not recognised. Must be 'simple' or 'fancy'."
     assert orientation in ['horizontal', 'vertical'], f"Scale bar orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'."
 
@@ -595,7 +340,7 @@ def plot_scale_bar(
         ySpan = 2e2
     elif tree is not None:
         if ySpan is not None:
-            logger.warning("Both tree and ySpan provided; using tree.ySpan.")
+            warnings.warn("Both tree and ySpan provided; using tree.ySpan.")
         ySpan = tree.ySpan
 
     localLineKwargs = dict(lineKwargs) if lineKwargs else {}
@@ -659,24 +404,24 @@ def plot_scale_bar(
                     "Neither scale bar length nor tree provided, "
                     "impossible to rescale scale bar to alignment length."
                 )
-            logger.warning("Neither L nor tree provided; defaulting to 0.001 (subs/site).")
+            warnings.warn("Neither L nor tree provided; defaulting to 0.001 (subs/site).")
             L = 0.001
 
     else:
         # L was explicitly given
         if tree is not None:
-            logger.warning("Both L and tree provided; L takes precedence.")
+            warnings.warn("Both L and tree provided; L takes precedence.")
         if alnL is not None and tree is not None and tree.treeType == "divergence":
             # Just record equivalent mutation count for labeling
             n_mutations = L * alnL
 
     if tree is not None and tree.treeType == 'time' and alnL is not None:
-        logger.warning("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
+        warnings.warn("The tree provided has branch length units of time, the scale bar rescaling parameter alnL cannot be used and will be ignored.")
 
     if unitText is None:
         if tree is None:
             if alnL is None:
-                logger.warning("No units provided; assuming substitutions per site.")
+                warnings.warn("No units provided; assuming substitutions per site.")
                 unitText = "subs/site"
             else:
                 # No tree, alnL given: interpret L as subs/site and show mutations
@@ -691,7 +436,7 @@ def plot_scale_bar(
                 else:
                     unitText = "subs/site"
             else:
-                logger.warning("No units provided; assuming branch lengths are years.")
+                warnings.warn("No units provided; assuming branch lengths are years.")
                 unitText = "years"
 
     x, y = xy
@@ -700,29 +445,29 @@ def plot_scale_bar(
     ys = [y, y]
 
     if orientation == 'vertical':
-        xs, ys = ys, xs
+        xs = [x, x]
+        ys = [y, y + L]
 
     ax.plot(xs, ys, **localLineKwargs)
 
     if style == 'fancy':
-        width = 0.005 * ySpan
+        width = L * fancyWidth ## fancyWidth is a scalar of scale bar length
         left_xs, left_ys = [x, x], [y - width, y + width]
         right_xs, right_ys = [x + L, x + L], [y - width, y + width]
 
         if orientation == 'vertical':
-            left_xs, left_ys = left_ys, left_xs
-            right_xs, right_ys = right_ys, right_xs
+            left_xs, left_ys = [x - width, x + width], [y, y]
+            right_xs, right_ys = [x - width, x + width], [y + L, y + L]
 
         ax.plot(left_xs, left_ys, **localLineKwargs)
         ax.plot(right_xs, right_ys, **localLineKwargs)
 
     if textXY is None: ## set text position defaults / might be worth turning these coordinates as fractions in relation to the bar itself
         textX, textY = (x + L/2, y - ySpan * 0.02)
+        if orientation == 'vertical':
+            textX, textY = (x + ySpan * 0.002, y + L/2)
     else:
         textX, textY = textXY
-
-    if orientation == 'vertical':
-        textX, textY = textY, textX
 
     if alnL is not None and tree is not None and tree.treeType == "divergence":
         # Label in mutations if we know alnL
@@ -742,127 +487,226 @@ def plot_scale_bar(
 
     return ax
 
+def _process_trait_prob_set(node, traitName):
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
 
-def plot_tmrca_posterior(
-        ax,
-        tmrcaFile,
-        tmrcaName = 'age(root)',
-        burnin = None,
-        yCoord = None,
-        fullViolin = True,
-        hpdLvl = 0.95,
-        precision = 100,
-        kdeWidth = 3,
-        orientation = 'horizontal',
-        connectNode = False,
-        node = None,
-        violinKwargs = {},
-        outlineKwargs = {},
-    ):
+    stateSet = node.traits[f"{traitName}.set"]
+    stateProbs = node.traits[f"{traitName}.set.prob"]
+
+    stateSetDict = {key: value for key, value in zip(stateSet, stateProbs)}
+
+    return stateSetDict
+
+def branch_to_json(curNode, treeType, traits, mostRecentDate, treeDict=None):
     """
-    Plot the posterior distribution of the time to the most recent common
-    ancestor (TMRCA).
-
-    Produces a violin plot of the TMRCA posterior distribution estimated
-    using a kernel density estimate (KDE), the violin plot can either be
-    full or half (upper) only. The highest posterior density (HPD) interval
-    is calculated and displayed on the plot. Optionally, the mean of the
-    posterior distribution can be connected to a specified node with a dotted
-    line or placed directly.
-
-    Parameters
-    ----------
-    ax : :obj:`matplotlib.axes.Axes`
-        Axes on which the posterior distribution will be plotted.
-
-    tmrcaFile : str
-        Path to the file containing the posterior samples of TMRCA.
-
-    tmrcaName : str, optional
-        The name of the column in the file containing the TMRCA values.
-        Defaults to ``'age(root)'``.
-
-    burnin : int, optional
-        The number of initial states to discard as burn-in. Defaults to
-        ``10,000,000`` if not specified.
-
-    yCoord : float, optional
-        The y-coordinate at which the posterior distribution will be
-        plotted. If not provided, defaults to ``0.0`` or the y-coordinate
-        of the specified node.
-
-    fullViolin : bool, optional
-        If ``True``, plot a full violin plot of the posterior distribution.
-        If ``False``, plot only the upper half. Defaults to ``True``.
-
-    hpdLvl : float, optional
-        The highest posterior density (HPD) level to calculate. Defaults
-        to ``0.95`` (95% HPD interval).
-
-    precision : int, optional
-        The number of points used to calculate the kernel density estimate
-        (KDE). Defaults to ``100``.
-
-    kdeWidth : float, optional
-        The width of the KDE plot. Defaults to ``3``.
-
-    orientation : {'horizontal', 'vertical'}, optional
-        The orientation of the plot. Defaults to ``'horizontal'``.
-
-    connectNode : bool, optional
-        If ``True``, connect the mean of the posterior distribution to the
-        specified node with a dotted line.
-        Defaults to ``False``.
-
-    node : :class:`.Node`, optional
-        The node to which the mean of the posterior distribution will be
-        connected. Required if ``connectNode`` is ``True``.
-
-    violinKwargs : dict, optional
-        Additional keyword arguments passed to the *fill_between* or
-        *fill_betweenx* function for the violin plot.
-
-    outlineKwargs : dict, optional
-        Additional keyword arguments passed to the *plot* function for
-        the outline of the violin plot.
-
-    Returns
-    -------
-    :obj:`matplotlib.axes.Axes`
-        The modified matplotlib Axes object.
-
-    Notes
-    -----
-    - The TMRCA posterior distribution is estimated using a kernel density estimate (KDE).
-    - The HPD interval is calculated and displayed in the plot.
-    - If *connectNode* is ``True``, the mean of the posterior distribution
-      is connected to the specified node with a dotted line.
-    - If both *yCoord* and *node* are provided, *yCoord* takes precedence
-      for positioning the plot.
-
-    Raises
-    ------
-    ValueError
-        If *connectNode* is ``True`` but *node* is not specified.
-
-    Warnings
-    --------
-    - If *burnin* is not specified, a default value of ``10,000,000`` states is used.
-    - If both *yCoord* and *node* are provided, a warning is issued, and *yCoord* is used.
-
-    Examples
-    --------
-    >>> fig, ax = plt.subplots(figsize=(8, 6))
-    >>> plot_tmrca_posterior(ax, "tmrca_posterior.txt", tmrcaName="age(root)", burnin=1000000)
-    >>> plt.show()
+    Formats a baltic branchLike object into a dict that will be converted into auspice JSON
     """
+
+    if treeDict is None:
+        treeDict = {}
+    
+    nodeDict = {}
+    nodeDict['node_attrs'] = {}
+
+    #####
+    if treeType == 'divergence':
+        nodeDict['node_attrs']['div'] = curNode.height
+    elif treeType == 'time':
+        nodeDict['node_attrs']['num_date'] = {'value': curNode.absoluteTime}
+
+    ##### rename nodes and leaves, recurse through children
+    if curNode.is_node():
+        if 'node_idx' in curNode.traits:
+            nodeDict['name'] = curNode.traits['node_idx']
+        else:
+            logger.warning(f"Node does not have a name derived from pre-order traversal (str expected under trait key 'node_idx'). Importing this JSON into auspice.us will be fine but re-importing in baltic will have issues.")
+
+        nodeDict['children'] = []
+
+        for childNode in curNode.children:
+            nodeDict['children'].append(branch_to_json(curNode=childNode, treeType=treeType, mostRecentDate=mostRecentDate, traits=traits, treeDict=treeDict))
+    
+    elif curNode.is_leaf():
+        nodeDict['name'] = curNode.name
+    
+    else:
+        logger.error(f"Attempted to convert baltic branchLike object of type {type(curNode)} which is not leaf or node which is currently not supported.")
+        raise TypeError()
+    #####
+    
+    for trait in traits: ## format traits
+        if trait in curNode.traits:
+            nodeDict['node_attrs'][trait] = {'value': curNode.traits[trait]}
+
+            ### assign uncertainties
+            if f"{trait}.set.prob" in curNode.traits: ## discrete traits
+                traitProbs = _process_trait_prob_set(curNode, trait)
+                nodeDict['node_attrs'][trait]['confidence'] = traitProbs
+            
+            elif f"{trait}_95%_HPD" in curNode.traits: ## continuous traits
+                nodeDict['node_attrs'][trait]['confidence'] = curNode.traits[f"{trait}_95%_HPD"]
+
+                if trait == 'height' and treeType == 'time' and mostRecentDate: ## special case - working with time tree
+                    nodeDict['node_attrs']['num_date']['confidence'] = [mostRecentDate - value for value in curNode.traits["height_95%_HPD"]]
+            
+            elif trait in curNode.traits:
+                nodeDict['node_attrs'][trait] = {'value': curNode.traits[trait]}
+    ########
+    return nodeDict
+
+def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 10, width = 0.2, otherThres = 0.0, connectNode = True, connectingCorner = 'lower middle', orientation = 'vertical', **kwargs):
+    from matplotlib.patches import Rectangle
+
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+    assert otherThres < 1.0, f"Threshold for assigning state to 'other' category ({otherThres}) should be <1.0."
+
+    if xyFxn is None: xyFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= otherThres]
+
+    localKwargs = dict(kwargs)
+
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+
+    if 'other' not in traitColourDict: traitColourDict['other'] = '#f5f5f5'
+
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    for i, (state, prob) in enumerate(zip(stateOrder, probs)):
+        x, y = xyFxn(node)
+
+        cumulativeProb = sum(probs[:i])
+        rectHeight = height * prob
+
+        if 'zorder' not in localKwargs: localKwargs['zorder'] = 1
+
+        if orientation == 'horizontal':
+            rectBottom = x + height * cumulativeProb
+            rect = Rectangle((rectBottom, y), width = rectHeight, height = width, fc = traitColourDict[state], **localKwargs)
+
+        elif orientation == 'vertical':
+            rectBottom = y + height * cumulativeProb
+            rect = Rectangle((x, rectBottom), width = width, height = rectHeight, fc = traitColourDict[state], **localKwargs)
+
+        ax.add_patch(rect)
+
+    if connectNode:
+        vaCorner, haCorner = connectingCorner.split(' ')
+        assert vaCorner in ['upper', 'lower'], f"Vertical corner connection parameter {vaCorner} not recognised. Must be 'lower' or 'upper'"
+        assert haCorner in ['left', 'middle', 'right'], f"Horizontal corner connection parameter {haCorner} not recognised. Must be 'left', 'middle' or 'right'"
+
+        x, y = xyFxn(node)
+
+        if vaCorner == 'upper':
+            y += height if orientation == 'vertical' else width
+
+        if haCorner == 'right':
+            x += width if orientation == 'vertical' else height
+        elif haCorner == 'middle':
+            x += width/2 if orientation == 'vertical' else height/2
+
+        xs, ys = zip(*[(x, y), (x, node.y), (node.x, node.y)])
+
+        ax.plot(xs, ys, ls = '--', color = 'dimgray', zorder = 0)
+
+
+def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, centerFxn = None, area = 1.0, other_thres = 0.0, **kwargs):
+
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    import squarify
+    from matplotlib.patches import Rectangle
+
+    if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+
+    if 'other' not in traitColourDict: traitColourDict['other'] = '#f5f5f5'
+
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    x, y = centerFxn(node)
+
+    x -= width/2
+    y -= height/2
+
+    values = squarify.normalize_sizes(probs, width, height)
+    rects = squarify.squarify(values, x, y, width, height)
+
+    for i,rect in enumerate(rects):
+        rectPatch = Rectangle((rect['x'], rect['y']), rect['dx'], rect['dy'], fc = cs[i], **kwargs)
+        ax.add_patch(rectPatch)
+
+    ax.autoscale()
+    return ax
+
+def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, radius = 0.5, other_thres = 0.0, **kwargs):
+    assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
+    assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
+
+    if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
+
+    stateSetDict = _process_trait_prob_set(node, traitName)
+
+    stateOrder = sorted(stateSetDict.keys(), key = lambda state: -stateSetDict[state])
+
+    otherCategory = [state for state in stateOrder if stateSetDict[state] <= other_thres]
+
+    if len(otherCategory) > 0:
+        stateSetDict['other'] = sum([stateSetDict[state] for state in otherCategory])
+        for state in otherCategory:
+            stateSetDict.pop(state)
+            stateOrder.remove(state)
+        stateOrder.append('other')
+    
+    if 'other' not in traitColourDict: traitColourDict['other'] = '#f5f5f5'
+
+    probs = [stateSetDict[state] for state in stateOrder]
+    cs = [traitColourDict[state] for state in stateOrder]
+
+    ax.pie(x = probs, colors = cs, radius = radius, center = centerFxn(node), **kwargs)
+
+    ax.autoscale()
+    return ax
+
+def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, yCoord = None, fullViolin = True,
+                         hpdLvl = 0.95, precision = 100, kdeWidth = 3, normalise=True, orientation = 'horizontal', connectNode = False, node = None, violinKwargs = {}, outlineKwargs = {}, connectionLineKwargs = {}):
+
     ### certain tree orientations will require xCoord too
     ### connect mean of HPD to node with dotted line (accommodate elbow in case KDE is on the x-axis)
-    func_logger = logging.getLogger("baltic.tree.plot_tmrca_posterior")
+    import csv
+    from scipy.stats import gaussian_kde
+    # from baltic.bt_utils import hpd, decimal_to_calendar_date
+
+
+    func_logger = logging.getLogger("baltic.bt_utils.plot_tmrca_posterior")
     func_logger.setLevel(logging.INFO)
     func_logger.propagate = False
 
     if not func_logger.handlers:
+        import sys
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter("[plot_tmrca_posterior] %(message)s"))
         handler.setLevel(logging.INFO)
@@ -872,15 +716,18 @@ def plot_tmrca_posterior(
 
     if burnin == None:
         burnin = 10e6
-        func_logger.warning('No burnin set, defaulting to 10M states.')
+        logger.warning('No burnin set, defaulting to 10M states.')
 
-    handle = open(tmrcaFile,'r')
+    if node: assert (node.is_leaflike() or node.is_node()), f"Provided node object is {type(node)}, not a baltic branchLike object."
+    handle = open(tmrcaFile, 'r')
 
     for l in csv.DictReader((line for line in handle if line.startswith('#') == False), delimiter = '\t'):
         state = int(l['state'])
         if state >= burnin:
+            assert tmrcaName in l, f"'{tmrcaName}' not found in log file provided. Log file header looks like this: {', '.join(list(l.keys()))}"
             tmrcaPosterior.append(float(l[tmrcaName])) ## grab column with tmrca stat
 
+    assert len(tmrcaPosterior) > 0, f"No TMRCA values loaded. Is burnin of {burnin} too high?"
     handle.close()
 
     if yCoord is None and node is None:
@@ -904,8 +751,14 @@ def plot_tmrca_posterior(
 
     localOutlineKwargs = dict(outlineKwargs)
     if 'color' not in localOutlineKwargs: localOutlineKwargs['color'] = 'gray'
-    if 'linewidth' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
+    if 'linewidth' not in localOutlineKwargs and 'lw' not in localOutlineKwargs: localOutlineKwargs['linewidth'] = 2
     if 'zorder' not in localOutlineKwargs: localOutlineKwargs['zorder'] = 2
+
+    localConnectionLineKwargs = dict(connectionLineKwargs)
+    if 'color' not in localConnectionLineKwargs: localConnectionLineKwargs['color'] = 'dimgray'
+    if 'linewidth' not in localConnectionLineKwargs and 'lw' not in localConnectionLineKwargs: localConnectionLineKwargs['linewidth'] = 2
+    if 'zorder' not in localConnectionLineKwargs: localConnectionLineKwargs['zorder'] = 1
+    if 'linestyle' not in localConnectionLineKwargs and 'ls' not in localConnectionLineKwargs: localConnectionLineKwargs['linestyle'] = '--'
 
     kde = gaussian_kde(tmrcaPosterior)
     hpdLo, hpdHi = hpd(tmrcaPosterior, hpdLvl)
@@ -919,7 +772,9 @@ def plot_tmrca_posterior(
 
     y_grid = kde(x_grid)
     y_max = y_grid.max()
-    y_grid /= y_max ## normalise KDE to peak at 1.0
+    if normalise:
+        y_grid /= y_max ## normalise KDE to peak at 1.0
+
     y_grid *= kdeWidth ## rescale
 
     upper_ys = [yCoord + y for y in y_grid]
@@ -956,9 +811,16 @@ def plot_tmrca_posterior(
 
         mean_xs = [meanTmrca, meanTmrca]
         if fullViolin:
-            mean_ys = [yCoord - kde(meanTmrca) / y_max * kdeWidth, yCoord + kde(meanTmrca) / y_max * kdeWidth]
+            if normalise:
+                mean_ys = [yCoord - kde(meanTmrca) / y_max * kdeWidth, yCoord + kde(meanTmrca) / y_max * kdeWidth]
+            else:
+                mean_ys = [yCoord - kde(meanTmrca) * kdeWidth, yCoord + kde(meanTmrca) * kdeWidth]
         else:
-            mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
+            if normalise:
+                mean_ys = [yCoord, yCoord + kde(meanTmrca).item() / y_max * kdeWidth]
+            else:
+                mean_ys = [yCoord, yCoord + kde(meanTmrca).item() * kdeWidth]    
+
             mean_ys = np.array(mean_ys, dtype=float).tolist()
 
         elbow_xs = [meanTmrca, meanTmrca, node.absoluteTime]
@@ -972,81 +834,15 @@ def plot_tmrca_posterior(
         ax.scatter(x, y, s = 40, fc = localViolinKwargs['facecolor'], ec = 'none', zorder = 10)
         ax.scatter(x, y, s = 80, fc = localViolinKwargs['edgecolor'], ec = 'none', zorder = 9)
 
-        ax.plot(mean_xs, mean_ys, color = 'dimgray', ls = '-', zorder = 2)
-        ax.plot(elbow_xs, elbow_ys, color = 'dimgray', ls = '--', zorder = 8)
-    elif node is None:
+        ax.plot(mean_xs, mean_ys, **localConnectionLineKwargs)
+        ax.plot(elbow_xs, elbow_ys, **localConnectionLineKwargs)
+    elif connectNode and node is None:
         logger.warning(f"Need to specify node to connect to.")
 
     return ax
 
+def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None, edgeColourFxn=None, edgeColour=None, axis='x',**kwargs):
 
-def plot_time_grid(
-        ax,
-        timeline,
-        dateFmt='%Y-%m-%d',
-        colourFxn=None,
-        colour=None,
-        edgeColourFxn=None,
-        edgeColour=None,
-        axis='x',
-        **kwargs
-    ):
-    """
-    Plot a time grid on the given axes, highlighting alternating time intervals.
-
-    Parameters
-    ----------
-    ax : :obj:`matplotlib.axes.Axes`
-        Axes on which the time grid will be plotted.
-
-    timeline : list[str] or range
-        A list of dates (as strings) or a range of decimal dates defining the time intervals.
-
-        Can be a list of dates (in *dateFmt* format) or a range of decimal dates.
-
-    dateFmt : str, optional
-        The format of the input dates in the timeline. Defaults to ``'%Y-%m-%d'``.
-
-    colourFxn : function, optional
-        A function that determines the fill color for each time interval. If not provided, defaults to black.
-
-    colour : str, optional
-        A single color to use for all time intervals. If provided, it overrides *colourFxn*.
-
-    edgeColourFxn : function, optional
-        A function that determines the edge color for each time interval. If not provided, defaults to no coloration.
-
-    edgeColour : str, optional
-        A single edge color to use for all time intervals. If provided, it overrides *edgeColourFxn*.
-
-    axis : {'x', 'y'}, optional
-        The axis along which the time grid will be plotted. Defaults to ``'x'``.
-
-    kwargs : dict, optional
-        Additional keyword arguments passed to the :obj:`matplotlib.axes.Axes.axvspan` or :obj:`matplotlib.axes.Axes.axhspan` function.
-
-    Returns
-    -------
-    :obj:`matplotlib.axes.Axes`
-        The modified matplotlib Axes object.
-
-    Notes
-    -----
-    - Alternating time intervals are highlighted, starting with the first
-      interval in the timeline.
-
-    Raises
-    ------
-    ValueError
-        If both *colour* and *colourFxn* are provided, or if both *edgeColour* and *edgeColourFxn* are provided.
-
-    Examples
-    --------
-    >>> fig, ax = plt.subplots(figsize=(8, 6))
-    >>> timeline = ['2020-01-01', '2020-02-01', '2020-03-01']
-    >>> plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colour='lightgray', axis='x')
-    >>> plt.show()
-    """
     if colour is not None and colourFxn is not None:
         raise ValueError(
             "Cannot specify both colour and colourFxn. Please use only one."
@@ -1072,9 +868,9 @@ def plot_time_grid(
         try:
             timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to
         except:
-            logger.warning(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+            warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
     else:
-        assert isinstance(timeline,range), "timeline is neither a list nor a range."
+        assert isinstance(timeline,range), f"timeline is neither a list nor a range."
 
     if axis == 'x':
         [ax.axvspan(timeline[t], timeline[t+1], fc=colourFxn(t), ec=edgeColourFxn(t), **localKwargs) for t in range(0,len(timeline)-1,2)]
@@ -1082,44 +878,7 @@ def plot_time_grid(
         [ax.axhspan(timeline[t], timeline[t+1], fc=colourFxn(t), ec=edgeColourFxn(t), **localKwargs) for t in range(0,len(timeline)-1,2)]
     return ax
 
-
 def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, labelPosition='mid', axis='x', **kwargs):
-    """
-    Format the tick positions and labels associated with a time grid.
-
-    Parameters
-    ----------
-    ax : :obj:`matplotlib.axes.Axes`
-        Axes whose ticks should be updated.
-
-    timeline : list[str]
-        Ordered list of calendar dates defining the grid boundaries.
-
-    inputDateFmt : str, optional
-        Format used to parse entries in *timeline*. Defaults to ``'%Y-%m-%d'``.
-
-    outputFmtFxn : callable, optional
-        Function used to convert each timeline entry into a display label.
-        The function must accept a single date string and return a string.
-        If omitted, a month-based formatter is used.
-
-    labelPosition : {'left', 'mid'}, optional
-        Whether labels should be placed on the interval boundaries or at
-        the midpoints of adjacent timeline entries. Defaults to ``'mid'``.
-
-    axis : {'x', 'y'}, optional
-        Axis whose ticks should be formatted. Defaults to ``'x'``.
-
-    kwargs : dict
-        Additional keyword arguments forwarded to
-        :meth:`matplotlib.axes.Axes.set_xticklabels` or
-        :meth:`matplotlib.axes.Axes.set_yticklabels`.
-
-    Returns
-    -------
-    :obj:`matplotlib.axes.Axes`
-        The modified matplotlib Axes object.
-    """
     assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
 
@@ -1146,8 +905,29 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     ax.tick_params(axis=axis, size=0)
     return ax
 
+def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLabels = 'both'):
+    """
+    Remove selected spines, suppress ticks and ticklabels on x, y or both axes.
+    """
+    validSpines = ['left', 'top', 'right', 'bottom']
+    assert set(validSpines) >= set(hideSpines), f"Spine {[val for val in hideSpines if val not in validSpines]} not recognised. Must belong to the set {validSpines}."
 
-def untangle(trees,costFxn=None,iterations=None):
+    validRemoveTickLabels = ['x', 'y', 'both', 'none']
+    assert removeTickLabels in validRemoveTickLabels, f"removeTickLabels value {removeTickLabels} not recognised. Must be one of {', '.join(validRemoveTickLabels)}"
+
+    if removeTickLabels in ['x', 'both']:
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+    if removeTickLabels in ['y', 'both']:
+        ax.set_yticks([])
+        ax.set_yticklabels([])
+
+    [ax.spines[loc].set_visible(False) for loc in hideSpines]
+    return ax
+
+
+
+def untangle(tree, reference, min_shared=2, maxPolytomy=9):
     """
     Reorder internal node children across multiple trees to reduce tip crossing.
 
@@ -1176,66 +956,134 @@ def untangle(trees,costFxn=None,iterations=None):
         If a node has ten or more children, making exhaustive permutation
         search impractical.
     """
-    if iterations is None: iterations=3
-    if costFxn is None: costFxn=lambda pair: math.pow(abs(pair[0]-pair[1]),2)
+    from itertools import permutations
 
-    y_positions={T: {k.name: k.y for k in T.getExternal()} for T in trees} ## get y positions of all the tips in every tree
+    # Ensure coordinates exist
+    reference._assign_tree_coordinates()
+    tree._assign_tree_coordinates()
 
-    for iteration in range(iterations):
-        logger.debug(f'Untangling iteration {iteration+1}')
-        first_trees=list(range(len(trees)-1))+[-1] ## trees up to next-to-last + last
-        next_trees=list(range(1,len(trees)))+[0] ## trees from second + first
-        for cur,nex in zip(first_trees,next_trees): ## adjacent pairs
-            tree1=trees[cur] ## fetch current tree
-            tree2=trees[nex] ## fetch next tree
-            logger.debug(f'{cur} vs {nex}')
-            for k in sorted(tree2.getInternal(),key=lambda branch: branch.height): ## iterate through nodes of next tree by height (start from root)
-                clade_y_positions=sorted([y_positions[tree2][tip] for tip in k.leaves]) ## sorted list of available y coordinates for node
-                costs={} ## will store cost of all children permutations
-                if len(k.children)>=10: raise RuntimeWarning('Node is too polytomic and untangling will take an astronomically long time')
-                logger.debug(len(k.children))
-                for permutation in permutations(k.children): ## iterate over permutations of node's children
-                    clade_order=sum([[child.name] if child.is_leaf() else list(child.leaves) for child in permutation],[]) ## flat list of tip names as they would appear in permutation order
-                    new_y_positions={clade_order[i]: clade_y_positions[i] for i in range(len(clade_y_positions))} ## assign available y positions in order
+    y_ref = {k.name: k.y for k in reference.get_external()}
+    y_tr  = {k.name: k.y for k in tree.get_external()}
 
-                    tip_costs=list(map(costFxn,[(y_positions[tree1][tip],new_y_positions[tip]) for tip in clade_order if tip in y_positions[tree1]]))
-                    costs[permutation]=sum(tip_costs)/len(tip_costs) ## compute cost of this permutation in relation to next tree
+    # Bottom-up so child decisions propagate correctly
+    for node in sorted(tree.get_internal(), key=lambda n: -n.height):
 
-                best=sorted(costs.keys(),key=lambda w: -costs[w])[0] ## get tree with smallest cost
-                k.children=list(best) ## reorder children according to minimised cost
+        k = len(node.children)
+        if k < 2:
+            continue
+        if k > maxPolytomy:
+            continue  # avoid factorial explosion
 
-            tree2.drawTree() ## compute new y coordinates for nodes
-            for k in tree2.getExternal(): ## iterate over tips
-                y_positions[tree2][k.name]=k.y ## remember new coordinates
+        # Precompute descendant sets
+        child_sets = [{ch.name} if ch.is_leaf() else ch.leaves for ch in node.children]
 
-    return trees
+        # Reference means for each child-set
+        ref_means = []
+        for S in child_sets:
+            shared = S & y_ref.keys()
+            if len(shared) < min_shared:
+                ref_means.append(None)
+            else:
+                ref_means.append(np.mean([y_ref[t] for t in shared if t in y_ref]))
 
-def unnest(nodeList, towardsRoot = True):
+        if any(m is None for m in ref_means):
+            continue
+
+        best_perm = None
+        best_score = None
+
+        for perm in permutations(range(k)):
+            perm_sets = [child_sets[i] for i in perm]
+
+            tree_means = []
+            for S in perm_sets:
+                shared = S & y_tr.keys()
+                if len(shared) < min_shared:
+                    break
+                tree_means.append(np.mean([y_tr[t] for t in shared if t in y_tr]))
+            else:
+                # Score = L1 distance between ordered means
+                score = sum(
+                    abs(tree_means[i] - ref_means[i])
+                    for i in range(k)
+                )
+
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best_perm = perm
+
+        if best_perm is not None:
+            node.children = [node.children[i] for i in best_perm]
+
+            # Commit geometry change
+            tree._assign_tree_coordinates()
+            y_tr = {k.name: k.y for k in tree.get_external()}
+
+    return tree
+
+
+def untangle_trees(
+    trees,
+    iterations=10,
+    maxPolytomy=8,
+    bidirectional=True
+):
     """
-    Remove nested nodes from a list until no selected nodes overlap in tips.
+    Untangle a list of trees for tanglegram visualisation.
 
     Parameters
     ----------
-    nodeList : list[:class:`.BranchLike`]
-        Nodes or leaf-like objects whose descendant tip sets should be made
-        mutually non-overlapping.
-
-    towardsRoot : bool, optional
-        If ``True``, preferentially keep deeper nodes and remove more
-        tip-proximal nested entries. If ``False``, preferentially keep
-        entries closer to the tips. Defaults to ``True``.
+    trees : list[Tree]
+        Trees ordered as they will appear in the tanglegram.
+        Trees are modified in place.
+    iterations : int
+        Number of global passes along the chain.
+    costFxn : callable
+        Function mapping (y_ref, y_tree) -> cost.
+    maxPoly : int
+        Maximum polytomy size to brute-force.
+    bidirectional : bool
+        Whether to do backward passes as well as forward passes.
 
     Returns
     -------
-    list[:class:`.BranchLike`]
-        The filtered list with nested overlaps removed.
-
-    Raises
-    ------
-    AssertionError
-        If *nodeList* contains objects that are neither nodes nor leaf-like
-        branches.
+    list[Tree]
+        The same list, untangled.
     """
+
+    logger.warning(f"Untangled trees can be misleading! Tangle lines can be perfectly parallel without much topological congruence between trees. Use at your own peril.")
+    
+    if len(trees) < 2:
+        raise Exception(f"List of trees contains {len(trees)} trees, need at least 2.")
+
+    # Ensure all trees start with valid coordinates
+    for t in trees:
+        t._assign_tree_coordinates()
+
+    for _ in range(iterations):
+
+        # ---------- forward pass ----------
+        for i in range(1, len(trees)):
+            untangle(
+                tree=trees[i],
+                reference=trees[i - 1],
+                maxPolytomy=maxPolytomy
+            )
+
+        # ---------- backward pass ----------
+        if bidirectional:
+            for i in range(len(trees) - 2, -1, -1):
+                untangle(
+                    tree=trees[i],
+                    reference=trees[i + 1],
+                    maxPolytomy=maxPolytomy
+                )
+
+    return trees
+
+
+def unnest(nodeList, towardsRoot = True):
+    nodeList = list(nodeList) ## make sure removal of nested nodes is not in-place
     assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f"nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}"
 
     while any([A.leaves.isdisjoint(B.leaves) == False for A in nodeList for B in nodeList if A != B]): ## continue looping for as long as any pair of nodes are nested
@@ -1254,46 +1102,7 @@ def unnest(nodeList, towardsRoot = True):
     return nodeList ## when done return list of remaining nodes
 
 def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
-    """
-    Evaluate a root-to-tip regression for a candidate root position.
-
-    Parameters
-    ----------
-    rootCandidate : :class:`.BranchLike`
-        Candidate root branch or node being evaluated.
-
-    tipDates : sequence[float]
-        Sampling times for the tips.
-
-    tipHeights : sequence[float]
-        Root-to-tip distances corresponding to *tipDates*.
-
-    res : dict
-        Mutable result dictionary storing the current best regression summary.
-
-    stat : {'r^2', 'correlation', 'sum of squares'}, optional
-        Criterion used to decide whether the current regression is better than
-        the result already stored in *res*. Defaults to ``'r^2'``.
-
-    forcePositive : bool, optional
-        If ``True``, regressions with negative slope are treated as invalid.
-        Defaults to ``True``.
-
-    frac : float, optional
-        Optional position along a branch associated with the candidate root.
-
-    Returns
-    -------
-    dict
-        Updated regression summary. The dictionary may contain correlation,
-        sum of squares, slope, intercept, ``r^2``, root, and branch fraction.
-
-    Raises
-    ------
-    ValueError
-        If *stat* is not recognized.
-    """
-    slope, intercept, rval, _, _ = linregress(tipDates,tipHeights) ## run linear regression
+    slope, intercept, rval, _, _ = linregress(tipDates, tipHeights) ## run linear regression
     corr = np.corrcoef((tipDates, tipHeights))[0,1] ## correlation coefficient
     ssq = sum([(y - (slope * x + intercept))**2 for x, y in zip(tipDates, tipHeights)]) ## sum of squares
 
@@ -1302,7 +1111,7 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     elif stat=='sum of squares':
         localStat = ssq
     elif stat=='r^2':
-        localStat = rval
+        localStat = math.pow(rval, 2)
     else:
         raise ValueError(f'Unknown stat {stat} to optimise')
 
@@ -1311,23 +1120,12 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     invalidateRegression = True if forcePositive and slope < 0 else False
 
     if (localStat < optStat if stat in ['sum of squares'] else localStat > optStat): ## minimise sum of squares or maximise correlation/r^2
-        # if forcePositive and slope < 0: ## force positive True and slope<0
-        #     pass ## if forcing positive root, slope must be positive; do nothing
-        #     res['correlation'] = -np.inf
-        #     res['sum of squares'] = np.inf
-        #     res['slope'] = slope
-        #     res['intercept'] = intercept
-        #     res['r^2'] = -np.inf
-        #     res['root'] = rootCandidate
-        #     if frac is not None: res['frac'] = frac
-        # else: ## force_positive is False or true and slope>0
         optStat = localStat ## better root found
-#             new_root = [w for w in self.Objects if w.index==k.index][0]
         res['correlation'] = -np.inf if invalidateRegression else corr
         res['sum of squares'] = np.inf if invalidateRegression else ssq
         res['slope'] = slope
         res['intercept'] = intercept
-        res['r^2'] = -np.inf if invalidateRegression else rval
+        res['r^2'] = -np.inf if invalidateRegression else math.pow(rval, 2)
         res['root'] = rootCandidate
         if frac is not None: res['frac'] = frac
 
@@ -1359,101 +1157,127 @@ def _rtt_worker(args):
         Best regression result found for the candidate root, with the root
         stored by index rather than by object reference.
     """
+
     (tree,
      root_index,
      tipDates,
      uncertainDateRanges,
-     n_mc,
+     max_iters,
      stat,
      forcePositive) = args
 
+    # deep-copy tree and reroot on candidate
     tree_copy = copy.deepcopy(tree)
-
-    # find candidate root node inside worker copy
     candidate = next(obj for obj in tree_copy.Objects if obj.index == root_index)
-
-    # Reroot on this candidate for this sample
     cll = tree_copy.reroot(candidate)
+
     tips = cll.get_external()
+    uncertainTips = [k for k in tips if k.name in uncertainDateRanges]
 
-    rootDistances = {k.name: k.height for k in tips} ## these don't change
+    # root-to-tip distances are fixed for a given root
+    rootDistances = {k.name: k.height for k in tips}
 
+    # start from a local copy of tipDates
+    # (each worker gets its own copy due to pickling, but we clone anyway to be explicit)
+    currentDates = dict(tipDates)
+
+    # storage for the best result across iterations
     best_res = None
     best_score = None
     best_dates = None
-    best_branch_frac = None
 
-    rng = np.random.default_rng()
+    # tolerance for date convergence
+    tol = 1e-6
 
-    for _ in range(n_mc): ## Monte Carlo iterations
+    # main refinement loop
+    for _ in range(max(1, int(max_iters))):
 
-        for k in uncertainDateRanges:
-            tipDates[k] = rng.uniform(*uncertainDateRanges[k]) ## for uncertain tips sample from possible date range randomly
+        # build regression inputs with current dates
+        xs = [currentDates[k.name] for k in tips]               # dates
+        ys = [rootDistances[k.name] for k in tips]               # heights
 
-        xs = [tipDates[k.name] for k in tips]
-        ys = [rootDistances[k.name] for k in tips]
-
-        # Run root-to-tip regression
         res_local = {}
         res_local = _root_to_tip(
             candidate, xs, ys, res_local,
             stat=stat, forcePositive=forcePositive
         )
 
-        if res_local: ## valid regression (when forcePositive == True but slope is negative res_local is None)
-            # Compute a scalar score, taking into account direction of optimisation
-            if stat == "sum of squares":
-                # Smaller is better
-                score = -res_local["sum of squares"]
-            else:
-                # Larger is better for r^2 or correlation
-                score = res_local[stat]
+        # if regression is invalid (e.g., negative slope with forcePositive=True), bail out
+        if not res_local:
+            break
 
-            if best_score is None or score > best_score:
-                best_res = res_local
-                best_score = score
-                best_dates = {k: tipDates[k] for k in uncertainDateRanges}
+        # compute scalar score (same logic as before)
+        if stat == "sum of squares":
+            score = -res_local["sum of squares"]  # smaller SSE is better
+        else:
+            score = res_local[stat]               # larger r^2 / correlation is better
 
+
+        # track best iteration so far
+        if best_score is None or score > best_score:
+            best_score = score
+            best_res = res_local
+            # store only the uncertain ones (like before with monte_carlo_dates)
+            best_dates = {name: currentDates[name] for name in uncertainDateRanges}
+
+        # if there are no uncertain dates, we are done after one regression
+        if not uncertainDateRanges:
+            break
+
+        # update uncertain dates by projecting onto the regression line
+        slope = res_local["slope"]
+        intercept = res_local["intercept"]
+
+        # if slope is zero, projection is undefined – nothing to refine
+        if abs(slope) < 1e-12:
+            break
+
+        newDates = _adjust_tip_dates_by_regression(uncertainTips, slope, intercept)
+        delta = 0.0
+        for tipName in newDates:
+            delta += abs(currentDates[tipName] - newDates[tipName])
+            currentDates[tipName] = newDates[tipName]
+
+        # stop if updates are tiny (converged)
+        if delta < tol:
+            break
+
+
+    # if we never got a valid regression, return an empty-ish record
     if best_res is None:
         best_res = {}
+        best_score = None
+        best_dates = None
 
+    # attach metadata expected by root_by_regression
     best_res["root_index"] = root_index
     best_res["score"] = best_score
-    best_res["monte_carlo_dates"] = best_dates
+    best_res["assigned_uncertain_dates"] = best_dates
 
-    # IMPORTANT: we replace 'root' with index so we don't leak deep-copied nodes
+    # IMPORTANT: replace 'root' node reference with index so we don't leak deep-copied nodes
     best_res["root"] = root_index
 
     return best_res
 
-
-def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
+def _adjust_tip_dates_by_regression(
+    uncertainTips,
+    slope: float,
+    intercept: float):
     """
-    Convert rectangular tree coordinates to Cartesian coordinates on a circle.
-
-    Parameters
-    ----------
-    x : float
-        Radial distance from the circle origin.
-
-    y : float
-        Position along the non-informative tree axis.
-
-    yRange : float
-        Total span of the non-informative axis.
-
-    circleStart : float, optional
-        Starting position of the circular layout, expressed as a fraction of a
-        full rotation. Defaults to ``0.0``.
-
-    circleFraction : float, optional
-        Fraction of the full circle used by the layout. Defaults to ``1.0``.
-
-    Returns
-    -------
-    tuple[float, float]
-        Projected ``(x, y)`` coordinates in Cartesian space.
+    Receives a list of tips with uncertain dates and regression parameters, adjusts .absoluteTime (within uncertainty range .absoluteTimeRange) to be as close to regression line as possible.
     """
+    adjustedDates = {}
+
+    for k in uncertainTips:
+        regressionDate = (k.height - intercept) / slope ## interpolate date of tip based on subs/site height
+        minD, maxD = k.absoluteTimeRange ## get clamp
+
+        adjustedDates[k.name] = min(max(regressionDate, minD), maxD) ## clamp tip date
+
+    return adjustedDates
+
+
+def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
     # circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
@@ -1466,102 +1290,15 @@ def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
     return (tx,ty)
 
-
 def project_polar_vector(x,y,radians,length):
-    """
-    Extend a Cartesian point by a vector defined in polar coordinates.
-
-    Parameters
-    ----------
-    x : float
-        Starting x-coordinate.
-
-    y : float
-        Starting y-coordinate.
-
-    radians : float
-        Direction of the vector in radians.
-
-    length : float
-        Length of the vector.
-
-    Returns
-    -------
-    tuple[float, float]
-        Endpoint coordinates after applying the vector.
-    """
 
     new_x = x + length * math.cos(radians)
     new_y = y + length * math.sin(radians)
 
     return (new_x,new_y)
 
-def desaturate(
-        colour,
-        desat=0.65,
-        out="auto",
-    ):
-    """
-    Desaturate a given color by reducing its saturation in HSV space.
 
-    Parameters
-    ----------
-    colour : str or tuple
-        The input color to be desaturated. Can be a named
-        color, a hex string (e.g., ``"#RRGGBB"`` or ``"#RRGGBBAA"``),
-        or an RGB/RGBA tuple (e.g., ``(R, G, B)`` or ``(R, G, B, A)``).
-
-    desat : float, optional
-        The desaturation factor, where ``0`` results
-        in grayscale and ``1`` retains the original saturation.
-        Must be a value between ``0`` and ``1``. Defaults to ``0.65``.
-
-    out : {'auto', 'hex', 'rgb', 'rgba'}, optional
-        The output format of the desaturated color:
-
-        - ``'auto'``: Matches the input format (e.g., hex strings remain
-          hex, tuples remain tuples).
-        - ``'hex'``: Returns a hex string (e.g., ``"#RRGGBB"`` or
-          ``"#RRGGBBAA"`` if alpha is present).
-        - ``'rgb'``: Returns an RGB tuple ``(R, G, B)``.
-        - ``'rgba'``: Returns an RGBA tuple ``(R, G, B, A)``.
-
-        Defaults to ``'auto'``.
-
-    Returns
-    -------
-    str or tuple
-        The desaturated color in the specified output format.
-
-    Notes
-    -----
-    - The desaturation is applied by converting the color
-      to HSV space, scaling the saturation channel by the
-      *desat* factor, and converting it back to RGB space.
-    - If the input is a hex string, the output will include an
-      alpha channel if the input had one or if the alpha
-      value is less than ``1.0``.
-
-    Raises
-    ------
-    ValueError
-        If *desat* is not between ``0`` and ``1``, or if *out*
-        is not one of ``'auto'``, ``'hex'``, ``'rgb'``, or ``'rgba'``.
-
-    TypeError
-        If *colour* is not a valid color string or tuple.
-
-    Examples
-    --------
-    >>> desaturate("#FF0000", desat=0.5)
-    '#BF4040'
-
-    >>> desaturate((1.0, 0.0, 0.0), desat=0.5, out="rgb")
-    (0.75, 0.25, 0.25)
-
-    >>> desaturate("blue", desat=0.2, out="hex")
-    '#3333CC'
-    """
+def desaturate(colour, desat=0.65, out="auto"):
     if not (0 <= desat <= 1):
         raise ValueError(f"invalid desat value: {desat}, must be within interval [0, 1].")
 
@@ -1606,48 +1343,61 @@ def desaturate(
     else:
         raise ValueError(f"out {out} invalid, must be one of {'auto','hex','rgb','rgba'}.")
 
-def desaturate_cmap(
-        cmap,
-        desat = 0.65,
-    ):
+def make_cmap(colours, position=None, name="custom_cmap"):
     """
-    Create a desaturated version of a given colormap.
-
-    Parameters
-    ----------
-    cmap : :obj:`matplotlib.colors.Colormap`
-        The input colormap to be desaturated. Must be an instance of
-        :obj:`matplotlib.colors.LinearSegmentedColormap` or :obj:`matplotlib.colors.ListedColormap`.
-
-    desat : float, optional
-        The desaturation factor, where ``0`` results in grayscale and ``1`` retains the original saturation.
-        Must be a value between ``0`` and ``1``. Defaults to ``0.65``.
-
-    Returns
-    -------
-    :obj:`matplotlib.colors.ListedColormap`
-        A new colormap with desaturated colors.
-
-    Notes
-    -----
-    - The desaturation is applied to each color in the colormap by converting it to HSV space and scaling
-      the saturation channel by the *desat* factor.
-    - This function is useful for creating muted or less vibrant versions of colormaps for better visualization
-      in certain contexts.
-
-    Raises
-    ------
-    AssertionError
-        If the input *cmap* is not an instance of :obj:`matplotlib.colors.LinearSegmentedColormap` or
-        :obj:`matplotlib.colors.ListedColormap`.
-
-    Examples
-    --------
-    >>> from matplotlib import cm
-    >>> from baltic.bt_utils import desaturate_cmap
-    >>> original_cmap = cm.viridis
-    >>> desaturated_cmap = desaturate_cmap(original_cmap, desat=0.5)
+    Create a colormap from mixed color formats:
+        - RGB float tuples (0–1)
+        - RGB int tuples (0–255)
+        - Hex strings "#RRGGBB" or "RRGGBB"
+        - HTML/CSS names ("red", "steelblue")
+        - Matplotlib shorthand ("r", "C0")
     """
+
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
+    normalized = []
+    for c in colours:
+
+        # tuple/list: could be float or int RGB
+        if isinstance(c, (tuple, list)) and len(c) == 3:
+            if all(isinstance(v, float) for v in c) and all(0 <= v <= 1 for v in c):
+                normalized.append(tuple(c))
+            elif all(isinstance(v, int) for v in c) and all(0 <= v <= 255 for v in c):
+                normalized.append(tuple(v / 255.0 for v in c))
+            else:
+                raise ValueError(f"Invalid RGB tuple: {c}")
+
+        # string: hex, HTML name, or mpl shorthand
+        elif isinstance(c, str):
+            # allow "ffaa00" without "#"
+            if len(c) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in c):
+                c = "#" + c
+            try:
+                normalized.append(to_rgb(c))
+            except ValueError:
+                raise ValueError(f"Unrecognized color string: {c}")
+
+        else:
+            raise TypeError(f"Unsupported color format: {c}")
+
+    if position is None:
+        position = np.linspace(0, 1, len(colours))
+    else:
+        position = np.asarray(position, float)
+        if len(position) != len(colours):
+            raise ValueError("position must be same length as colors")
+        if position[0] != 0 or position[-1] != 1:
+            raise ValueError("position must start at 0 and end at 1")
+
+    cdict = {"red": [], "green": [], "blue": []}
+    for p, (r, g, b) in zip(position, normalized):
+        cdict["red"].append((p, r, r))
+        cdict["green"].append((p, g, g))
+        cdict["blue"].append((p, b, b))
+
+    return LinearSegmentedColormap(name, cdict)
+
+def desaturate_cmap(cmap, desat=0.65):
     from matplotlib.colors import ListedColormap
 
     assert isinstance(cmap, mpl.colors.LinearSegmentedColormap) or isinstance(cmap, mpl.colors.ListedColormap), f"cmap type {type(cmap)} invalid, must be mpl.colors.LinearSegmentedColormap or mpl.colors.ListedColormap."
@@ -1656,7 +1406,7 @@ def desaturate_cmap(
 
     return ListedColormap(desat_colours)
 
-def hpd(data, level = 0.95):
+def hpd(data, level=0.95):
     """
     Compute the highest posterior density interval for a sample.
 
@@ -1698,3 +1448,116 @@ def hpd(data, level = 0.95):
     assert 0 <= i <= i+nIn-1 < len(d)
 
     return (d[i], d[i+nIn-1])
+
+def five_point_bezier(points, precision=50):
+    """
+    Quartic Bézier curve (5 control points).
+    Returns arrays of x and y coordinates.
+    """
+    p0, p1, p2, p3, p4 = map(lambda x: np.array(x, dtype=float), points)
+
+    t = np.linspace(0, 1, precision)
+
+    Bx = ((1-t)**4 * p0[0] +
+          4*(1-t)**3 * t * p1[0] +
+          6*(1-t)**2 * t**2 * p2[0] +
+          4*(1-t) * t**3 * p3[0] +
+          t**4 * p4[0])
+
+    By = ((1-t)**4 * p0[1] +
+          4*(1-t)**3 * t * p1[1] +
+          6*(1-t)**2 * t**2 * p2[1] +
+          4*(1-t) * t**3 * p3[1] +
+          t**4 * p4[1])
+
+    return Bx, By
+
+def draw_gradient_polygon(
+    ax,
+    polygonXY,
+    extent,
+    colour,
+    minAlpha=0.0,
+    maxAlpha=1.0,
+    n=256,
+    axis='y',
+    origin='lower',
+    reverse=False,
+    zorder=0,
+    interpolation='bicubic',
+    addPatch=True,
+    patchKwargs=None,
+    imshowKwargs=None,
+    ):
+    """
+    Draw an RGBA gradient image and clip it to a polygon.
+    """
+    import numpy as np
+    import matplotlib as mpl
+    from matplotlib.patches import Polygon
+
+    assert 0.0 <= minAlpha <= 1.0 and 0.0 <= maxAlpha <= 1.0, f"minAlpha ({minAlpha}) and maxAlpha ({maxAlpha}) must be in range [0.0, 1.0]."
+    assert n >= 2, f"Insufficient number of colours: {n}, must be >=2."
+    assert axis in ['x', 'y'], f"Unrecognised axis {axis}. Must be 'x' or 'y'."
+
+    polygonXY = np.asarray(polygonXY, dtype=float)
+    if polygonXY.ndim != 2 or polygonXY.shape[1] != 2:
+        raise ValueError("polygonXY must be an array-like of shape (N, 2)")
+
+    xmin, xmax, ymin, ymax = extent
+
+    # Build RGBA image. We keep the non-ramp dimension at 2 pixels because colour/alpha don't vary there.
+    rgb = mpl.colors.colorConverter.to_rgb(colour)
+
+    if axis == 'y':
+        img = np.zeros((n, 2, 4), dtype=float)  # rows vary in y
+    elif axis == 'x':
+        img = np.zeros((2, n, 4), dtype=float)  # cols vary in x
+
+    img[..., 0] = rgb[0]
+    img[..., 1] = rgb[1]
+    img[..., 2] = rgb[2]
+
+    ramp = np.linspace(minAlpha, maxAlpha, n)
+    if reverse: ramp = ramp[::-1]
+    
+    if axis == 'y':
+        img[..., 3] = ramp[:, None]
+    elif axis == 'x':
+        img[..., 3] = ramp[None, :]
+    
+    localImshowKwargs = dict(imshowKwargs) if imshowKwargs else {}
+    im = ax.imshow(
+        img,
+        extent=[xmin, xmax, ymin, ymax],
+        origin=origin,
+        aspect='auto',
+        interpolation=interpolation,
+        zorder=zorder,
+        **localImshowKwargs,
+    )
+
+    localPatchKwargs = dict(patchKwargs) if patchKwargs else {}
+    # Default: invisible patch used only for clipping
+    patch = Polygon(
+        polygonXY,
+        facecolor='none',
+        edgecolor='none',
+        closed=localPatchKwargs.pop('closed', True),
+        zorder=localPatchKwargs.pop('zorder', zorder),
+        **localPatchKwargs,
+    )
+    if addPatch:
+        ax.add_patch(patch)
+
+    im.set_clip_path(patch)
+    return im, patch
+
+def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineWeight=4):
+
+    import matplotlib.patheffects as path_effects
+
+    effects = [path_effects.Stroke(linewidth=outlineWeight, foreground=outlineColour), 
+               path_effects.Stroke(linewidth=mainWeight, foreground=mainColour)]
+
+    return effects

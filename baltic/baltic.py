@@ -1,26 +1,3 @@
-"""This module provides the core ``baltic`` functions :func:`make_tree` and :func:`make_tree_JSON`, the core parser functions which create ``baltic`` tree, node, and branchLike objects.
-
-By convention, ``baltic`` (and this base module) are loaded under the name ``bt``.
-
-
-Example
--------
-After loading the module, a basic Newick formatted tree string can be read by:
-
->>> treeString='((A:1.0,B:2.0):1.0,C:3.0);'
->>> ll = bt.make_tree(treeString, treeType="divergence")
-
-
-Notes
------
-This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
-
-
-Attributes
-----------
-logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
-"""
 __all__ = ['make_tree', 'make_tree_JSON']
 import re
 import sys
@@ -33,44 +10,10 @@ from baltic.reticulation import Reticulation
 logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
-def make_tree(
-    data,
-    treeType,
-    tre=None,
-    ):
-    """
-    Parses a tree string to create a baltic tree.
-
-    Trees are parsed according to the following standard algorithm:
-
-    * Every time an opening parenthesis (``(``) is encountered in the tree string a new instance of `Node` class is created. The new class' ``.index`` attribute is set to the index along the tree string where it was encountered, giving that particular class a unique identifier within the tree string. The ``.parent`` attribute is set to whatever the previous object encountered was, similarly, since the last encountered object could only be another node, the current node is added to its parents list of ``children``. Finally we set our new node as the 'current' node of the tree and append the node to the list of objects (``.Objects``, which are branches) contained in the tree.
-    * Every time a string is encountered which may or may not be surrounded by quotation marks (``'`` or ``"``) or have the beginning of an annotation block (``[``) we create a new ``Leaf`` object. It also receives an ``.index`` identifier, like the ``Node`` object. Unlike the ``Node``, however, the ``.numName`` attribute is also set as the string that defined the tip. In BEAST X trees it will be the number that identifies the tip, but it could also be a regular string.
-    * Next, baltic looks for annotations, which are the blocks in the format ``[&parameter1=1.0,parameter2=0.0]``. These are transformed into the ``.traits`` dictionary for the branch. In this example the branch being parsed would receive a dictionary with two keys: ``cur_branch.traits = {'parameter1' : 1.0, 'parameter2' : 0.0}``.
-    * Annotations should be followed by branch lengths preceded by a colon (``:``). The branch length is assigned to the current branch's ``.length`` attribute.
-    * Bifurcations (or multifurcations) in the tree string are notated by commas (``,``) and ends of clades are denoted by closing parentheses (``)``). Both mean that whatever comes next is in relation to the parent branch of whatever branch we were dealing with earlier.
-    * Finally tree strings are finished with a semi colon (``;``).
-
-
-    Parameters
-    ----------
-    data : str
-        Input tree string to be parsed.
-
-    treeType : {'time', 'divergence'}
-        The type of the tree, which defines meaning of branch lengths (e.g.
-        for a time-calibrated phylogeny whose branches are in units of
-        years or months, 'time' should be used.)
-
-    tre : :class:`baltic.Tree`, optional
-        Reference to an existing tree object. If omitted, a new object will be created.
-
-    Returns
-    -------
-    tre : :class:`baltic.Tree`
-    """
+def make_tree(data, treeType, tre=None):
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
-        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
+        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#,]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
     }
     if not isinstance(data,str): ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
@@ -123,7 +66,7 @@ def make_tree(
                     if destination is None: ## not set destination before
                         destination=k ## destination is matching node
                     else: ## destination seen before - raise an error (indicates reticulate branch ids are not unique)
-                        logger.error(f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
+                        raise Exception(f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
             if destination: ## identified destination of this branch
                 logger.debug(f'identified {match.group(1)} destination')
                 tre.curNode.target=destination ## set current node's target as the destination
@@ -168,6 +111,9 @@ def make_tree(
                 if '+' in val:
                     val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
                 tre.curNode.traits[tr]=val.strip('"')
+
+                if tre.curNode.traits[tr] in ['true', 'false']:
+                    tre.curNode.traits[tr] = True if tre.curNode.traits[tr] == 'true' else False ## convert to actual Boolean
 
             for vals in numerics: ## assign all parsed annotations to traits of current branch
                 tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
@@ -229,95 +175,57 @@ def make_tree(
             tre.curNode=tre.curNode.parent
 
         if data[i] == ';': ## look for string end
-            tre.traverse_tree()
+            if sum(tre.get_parameter_list('length')) == 0.0:
+                logger.warning(f"All branch lengths 0.0, setting branch lengths to make tree ultrametric with a height of 1.0")
+
+                maxLvl = 0
+                for k in tre.get_external():
+                    k.height = 1.0
+
+                    pathLen = len(k.get_path_to_root()) - 1
+                    if pathLen > maxLvl:
+                        maxLvl = pathLen
+
+                heightless = tre.get_internal(lambda k: k.height is None)
+
+                while len(heightless) > 0:
+                    for node in heightless:
+                        if len(node.children) == len([ch for ch in node.children if ch.height is not None]):
+                            node.height = min((ch.height - (1.0 / maxLvl)) for ch in node.children)
+                    heightless = tre.get_internal(lambda k: k.height is None)
+
+                for k in tre.Objects:
+                    k.length = (k.height - k.parent.height) if k.parent else 0.0
+
+                tre.traverse_tree()
+
             return tre
 
-
-def make_tree_JSON(
-    jsonNode,
-    jsonTranslationDict,
-    treeType,
-    tre=None,
-    ):
-    """
-    Create a ``baltic`` tree object from a JSON representation.
-
-    Parameters
-    ----------
-    jsonNode : dict
-        The root node of the JSON tree structure. This dictionary should contain
-        information about the node, including its name, attributes, and children.
-
-    jsonTranslationDict : dict
-        A dictionary mapping JSON keys to the corresponding attributes in the ``baltic`` tree.
-        For example, it might map "name" to the node name or "children" to the list of child nodes.
-
-    treeType : {'time', 'divergence'}
-        The type of the tree, which defines the meaning of branch lengths. For example:
-        - 'time': Branch lengths represent absolute time (e.g., years, days).
-        - 'divergence': Branch lengths represent relative units (e.g., substitutions per site).
-
-    tre : baltic.Tree, optional
-        An existing ``baltic`` tree object to which the JSON tree will be added. If not provided,
-        a new tree object will be created.
-
-    Returns
-    -------
-    :class:`.Tree`
-        A ``baltic`` tree object created from the JSON representation.
-
-    Notes
-    -----
-    - This function recursively traverses the JSON tree structure to create the corresponding
-      ``baltic`` tree, including nodes, leaves, and their attributes.
-    - The `jsonTranslationDict` is used to map JSON keys to the appropriate attributes in the
-      ``baltic`` tree. For example, it can map "name" to the node name or "children" to the list of child nodes.
-    - If the JSON node has an "attr" key, its contents are merged into the node's attributes.
-
-    Raises
-    ------
-    KeyError
-        If required keys are missing from the JSON node or `jsonTranslationDict`.
-
-    Examples
-    --------
-    >>> jsonNode = {
-    ...     "name": "Root",
-    ...     "children": [
-    ...         {"name": "A", "attr": {"length": 1.0}},
-    ...         {"name": "B", "attr": {"length": 2.0}}
-    ...     ]
-    ... }
-    >>> jsonTranslationDict = {"name": "name", "children": "children"}
-    >>> tree = make_tree_JSON(jsonNode, jsonTranslationDict, treeType="divergence")
-    >>> print(tree.root.index)
-    'Root'
-    >>> print([child.index for child in tree.root.children])
-    ['A', 'B']
-    """
+def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
     else:
-        newNode=Leaf(name=jsonNode[jsonTranslationDict['name']])
+        newNode=Leaf(name = jsonNode[jsonTranslationDict['name']])
 
     if tre is None:
-        tre=Tree(treeType)
-        tre.root=newNode
+        tre = Tree(treeType)
+        tre.root = newNode
+    
     if 'attr' in jsonNode:
         attr = jsonNode.pop('attr')
         jsonNode.update(attr)
 
-    newNode.parent=tre.curNode ## set parent-child relationships
+    newNode.parent = tre.curNode ## set parent-child relationships
     tre.curNode.children.append(newNode)
-    newNode.index=jsonNode[jsonTranslationDict['name']] ## indexing is based on name
-    newNode.traits={n:jsonNode[n] for n in list(jsonNode.keys()) if n!='children'} ## set traits to non-children attributes
+    newNode.index = jsonNode[jsonTranslationDict['name']] ## indexing is based on name
+    newNode.traits = {n: jsonNode[n] for n in list(jsonNode.keys()) if n != 'children'} ## set traits to non-children attributes
     tre.Objects.append(newNode)
-    tre.curNode=newNode
+    tre.curNode = newNode
 
     if 'children' in jsonNode:
         for child in jsonNode['children']:
-            make_tree_JSON(child,jsonTranslationDict,tre)
-            tre.curNode=tre.curNode.parent
+            make_tree_JSON(jsonNode=child, jsonTranslationDict=jsonTranslationDict, treeType=treeType, tre=tre)
+            tre.curNode = tre.curNode.parent
     return tre
 
 if __name__ == '__main__':

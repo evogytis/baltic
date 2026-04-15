@@ -6,7 +6,7 @@ from baltic.bt_utils import calendar_to_decimal_date
 
 logger = logging.getLogger("baltic.samogitia")
 
-def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRegex, dateFmt, treestringRegex):
+def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt, treestringRegex):
     """
     Iterate over tree strings in a posterior ``.trees`` file after burn-in.
 
@@ -45,10 +45,10 @@ def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRe
     treeCounter = 0
     ############
     handle = open(treesPath, 'r')
-
+    
     for line in handle:
         l = line.strip('\n')
-
+        
         ############
         match = re.search('Dimensions ntax=([0-9]+);',l)
         if match:
@@ -59,32 +59,40 @@ def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRe
         match = re.search(treestringRegex,l)
         if match:
             state = int(match.group(1))
-
+            
             treeString_start = l.index('(')
 
-            if state == 0: ## only need to get tip names on the first tree
+            if treeCounter == 0: ## only need to get tip names on the first tree
                 ####
                 # do an assertion here that tipNames exist in tree
                 ####
                 tree = make_tree(l[treeString_start:], 'time')
-                tree.rename_tips(tips)
 
+                if len(tips) > 0:
+                    tree.rename_tips(tips)
+                
                 tip_dates = []
                 tip_names = []
                 for k in tree.get_external():
                     tip_names.append(k.name)
                     match = re.search(tipRegex, k.name)
                     if match:
-                        tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = True))
+                        tip_dates.append(calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = False))
 
-                maxDate = max(tip_dates)
+                if mostRecentDate:
+                    maxDate = mostRecentDate
+                    logger.warning(f"Using provided mostRecentDate ({mostRecentDate})")
+                else:
+                    assert len(tip_dates) > 0, f"Could not identify any tip dates from tip names."
+                    maxDate = max(tip_dates)
+                
+            if state < burnin:
+                continue
 
-            if state >= burnin:
-
-                yield treeCounter, state, l[treeString_start:], tips, maxDate
-                treeCounter += 1
-
-                logger.debug('Identified tree string')
+            yield treeCounter, state, l[treeString_start:], tips, maxDate
+            treeCounter += 1
+            
+            logger.debug('Identified tree string')
         ##############
         if tip_flag:
             match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
@@ -98,19 +106,10 @@ def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRe
             tip_flag = True
         if ';' in l:
             tip_flag = False
-
+    
     handle.close()
 
-def process_posterior_trees(treesPath,
-                            processFxn,
-                            workers = 4,
-                            burnin = None,
-                            outputPath = 'processed-output.log.txt',
-                            mostRecentDate = None,
-                            tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)',
-                            dateFmt='%Y-%m-%d',
-                            treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
-                            **kwargs):
+def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, outputPath = 'processed-output.log.txt', mostRecentDate = None, tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)', dateFmt='%Y-%m-%d', treestringRegex=r'tree [A-Za-z\_]+([0-9]+)', **kwargs):
     """
     Process a posterior tree set with a parallel worker function.
 
@@ -148,7 +147,7 @@ def process_posterior_trees(treesPath,
     """
     if burnin is None:
         burnin = 0
-
+    
     import heapq
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -159,12 +158,12 @@ def process_posterior_trees(treesPath,
         futures = []
 
         # submit each tree as we read it
-        for i, state, treeString, tipRenameDict, maxDate in posterior_tree_iterator(treesPath, burnin = burnin, outputPath = outputPath, mostRecentDate = mostRecentDate, tipRegex = tipRegex, dateFmt = dateFmt, treestringRegex = treestringRegex): ## posterior tree iterator returns the index of the tree, its MCMC state number, treestring itself, tip renaming dict and most recent tip date
-
+        for i, state, treeString, tipRenameDict, maxDate in posterior_tree_iterator(treesPath, burnin = burnin, mostRecentDate = mostRecentDate, tipRegex = tipRegex, dateFmt = dateFmt, treestringRegex = treestringRegex): ## posterior tree iterator returns the index of the tree, its MCMC state number, treestring itself, tip renaming dict and most recent tip date
+            
             if i == 0: ## at first tree
                 _, _, header_val = processFxn(-1, state, treeString, tipRenameDict, maxDate, **kwargs, headerMode = True) ## call worker in header mode
                 out.write(f"state\t{'\t'.join(header_val)}\n") ## write header to output file
-
+                
             fut = ex.submit(processFxn, i, state, treeString, tipRenameDict, maxDate, **kwargs, headerMode = False) ## process tree as usual - calling worker in headerMode = False
             futures.append(fut)
 
@@ -175,7 +174,7 @@ def process_posterior_trees(treesPath,
             except Exception as e:
                 print("Worker crashed:", e)
                 raise
-
+            
             # i, state, value = fut.result()
             heapq.heappush(pq, (i, state, value))
 
@@ -183,7 +182,7 @@ def process_posterior_trees(treesPath,
             while pq and pq[0][0] == next_to_write:
                 _, st, val = heapq.heappop(pq)
                 # print(state, '\t'.join(val))
-                out.write(f"{st}\t{'\t'.join(val)}\n") ## output to file
+                out.write(f"{st}\t{'\t'.join(map(str, val))}\n") ## output to file
                 next_to_write += 1
 
 
@@ -272,10 +271,11 @@ def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tip
     """
 
     tree = make_tree(treeString, 'time')
-    tree.rename_tips(tipRenameDict)
+    if len(tipRenameDict) > 0:
+        tree.rename_tips(tipRenameDict)
     tree.traverse_tree()
     tree.set_absolute_time(maxDate)
-
+    
     if isinstance(tipNames, str): ## was given a single tip
         focalTips = tree.get_external(lambda k: k.is_leaf() and k.name == tipNames) ## get leaf object
         assert len(focalTips) == 1, f'Found {len(focalTips)} tips named {tipNames} in tree.'
@@ -283,16 +283,16 @@ def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tip
         focalTips = tree.get_external(lambda k: k.is_leaf() and k.name in tipNames) ## get leaf objects
         assert len(focalTips) == len(tipNames), f'Found {len(focalTips)} tips but {len(tipNames)} were expected in tree.\nFound in tree: {', '.join([k.name for k in focalTips if k.name in tipNames])}\nMissing from tree: {', '.join([k.name for k in focalTips if k.name not in tipNames])}'
 
-    output_string = [] if headerMode == False else ['state']
-
+    output_string = []
+    
     for focalTip in focalTips: ## iterate over leaf objects
 
         if headerMode == False: ## processing tree and generating actual output
             path = focalTip.get_path_to_root() ## ignore last value (parent of root)
-
+        
             branchTimes = np.array([k.absoluteTime for k in path][::-1])
             branchTraits = np.array([k.traits[traitName] for k in path][::-1])
-
+            
             traitSwitchIdx = np.flatnonzero(branchTraits[1:] != branchTraits[:-1]) + 1 ## identify indices where trait switches
             traitSwitchIdx = np.concatenate(([0], traitSwitchIdx, [len(branchTimes)-1])) ## add first and last value to indices
             traitSwitchStates = branchTraits[traitSwitchIdx] ## grab (new) traits after switch
@@ -343,13 +343,14 @@ def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictM
         pipeline.
     """
     tree = make_tree(treeString, 'time')
-    tree.rename_tips(tipRenameDict)
+    if len(tipRenameDict) > 0:
+        tree.rename_tips(tipRenameDict)
     tree.traverse_tree()
     tree.set_absolute_time(maxDate)
-
+    
     if isinstance(tipNames, list):
         tipNames = {'tmrca': tipNames} ## convert to dict format for later processing
-
+    
     descendants = {}
     for tmrca in tipNames:
         assert len(tipNames[tmrca]) >= 2, f'Need at least 2 tip names to identify TMRCA, {len(tipNames[tmrca])} provided.'
@@ -367,5 +368,18 @@ def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictM
                 out += ['nan']
         else: ## header mode - just output tmrca name
             out += [tmrca]
-
+    
     return i, state, out
+
+def tree_length_worker(i, state, treeString, tipRenameDict, maxDate, headerMode = False):
+    # i, state, treeString, tipRenameDict, maxDate
+    tree = make_tree(treeString, 'time')
+    tree.traverse_tree()
+
+    outputLine = []
+    if headerMode == False:
+        outputLine.append(sum(tree.get_parameter_list('length')))
+    else:
+        outputLine.append('treeLength')
+
+    return i, state, outputLine
