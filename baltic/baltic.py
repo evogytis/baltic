@@ -18,7 +18,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 __all__ = ['make_tree', 'make_tree_JSON']

@@ -7,7 +7,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 import sys
@@ -1084,6 +1084,42 @@ def plot_time_grid(
 
 
 def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, labelPosition='mid', axis='x', **kwargs):
+    """
+    Format the tick positions and labels associated with a time grid.
+
+    Parameters
+    ----------
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes whose ticks should be updated.
+
+    timeline : list[str]
+        Ordered list of calendar dates defining the grid boundaries.
+
+    inputDateFmt : str, optional
+        Format used to parse entries in *timeline*. Defaults to ``'%Y-%m-%d'``.
+
+    outputFmtFxn : callable, optional
+        Function used to convert each timeline entry into a display label.
+        The function must accept a single date string and return a string.
+        If omitted, a month-based formatter is used.
+
+    labelPosition : {'left', 'mid'}, optional
+        Whether labels should be placed on the interval boundaries or at
+        the midpoints of adjacent timeline entries. Defaults to ``'mid'``.
+
+    axis : {'x', 'y'}, optional
+        Axis whose ticks should be formatted. Defaults to ``'x'``.
+
+    kwargs : dict
+        Additional keyword arguments forwarded to
+        :meth:`matplotlib.axes.Axes.set_xticklabels` or
+        :meth:`matplotlib.axes.Axes.set_yticklabels`.
+
+    Returns
+    -------
+    :obj:`matplotlib.axes.Axes`
+        The modified matplotlib Axes object.
+    """
     assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
 
@@ -1112,6 +1148,34 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
 
 
 def untangle(trees,costFxn=None,iterations=None):
+    """
+    Reorder internal node children across multiple trees to reduce tip crossing.
+
+    Parameters
+    ----------
+    trees : list[:class:`.Tree`]
+        Trees to reorder in sequence.
+
+    costFxn : callable, optional
+        Function used to score the discrepancy between the y-positions of a
+        shared tip in adjacent trees. The function must accept a pair of
+        numeric positions and return a scalar cost. If omitted, squared
+        distance is used.
+
+    iterations : int, optional
+        Number of untangling passes to perform. Defaults to ``3``.
+
+    Returns
+    -------
+    list[:class:`.Tree`]
+        The input trees with child orderings updated in place.
+
+    Raises
+    ------
+    RuntimeWarning
+        If a node has ten or more children, making exhaustive permutation
+        search impractical.
+    """
     if iterations is None: iterations=3
     if costFxn is None: costFxn=lambda pair: math.pow(abs(pair[0]-pair[1]),2)
 
@@ -1147,6 +1211,31 @@ def untangle(trees,costFxn=None,iterations=None):
     return trees
 
 def unnest(nodeList, towardsRoot = True):
+    """
+    Remove nested nodes from a list until no selected nodes overlap in tips.
+
+    Parameters
+    ----------
+    nodeList : list[:class:`.BranchLike`]
+        Nodes or leaf-like objects whose descendant tip sets should be made
+        mutually non-overlapping.
+
+    towardsRoot : bool, optional
+        If ``True``, preferentially keep deeper nodes and remove more
+        tip-proximal nested entries. If ``False``, preferentially keep
+        entries closer to the tips. Defaults to ``True``.
+
+    Returns
+    -------
+    list[:class:`.BranchLike`]
+        The filtered list with nested overlaps removed.
+
+    Raises
+    ------
+    AssertionError
+        If *nodeList* contains objects that are neither nodes nor leaf-like
+        branches.
+    """
     assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f"nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}"
 
     while any([A.leaves.isdisjoint(B.leaves) == False for A in nodeList for B in nodeList if A != B]): ## continue looping for as long as any pair of nodes are nested
@@ -1165,6 +1254,45 @@ def unnest(nodeList, towardsRoot = True):
     return nodeList ## when done return list of remaining nodes
 
 def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
+    """
+    Evaluate a root-to-tip regression for a candidate root position.
+
+    Parameters
+    ----------
+    rootCandidate : :class:`.BranchLike`
+        Candidate root branch or node being evaluated.
+
+    tipDates : sequence[float]
+        Sampling times for the tips.
+
+    tipHeights : sequence[float]
+        Root-to-tip distances corresponding to *tipDates*.
+
+    res : dict
+        Mutable result dictionary storing the current best regression summary.
+
+    stat : {'r^2', 'correlation', 'sum of squares'}, optional
+        Criterion used to decide whether the current regression is better than
+        the result already stored in *res*. Defaults to ``'r^2'``.
+
+    forcePositive : bool, optional
+        If ``True``, regressions with negative slope are treated as invalid.
+        Defaults to ``True``.
+
+    frac : float, optional
+        Optional position along a branch associated with the candidate root.
+
+    Returns
+    -------
+    dict
+        Updated regression summary. The dictionary may contain correlation,
+        sum of squares, slope, intercept, ``r^2``, root, and branch fraction.
+
+    Raises
+    ------
+    ValueError
+        If *stat* is not recognized.
+    """
     slope, intercept, rval, _, _ = linregress(tipDates,tipHeights) ## run linear regression
     corr = np.corrcoef((tipDates, tipHeights))[0,1] ## correlation coefficient
     ssq = sum([(y - (slope * x + intercept))**2 for x, y in zip(tipDates, tipHeights)]) ## sum of squares
@@ -1207,17 +1335,29 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
 
 def _rtt_worker(args):
     """
-    Worker for root_by_regression.
+    Evaluate one candidate root in a Monte Carlo root-to-tip analysis.
 
-    args = (
-        tree,                # a picklable copy of the tree
-        root_index,          # candidate root node index
-        fixed_times,         # dict: tip.index -> fixed date
-        uncertain_ranges,    # dict: tip.index -> (min_date, max_date)
-        n_mc,                # number of Monte Carlo iterations
-        stat,                # 'r^2', 'correlation', or 'sum of squares'
-        forcePositive,       # as in your original function
-    )
+    Parameters
+    ----------
+    args : tuple
+        Tuple containing:
+
+        - ``tree``: a tree object to copy and reroot.
+        - ``root_index``: object index for the candidate root.
+        - ``tipDates``: mapping of tip name to fixed sampling date.
+        - ``uncertainDateRanges``: mapping of tip name to ``(min, max)`` date
+          interval for uncertain tips.
+        - ``n_mc``: number of Monte Carlo iterations.
+        - ``stat``: optimization statistic, one of ``'r^2'``,
+          ``'correlation'``, or ``'sum of squares'``.
+        - ``forcePositive``: whether negative regression slopes should be
+          rejected.
+
+    Returns
+    -------
+    dict
+        Best regression result found for the candidate root, with the root
+        stored by index rather than by object reference.
     """
     (tree,
      root_index,
@@ -1288,6 +1428,32 @@ def _rtt_worker(args):
 
 
 def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
+    """
+    Convert rectangular tree coordinates to Cartesian coordinates on a circle.
+
+    Parameters
+    ----------
+    x : float
+        Radial distance from the circle origin.
+
+    y : float
+        Position along the non-informative tree axis.
+
+    yRange : float
+        Total span of the non-informative axis.
+
+    circleStart : float, optional
+        Starting position of the circular layout, expressed as a fraction of a
+        full rotation. Defaults to ``0.0``.
+
+    circleFraction : float, optional
+        Fraction of the full circle used by the layout. Defaults to ``1.0``.
+
+    Returns
+    -------
+    tuple[float, float]
+        Projected ``(x, y)`` coordinates in Cartesian space.
+    """
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
     # circle_fraction_radians = 2*math.pi * circleFraction ## convert arc width to radians
@@ -1302,6 +1468,28 @@ def project_to_polar(x,y,yRange,circleStart=0.0,circleFraction=1.0):
 
 
 def project_polar_vector(x,y,radians,length):
+    """
+    Extend a Cartesian point by a vector defined in polar coordinates.
+
+    Parameters
+    ----------
+    x : float
+        Starting x-coordinate.
+
+    y : float
+        Starting y-coordinate.
+
+    radians : float
+        Direction of the vector in radians.
+
+    length : float
+        Length of the vector.
+
+    Returns
+    -------
+    tuple[float, float]
+        Endpoint coordinates after applying the vector.
+    """
 
     new_x = x + length * math.cos(radians)
     new_y = y + length * math.sin(radians)
@@ -1330,13 +1518,16 @@ def desaturate(
 
     out : {'auto', 'hex', 'rgb', 'rgba'}, optional
         The output format of the desaturated color:
-        - ``'auto'``: Matches the input format (e.g.,
-        hex strings remain hex, tuples remain tuples).
-        - ``'hex'``: Returns a hex string (e.g.,
-        ``"#RRGGBB"`` or ``"#RRGGBBAA"`` if alpha is present).
+
+        - ``'auto'``: Matches the input format (e.g., hex strings remain
+          hex, tuples remain tuples).
+        - ``'hex'``: Returns a hex string (e.g., ``"#RRGGBB"`` or
+          ``"#RRGGBBAA"`` if alpha is present).
         - ``'rgb'``: Returns an RGB tuple ``(R, G, B)``.
         - ``'rgba'``: Returns an RGBA tuple ``(R, G, B, A)``.
+
         Defaults to ``'auto'``.
+
     Returns
     -------
     str or tuple
@@ -1467,10 +1658,25 @@ def desaturate_cmap(
 
 def hpd(data, level = 0.95):
     """
-    Return highest posterior density interval from a list,
-    given the posterior density interval required.
-    Copyright (C) 2010 Joseph Heled
-    Author: Joseph Heled <jheled@gmail.com>
+    Compute the highest posterior density interval for a sample.
+
+    Parameters
+    ----------
+    data : sequence[float]
+        Posterior samples.
+
+    level : float, optional
+        Posterior mass to include in the interval. Defaults to ``0.95``.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Lower and upper bounds of the highest posterior density interval, or
+        ``None`` if there are too few samples to estimate the interval.
+
+    Notes
+    -----
+    Original implementation copyright (C) 2010 Joseph Heled.
     """
     d = list(data)
     d.sort()

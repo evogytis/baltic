@@ -7,7 +7,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 import logging
@@ -68,6 +68,29 @@ class BranchLike:
         parent=None,
         traits=None,
         ):
+        """
+        Initialize a generic branch-like object.
+
+        Parameters
+        ----------
+        length : float, optional
+            Length of the incoming branch. Defaults to ``0.0``.
+
+        height : float, optional
+            Height of the branch in tree coordinates.
+
+        absoluteTime : float, optional
+            Absolute time assigned to the branch endpoint.
+
+        absoluteTimeRange : tuple[float, float], optional
+            Uncertainty interval associated with *absoluteTime*.
+
+        parent : :class:`.BranchLike`, optional
+            Parent branch in the tree.
+
+        traits : dict, optional
+            Mapping of parsed annotations associated with the branch.
+        """
         self.branchType=None
         self.length=length
         self.height=height
@@ -172,4 +195,12 @@ class BranchLike:
 
 
     def __str__(self):
+        """
+        Return a compact string representation of the branch.
+
+        Returns
+        -------
+        str
+            Human-readable representation containing the branch index.
+        """
         return f"BranchLike({self.index})"

@@ -7,7 +7,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 
@@ -51,6 +51,20 @@ class Reticulation(BranchLike):
         width=0.5,
         target=None,
         ):
+        """
+        Initialize a reticulation branch.
+
+        Parameters
+        ----------
+        name : str
+            Identifier for the reticulation event.
+
+        width : float, optional
+            Plotting width assigned to the reticulation. Defaults to ``0.5``.
+
+        target : :class:`.BranchLike`, optional
+            Destination branch into which the reticulation merges.
+        """
         super().__init__() # Inherit traits from BranchLike
         self.name=name
         self.branchType='reticulation'
@@ -70,4 +84,12 @@ class Reticulation(BranchLike):
         return False
 
     def __str__(self):
+        """
+        Return a compact string representation of the reticulation.
+
+        Returns
+        -------
+        str
+            Human-readable representation containing the reticulation name.
+        """
         return f"Reticulation({self.name})"

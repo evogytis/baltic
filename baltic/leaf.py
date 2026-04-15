@@ -7,7 +7,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 
@@ -38,6 +38,14 @@ class Leaf(BranchLike):
     """
 
     def __init__(self, name):
+        """
+        Initialize a terminal leaf.
+
+        Parameters
+        ----------
+        name : str
+            Tip label associated with the leaf.
+        """
         super().__init__() # all of leaf's traits come from BranchLike
         self.branchType='leaf'
         self.name=name
@@ -55,4 +63,12 @@ class Leaf(BranchLike):
         return False
 
     def __str__(self):
+        """
+        Return a compact string representation of the leaf.
+
+        Returns
+        -------
+        str
+            Human-readable representation containing the leaf name.
+        """
         return f"Leaf({self.name})"

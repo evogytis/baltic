@@ -11,6 +11,24 @@ logger = logging.getLogger("baltic.io")
 
 
 def process_tip_dates(tree, tipRegex, dateFmt, variableDate):
+    """
+    Parse tip dates from leaf names and assign absolute times to a tree.
+
+    Parameters
+    ----------
+    tree : :class:`baltic.tree.Tree`
+        Tree whose external branches should be inspected.
+
+    tipRegex : str
+        Regular expression used to extract the date token from each tip name.
+
+    dateFmt : str
+        Date format used to parse the captured token.
+
+    variableDate : bool
+        Whether partially specified dates should be interpreted with date
+        uncertainty.
+    """
     tip_dates = []
     tip_names = []
     tipDateUncertainties = {}
@@ -37,6 +55,39 @@ def load_newick(treePath,
                 variableDate=True,
                 absoluteTime=False,
                 sortBranches=True):
+    """
+    Load a tree from a Newick file or file-like object.
+
+    Parameters
+    ----------
+    treePath : str or file-like
+        Path to a Newick file or an open handle containing a Newick tree.
+
+    treeType : {'time', 'divergence'}
+        Type of tree being loaded.
+
+    tipRegex : str, optional
+        Regular expression used to extract dates from tip labels.
+
+    dateFmt : str, optional
+        Format used to parse extracted tip dates.
+
+    variableDate : bool, optional
+        Whether partially specified dates should be interpreted with
+        uncertainty. Defaults to ``True``.
+
+    absoluteTime : bool, optional
+        If ``True``, assign absolute times based on tip labels. Defaults to
+        ``False``.
+
+    sortBranches : bool, optional
+        If ``True``, sort branches after parsing. Defaults to ``True``.
+
+    Returns
+    -------
+    :class:`baltic.tree.Tree`
+        Parsed tree object.
+    """
     ll = None
 
     handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
@@ -69,6 +120,42 @@ def load_nexus(treePath,
                 variableDate=True,
                 absoluteTime=True,
                 sortBranches=True):
+    """
+    Load a tree from a Nexus file or file-like object.
+
+    Parameters
+    ----------
+    treePath : str or file-like
+        Path to a Nexus file or an open handle containing Nexus content.
+
+    treeType : {'time', 'divergence'}
+        Type of tree being loaded.
+
+    tipRegex : str, optional
+        Regular expression used to extract dates from tip labels.
+
+    dateFmt : str, optional
+        Format used to parse extracted tip dates.
+
+    treestringRegex : str, optional
+        Regular expression used to identify the line containing the tree.
+
+    variableDate : bool, optional
+        Whether partially specified dates should be interpreted with
+        uncertainty. Defaults to ``True``.
+
+    absoluteTime : bool, optional
+        If ``True``, assign absolute times based on tip labels. Defaults to
+        ``True``.
+
+    sortBranches : bool, optional
+        If ``True``, sort branches after parsing. Defaults to ``True``.
+
+    Returns
+    -------
+    :class:`baltic.tree.Tree`
+        Parsed tree object.
+    """
     tip_flag = False
     tips = {}
     tip_num = 0
@@ -129,6 +216,44 @@ def load_posterior_nexus(treePath,
                 variableDate=True,
                 absoluteTime=True,
                 sortBranches=True):
+    """
+    Iterate over post-burn-in trees in a posterior Nexus tree set.
+
+    Parameters
+    ----------
+    treePath : str or file-like
+        Path to a Nexus tree set or an open handle containing the tree set.
+
+    treeType : {'time', 'divergence'}
+        Type of tree being loaded.
+
+    burnin : int, optional
+        Number of trees to skip from the start of the posterior sample.
+
+    tipRegex : str, optional
+        Regular expression used to extract dates from tip labels.
+
+    dateFmt : str, optional
+        Format used to parse extracted tip dates.
+
+    treestringRegex : str, optional
+        Regular expression used to identify tree lines.
+
+    variableDate : bool, optional
+        Whether partially specified dates should be interpreted with
+        uncertainty.
+
+    absoluteTime : bool, optional
+        If ``True``, assign absolute times based on tip labels.
+
+    sortBranches : bool, optional
+        If ``True``, sort branches after parsing.
+
+    Yields
+    ------
+    :class:`baltic.tree.Tree`
+        Parsed trees from the posterior sample.
+    """
     tip_flag = False
     tips = {}
     tip_num = 0
@@ -190,6 +315,33 @@ def load_JSON(jsonObject,
                 jsonTranslation=None,
                 sort=True,
                 stats=True):
+    """
+    Load a tree from an Auspice-style JSON object, file, or URL.
+
+    Parameters
+    ----------
+    jsonObject : str or dict
+        JSON source. This may be a local path, a Nextstrain URL, or an
+        already loaded JSON object.
+
+    treeType : {'time', 'divergence'}
+        Type of tree being loaded.
+
+    jsonTranslation : dict, optional
+        Mapping from baltic attribute names to JSON field names or callables.
+
+    sort : bool, optional
+        If ``True``, sort branches after parsing. Defaults to ``True``.
+
+    stats : bool, optional
+        If ``True``, compute and print tree statistics after parsing.
+        Defaults to ``True``.
+
+    Returns
+    -------
+    tuple[:class:`baltic.tree.Tree`, dict]
+        Parsed tree and associated metadata dictionary.
+    """
     if jsonTranslation is None:
         jsonTranslation={'name':'name','absoluteTime':'num_date'}
 

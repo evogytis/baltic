@@ -7,7 +7,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 
@@ -63,6 +63,29 @@ class Clade(BranchLike): ## clade class
         lastAbsoluteTime=None,
         width=1.0,
         ):
+        """
+        Initialize a collapsed clade placeholder.
+
+        Parameters
+        ----------
+        name : str
+            Label for the collapsed clade.
+
+        subtree : list[:class:`.BranchLike`], optional
+            Branches contained in the collapsed subtree.
+
+        leaves : list[:class:`.Leaf`], optional
+            Descendant leaves represented by the clade.
+
+        lastHeight : float, optional
+            Height of the deepest descendant in the collapsed subtree.
+
+        lastAbsoluteTime : float, optional
+            Absolute time of the deepest descendant in the collapsed subtree.
+
+        width : float, optional
+            Plotting width assigned to the clade. Defaults to ``1.0``.
+        """
         super().__init__() # Inherit traits from BranchLike
         self.name=name
         self.branchType='clade'
@@ -85,4 +108,12 @@ class Clade(BranchLike): ## clade class
         return False
 
     def __str__(self):
+        """
+        Return a compact string representation of the clade.
+
+        Returns
+        -------
+        str
+            Human-readable representation containing the clade name.
+        """
         return f"Clade({self.name})"

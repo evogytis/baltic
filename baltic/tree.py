@@ -19,7 +19,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 import copy
@@ -92,6 +92,35 @@ class Tree:
         treeHeight=0.0,
         ySpan=0.0,
         ):
+        """
+        Initialize a tree container.
+
+        Parameters
+        ----------
+        treeType : {'divergence', 'time'}
+            Interpretation of branch lengths in the tree.
+
+        curNode : :class:`.Node`, optional
+            Current node used during tree construction.
+
+        root : :class:`.Node`, optional
+            Root node of the tree.
+
+        Objects : list[:class:`.BranchLike`], optional
+            Flat list of branches currently contained in the tree.
+
+        tipMap : dict, optional
+            Mapping between alternate tip naming schemes.
+
+        mostRecent : float, optional
+            Most recent absolute time observed in the tree.
+
+        treeHeight : float, optional
+            Total height of the tree.
+
+        ySpan : float, optional
+            Span of the non-informative plotting axis.
+        """
         assert treeType in [
             "divergence",
             "time"
@@ -448,6 +477,15 @@ class Tree:
         self,
         dateUncertainties,
         ):
+        """
+        Attach absolute-time uncertainty intervals to external branches.
+
+        Parameters
+        ----------
+        dateUncertainties : dict[str, tuple[float, tuple[float, float]]]
+            Mapping from tip name to a best estimate and corresponding
+            uncertainty interval.
+        """
         for k in self.get_external():
             k.absoluteTime, k.absoluteTimeRange = dateUncertainties[k.name]
 
@@ -1314,6 +1352,24 @@ class Tree:
         total=None,
         padNodes=None,
         ):
+        """
+        Recursively assign Cartesian coordinates for an unrooted tree layout.
+
+        Parameters
+        ----------
+        circStart : float, optional
+            Starting angular offset as a fraction of a full circle.
+
+        node : :class:`.BranchLike`, optional
+            Node currently being positioned. If omitted, positioning begins at
+            the root.
+
+        total : float, optional
+            Total width used to normalize angular allocation.
+
+        padNodes : dict, optional
+            Mapping of branches to extra spacing values.
+        """
         if padNodes is None: padNodes = {}
 
         if node is None:
@@ -3199,6 +3255,32 @@ class Tree:
         colourFxn,
         **kwargs,
     ):
+        """
+        Render text labels on a rectangular tree layout.
+
+        Parameters
+        ----------
+        ax : :obj:`matplotlib.axes.Axes`
+            Axes on which text should be drawn.
+
+        targetFxn, xCoordinateFxn, yCoordinateFxn, textContentFxn, colourFxn : callable
+            Functions controlling label selection, placement, content, and
+            colour.
+
+        orientation : {'horizontal', 'vertical'}
+            Orientation of the rectangular layout.
+
+        cladeEndAttrFxn : callable
+            Included for signature consistency with other text helpers.
+
+        **kwargs
+            Additional keyword arguments forwarded to ``ax.text``.
+
+        Returns
+        -------
+        :obj:`matplotlib.axes.Axes`
+            The modified matplotlib Axes object.
+        """
         localKwargs = dict(kwargs)
 
         if orientation == 'vertical':
@@ -3236,6 +3318,29 @@ class Tree:
         colourFxn,
         **kwargs,
         ):
+        """
+        Render text labels on an unrooted tree layout.
+
+        Parameters
+        ----------
+        ax : :obj:`matplotlib.axes.Axes`
+            Axes on which text should be drawn.
+
+        targetFxn, xCoordinateFxn, yCoordinateFxn, textContentFxn, colourFxn : callable
+            Functions controlling label selection, placement, content, and
+            colour.
+
+        cladeEndAttrFxn : callable
+            Included for signature consistency with other text helpers.
+
+        **kwargs
+            Additional keyword arguments forwarded to ``ax.text``.
+
+        Returns
+        -------
+        :obj:`matplotlib.axes.Axes`
+            The modified matplotlib Axes object.
+        """
         localKwargs = dict(kwargs)
 
         if "verticalalignment" not in localKwargs:
@@ -3286,6 +3391,38 @@ class Tree:
         colourFxn,
         **kwargs,
         ):
+        """
+        Render text labels on a circular tree layout.
+
+        Parameters
+        ----------
+        ax : :obj:`matplotlib.axes.Axes`
+            Axes on which text should be drawn.
+
+        targetFxn, textContentFxn, xCoordinateFxn, yCoordinateFxn, normaliseHeight, colourFxn : callable
+            Functions controlling label selection, placement, content,
+            normalization, and colour.
+
+        circStart : float
+            Starting angular offset as a fraction of a full circle.
+
+        circFrac : float
+            Fraction of the circle used by the layout.
+
+        inwardSpace : float
+            Radial offset applied before projection.
+
+        cladeEndAttrFxn : callable
+            Included for signature consistency with other text helpers.
+
+        **kwargs
+            Additional keyword arguments forwarded to ``ax.text``.
+
+        Returns
+        -------
+        :obj:`matplotlib.axes.Axes`
+            The modified matplotlib Axes object.
+        """
         assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
 
         localKwargs = dict(kwargs)  ## copy global kwargs into a local version
@@ -3456,6 +3593,48 @@ class Tree:
 
     def _plot_rectangular_tree(self,ax,connectionType,xCoordinateFxn,yCoordinateFxn,targetFxn,widthFxn,colourFxn,orientation,
                                 plotClades,cladeColour,cladeEndAttrFxn,cladeStyle,cladeBaseWidth,**kwargs):
+        """
+        Render branch geometry for a rectangular or vertically oriented tree.
+
+        Parameters
+        ----------
+        ax : :obj:`matplotlib.axes.Axes`
+            Axes on which branches should be drawn.
+
+        connectionType : {'baltic', 'direct', 'elbow'}
+            Style used to connect branches to their parents.
+
+        xCoordinateFxn, yCoordinateFxn, targetFxn, widthFxn, colourFxn : callable
+            Functions controlling branch placement, filtering, width, and
+            colour.
+
+        orientation : {'horizontal', 'vertical'}
+            Orientation of the layout.
+
+        plotClades : bool
+            Whether collapsed clades should be drawn.
+
+        cladeColour : color or callable
+            Colour specification for collapsed clades.
+
+        cladeEndAttrFxn : callable
+            Function defining the terminal x position of collapsed clades.
+
+        cladeStyle : {'equal', 'skewed'}
+            Style used for collapsed clade polygons.
+
+        cladeBaseWidth : float
+            Fractional width of the clade base.
+
+        **kwargs
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.collections.LineCollection`.
+
+        Returns
+        -------
+        :obj:`matplotlib.axes.Axes`
+            The modified matplotlib Axes object.
+        """
 
 
         localKwargs = dict(kwargs)
@@ -3520,6 +3699,68 @@ class Tree:
     def _plot_circular_tree(self,ax,targetFxn,xCoordinateFxn,yCoordinateFxn,widthFxn,colour,
                             circStart,circFrac,inwardSpace,normaliseHeight,connectionType,padNodes,precision,plotClades,cladeColour,
                             cladeEndAttrFxn,cladeStyle,cladeShape,cladeBaseWidth,**kwargs):
+        """
+        Render branch geometry for a circular tree layout.
+
+        Parameters
+        ----------
+        ax : :obj:`matplotlib.axes.Axes`
+            Axes on which branches should be drawn.
+
+        targetFxn, xCoordinateFxn, yCoordinateFxn, widthFxn : callable
+            Functions controlling branch filtering, placement, and width.
+
+        colour : callable
+            Function that returns branch colours.
+
+        circStart : float
+            Starting angular offset as a fraction of a full circle.
+
+        circFrac : float
+            Fraction of the circle used by the layout.
+
+        inwardSpace : float
+            Radial offset applied before projection.
+
+        normaliseHeight : callable
+            Function mapping branch heights to radial positions.
+
+        connectionType : {'baltic', 'direct', 'elbow'}
+            Style used to connect branches to their parents.
+
+        padNodes : dict
+            Mapping of branches to additional spacing values.
+
+        precision : int
+            Number of interpolation points used for arcs.
+
+        plotClades : bool
+            Whether collapsed clades should be drawn.
+
+        cladeColour : color or callable
+            Colour specification for collapsed clades.
+
+        cladeEndAttrFxn : callable
+            Function defining the terminal radial position of collapsed clades.
+
+        cladeStyle : {'equal', 'skewed'}
+            Style used for collapsed clade polygons.
+
+        cladeShape : {'triangle', 'square'}
+            Shape used to depict collapsed clades.
+
+        cladeBaseWidth : float
+            Fractional width of the clade base.
+
+        **kwargs
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.collections.LineCollection`.
+
+        Returns
+        -------
+        :obj:`matplotlib.axes.Axes`
+            The modified matplotlib Axes object.
+        """
         if cladeColour is None: cladeColour = (0.7,0.7,0.7)
         if cladeShape is None: cladeShape = 'triangle'
         if cladeEndAttrFxn is None: cladeEndAttrFxn = lambda k: max([xCoordinateFxn(desc) for desc in k.subtree])

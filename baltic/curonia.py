@@ -118,12 +118,44 @@ def fix_freq(freq, pc):
 
 
 def logit_transform(freq, pc):
+    """
+    Transform frequencies to logit space after pseudocount clipping.
+
+    Parameters
+    ----------
+    freq : array-like
+        Frequencies to transform.
+
+    pc : float
+        Pseudocount used to clip frequencies away from 0 and 1.
+
+    Returns
+    -------
+    np.ndarray
+        Logit-transformed frequencies.
+    """
     freq = np.asarray(freq)
     f = fix_freq(freq, pc)
     return np.log(f / (1 - f))
 
 
 def logit_inv(logit_freq, pc):
+    """
+    Transform logit-space values back to clipped frequencies.
+
+    Parameters
+    ----------
+    logit_freq : array-like
+        Values in logit space.
+
+    pc : float
+        Pseudocount used to clip the reconstructed frequencies.
+
+    Returns
+    -------
+    np.ndarray
+        Frequencies constrained to the interval ``[pc, 1 - pc]``.
+    """
     logit_freq = np.asarray(logit_freq)
     tmp = np.exp(logit_freq)
     tmp = np.maximum(pc / (1 - pc), np.minimum((1 - pc) / pc, tmp))  # CHANGED: tighter symmetric clipping
@@ -131,6 +163,19 @@ def logit_inv(logit_freq, pc):
 
 
 def pq(p):
+    """
+    Compute the Bernoulli variance term ``p * (1 - p)``.
+
+    Parameters
+    ----------
+    p : array-like
+        Frequencies or probabilities.
+
+    Returns
+    -------
+    np.ndarray
+        Elementwise Bernoulli variance term.
+    """
     p = np.asarray(p)
     return p * (1 - p)
 
@@ -184,6 +229,19 @@ class frequency_estimator(object):
         self.obs = self.obs[good_tps]
 
     def initial_guess(self, pc=0.01):
+        """
+        Construct an initial frequency trajectory estimate on the pivot grid.
+
+        Parameters
+        ----------
+        pc : float, optional
+            Pseudocount used to clip the initial estimate away from 0 and 1.
+
+        Returns
+        -------
+        np.ndarray
+            Initial frequency values at each pivot.
+        """
         # generate a useful initial guess from a running average of the counts
         if self.tps.size == 0:
             # CHANGED: guard against empty tps
@@ -202,6 +260,15 @@ class frequency_estimator(object):
         return pivot_freq
 
     def stiffLH(self):
+        """
+        Compute the smoothness penalty term of the trajectory likelihood.
+
+        Returns
+        -------
+        float
+            Log-likelihood contribution from the diffusion-style smoothness
+            prior.
+        """
         freq = self.pivot_freq
         dfreq = np.diff(freq)
         dfreq_penalty = dfreq[1:] - self.inertia * dfreq[:-1]
@@ -213,6 +280,15 @@ class frequency_estimator(object):
         )
 
     def learn(self, initial_guess=None):
+        """
+        Fit the frequency trajectory by numerical optimization.
+
+        Parameters
+        ----------
+        initial_guess : callable, optional
+            Function that accepts the pivot grid and returns an initial
+            frequency trajectory.
+        """
         self.dt = np.diff(self.pivots)
 
         def logLH(x):
@@ -270,6 +346,30 @@ class freq_est_clipped(object):
     """
 
     def __init__(self, tps, obs, pivots, name=None, dtps=None, **kwargs):
+        """
+        Initialize a clipped frequency estimator around the observation window.
+
+        Parameters
+        ----------
+        tps : array-like
+            Observation times.
+
+        obs : array-like
+            Boolean observations aligned with *tps*.
+
+        pivots : np.ndarray
+            Pivot grid on which frequencies will be estimated.
+
+        name : str, optional
+            Label used in diagnostic messages.
+
+        dtps : float, optional
+            Additional margin around the first and last positive observation.
+
+        **kwargs
+            Additional keyword arguments forwarded to
+            :class:`frequency_estimator`.
+        """
         super(freq_est_clipped, self).__init__()
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
         self.tps = tmp_obs[:, 0]
@@ -321,6 +421,9 @@ class freq_est_clipped(object):
                                       self.pivots[self.good_pivots], **kwargs)
 
     def learn(self):
+        """
+        Fit the clipped frequency estimator and expand the result to the full pivot grid.
+        """
         if not self.valid:
             self.pivot_freq = np.zeros_like(self.pivots)
             return
@@ -358,6 +461,14 @@ class nested_frequencies(object):
         self.kwargs = kwargs
 
     def calc_freqs(self):
+        """
+        Estimate mutually exclusive child frequencies on a shared pivot grid.
+
+        Returns
+        -------
+        dict
+            Mapping of observation key to estimated pivot frequencies.
+        """
         # sort by total number of positives per clade (largest first)
         sorted_obs = sorted(self.obs.items(), key=lambda x: x[1].sum(), reverse=True)
 
@@ -397,6 +508,27 @@ class tree_frequencies(object):
     """
 
     def __init__(self, tree, timepoints, verbose=0, pc=1e-4, **kwargs):
+        """
+        Initialize a tree-wide clade frequency estimator.
+
+        Parameters
+        ----------
+        tree : :class:`baltic.tree.Tree`
+            Tree whose nodes carry observation metadata.
+
+        timepoints : int or array-like
+            Number of pivots or explicit pivot locations used for frequency
+            estimation.
+
+        verbose : int, optional
+            Verbosity flag for diagnostic output.
+
+        pc : float, optional
+            Pseudocount used to clip frequencies away from 0 and 1.
+
+        **kwargs
+            Additional keyword arguments forwarded to nested estimators.
+        """
 
         self.tree = tree
         self.timepoints = timepoints

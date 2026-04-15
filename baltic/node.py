@@ -7,7 +7,7 @@ This version of ``baltic`` (v0.1) contains many API changes from previous versio
 
 Attributes
 ----------
-logger : :external+python:py:class:`logging.Logger`
+logger : ``logging.Logger``
     Default logger which will be passed to other baltic functions.
 """
 
@@ -53,6 +53,20 @@ class Node(BranchLike):
         childHeight=None,
         leaves=None,
         ):
+        """
+        Initialize an internal node.
+
+        Parameters
+        ----------
+        children : list[:class:`.BranchLike`], optional
+            Descendant branches of the node.
+
+        childHeight : float, optional
+            Maximum descendant height observed below the node.
+
+        leaves : set[str], optional
+            Descendant leaf names associated with the node.
+        """
         super().__init__()
         self.branchType='node'
         self.children = children if children is not None else []
@@ -73,4 +87,12 @@ class Node(BranchLike):
         return True
 
     def __str__(self):
+        """
+        Return a compact string representation of the node.
+
+        Returns
+        -------
+        str
+            Human-readable representation containing the node index.
+        """
         return f"Node({self.index})"

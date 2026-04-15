@@ -8,10 +8,36 @@ logger = logging.getLogger("baltic.samogitia")
 
 def posterior_tree_iterator(treesPath, burnin, outputPath, mostRecentDate, tipRegex, dateFmt, treestringRegex):
     """
-    Takes a treePath (path to .trees file), burnin, outputPath (output name), mostRecentDate (for most recent tip date), tipRegex (for figuring out collection dates), dateFmt (for parsing calendar dates), treestringRegex (for identifying lines with trees and their MCMC state number).
-    Parses .trees file, yields each treestring (and tip name map + most recent date) after burnin is passed.
-    Each treestring is passed onto a separate parallel worker elsewhere.
-    ### there might be ways to make this parsing more efficient and still need to fix identifying most recent tip dates and determine how dummy most recent dates are handled in the .trees file.
+    Iterate over tree strings in a posterior ``.trees`` file after burn-in.
+
+    Parameters
+    ----------
+    treesPath : str
+        Path to the posterior tree file.
+
+    burnin : int
+        Number of initial sampled trees to skip.
+
+    outputPath : str
+        Output path associated with the downstream processing workflow.
+
+    mostRecentDate : float or None
+        Explicit most recent sampling date. Currently unused during parsing.
+
+    tipRegex : str
+        Regular expression used to extract dates from tip names.
+
+    dateFmt : str
+        Calendar date format used to parse matched tip dates.
+
+    treestringRegex : str
+        Regular expression used to identify tree lines and extract state
+        numbers.
+
+    Yields
+    ------
+    tuple
+        Tuple ``(i, state, treeString, tips, maxDate)`` for each sampled tree.
     """
     tip_flag = False
     tips = {}
@@ -86,19 +112,39 @@ def process_posterior_trees(treesPath,
                             treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
                             **kwargs):
     """
-    This is the generic function that gets called when processing posterior sets of trees.
-    At a minimum it takes a path to the .trees file (treesPath) and a worker function (processFxn).
-    It calls the `posterior_tree_iterator` which yields treestrings that are passed onto some number (equal to `workers`) of parallel worker functions that return processed results asynchronously.
-    Worker functions must have a `headerMode` parameter which when True returns the header of the output file (for future parsing or loading into Tracer).
+    Process a posterior tree set with a parallel worker function.
 
-    Example:
+    Parameters
+    ----------
+    treesPath : str
+        Path to the posterior ``.trees`` file.
 
-    process_posterior_trees(inTree,
-                            processFxn = tmrca_worker,
-                            tipNames = tipNames)
+    processFxn : callable
+        Worker function applied to each sampled tree.
 
-    will call a tmrca_worker function on posterior set of trees in `inTree`
-    tmrca_worker takes a `tipNames` parameter which is passed to it via kwargs.
+    workers : int, optional
+        Maximum number of worker processes to use. Defaults to ``4``.
+
+    burnin : int, optional
+        Number of initial sampled trees to skip. Defaults to ``0``.
+
+    outputPath : str, optional
+        Path to the tab-delimited output file.
+
+    mostRecentDate : float, optional
+        Explicit most recent sampling date to pass to workers.
+
+    tipRegex : str, optional
+        Regular expression used to extract dates from tip names.
+
+    dateFmt : str, optional
+        Date format used to parse extracted tip dates.
+
+    treestringRegex : str, optional
+        Regular expression used to identify tree lines and their state values.
+
+    **kwargs
+        Additional keyword arguments forwarded to *processFxn*.
     """
     if burnin is None:
         burnin = 0
@@ -187,9 +233,42 @@ def label_timepoints(times, edges, labels):
 
 def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, traitName, timeline, headerMode = False):
     """
-    Will take tree index, tree object, tipNames (str or list) of interest, traitName (for tracking back to root), timeline (time points at which to determine trait state along path).
-    Returns the trait state of the lineage connecting the tipNames provided to the root of the tree at each point along timeline.
-    tipNames can be a string (for one tip) or a list of tips (for multiple)
+    Track lineage trait states backward in time for one or more focal tips.
+
+    Parameters
+    ----------
+    i : int
+        Tree index within the posterior sample.
+
+    state : int
+        MCMC state associated with the sampled tree.
+
+    treeString : str
+        Serialized tree string for the sampled tree.
+
+    tipRenameDict : dict
+        Mapping from numeric tip identifiers to display names.
+
+    maxDate : float
+        Most recent sampling date used to assign absolute times.
+
+    tipNames : str or list[str]
+        Tip name or names whose lineage trait history should be extracted.
+
+    traitName : str
+        Trait to read along the path from each focal tip to the root.
+
+    timeline : array-like
+        Time points at which trait states should be reported.
+
+    headerMode : bool, optional
+        If ``True``, return output column names instead of values.
+
+    Returns
+    -------
+    tuple
+        Tuple ``(i, state, values)`` suitable for the posterior-processing
+        pipeline.
     """
 
     tree = make_tree(treeString, 'time')
@@ -228,10 +307,40 @@ def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tip
 
 def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictMRCA = False, headerMode = False):
     """
-    Takes tipNames that define a clade and return its TMRCA.
-    strictMRCA parameter controls whether we want to restrict the common ancestor dates to just nodes whose descendants exactly match the descendants required or the common ancestor in its general sense. Basically whether we want to condition the TMRCA on monophyly of the tips provided.
-    If tipNames is a list, the function returns a single TMRCA value corresponding to the common ancestor of those tips.
-    If tipNames is a dict, its structure should be {'tmrca A': ['tip A1', 'tip A2', 'tip C'], 'tmrca B': ['tip B1', 'tip B2', 'tip D']} and it will returns a separate TMRCA value for each list of tips provided in the dict values.
+    Compute TMRCA values for one or more named tip sets in a sampled tree.
+
+    Parameters
+    ----------
+    i : int
+        Tree index within the posterior sample.
+
+    state : int
+        MCMC state associated with the sampled tree.
+
+    treeString : str
+        Serialized tree string for the sampled tree.
+
+    tipRenameDict : dict
+        Mapping from numeric tip identifiers to display names.
+
+    maxDate : float
+        Most recent sampling date used to assign absolute times.
+
+    tipNames : list[str] or dict[str, list[str]]
+        Tip set definitions for which TMRCA values should be reported.
+
+    strictMRCA : bool, optional
+        If ``True``, only report TMRCAs for nodes whose descendant set exactly
+        matches the requested tip set.
+
+    headerMode : bool, optional
+        If ``True``, return output column names instead of values.
+
+    Returns
+    -------
+    tuple
+        Tuple ``(i, state, values)`` suitable for the posterior-processing
+        pipeline.
     """
     tree = make_tree(treeString, 'time')
     tree.rename_tips(tipRenameDict)
