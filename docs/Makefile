@@ -1,10 +1,15 @@
 # Minimal makefile for Sphinx documentation
 #
 
-# You can set these variables from the command line, and also
-# from the environment for the first two.
+# Prefer the repo-managed docs environment when it exists so local builds use
+# the same theme and dependency set declared in anaconda-project.yml.
+LOCALSPHINX   := $(CURDIR)/envs/default/bin/sphinx-build
 SPHINXOPTS    ?=
+ifeq ($(wildcard $(LOCALSPHINX)),)
 SPHINXBUILD   ?= sphinx-build
+else
+SPHINXBUILD   ?= $(LOCALSPHINX)
+endif
 SOURCEDIR     = source
 BUILDDIR      = build
 
