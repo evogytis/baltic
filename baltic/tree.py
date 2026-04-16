@@ -2209,7 +2209,7 @@ class Tree: ## tree class
             Function returning the far edge of collapsed clades.
         recomputeCoordinates : bool, optional
             If ``True``, recompute tree coordinates before plotting.
-        **kwargs
+        ``**kwargs``
             Additional keyword arguments forwarded to ``Axes.text``.
 
         Returns
@@ -2450,7 +2450,7 @@ class Tree: ## tree class
             Extra horizontal offset, expressed as a fraction of tree height.
         connectingLines : bool, optional
             If ``True``, draw guide lines between tips and aligned labels.
-        **kwargs
+        ``**kwargs``
             Additional keyword arguments forwarded to :meth:`plot_text`.
 
         Returns
@@ -2567,7 +2567,7 @@ class Tree: ## tree class
             Circular-layout controls.
         recomputeCoordinates : bool, optional
             If ``True``, recompute coordinates before plotting.
-        **kwargs
+        ``**kwargs``
             Additional keyword arguments forwarded to ``Axes.scatter``.
 
         Returns
@@ -3065,7 +3065,7 @@ class Tree: ## tree class
             If ``True``, recompute branch coordinates before plotting.
         autoSort : bool, optional
             If ``True``, sort branches before drawing.
-        **kwargs
+        ``**kwargs``
             Additional keyword arguments forwarded to the line collection.
 
         Returns
@@ -3245,7 +3245,7 @@ class Tree: ## tree class
             Orientation of the exploded view.
         connectionType : {"baltic", "direct", "elbow"}, optional
             Branch connection style used for each subtree.
-        **kwargs
+        ``**kwargs``
             Additional keyword arguments forwarded to subtree plotting calls.
 
         Returns
