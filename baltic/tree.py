@@ -29,6 +29,9 @@ logger = logging.getLogger("baltic.Tree")
 
 
 class Tree: ## tree class
+    """
+    Represent a phylogenetic tree and provide traversal, manipulation, and plotting helpers.
+    """
     def __init__(self, treeType):
         """
         Initialize an empty baltic tree.
