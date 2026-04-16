@@ -2,8 +2,8 @@
    :hidden:
    :maxdepth: 3
 
-``Tree``
-========
+``curonia``
+===========
 
-.. automodule:: baltic.tree
+.. automodule:: baltic.curonia
     :members:

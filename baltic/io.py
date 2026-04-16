@@ -1,44 +1,24 @@
+"""This module provides the ``baltic`` input and output functions.
+
+Notes
+-----
+This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
+Attributes
+----------
+logger : ``logging.Logger``
+    Default logger which will be passed to other baltic functions.
+"""
 import re
 import json
 from io import BytesIO as csio
 import logging
-import warnings
 import requests
 from baltic.baltic import make_tree, make_tree_JSON
 from baltic.bt_utils import calendar_to_decimal_date
 
 logger = logging.getLogger("baltic.io")
-
-
-def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
-    tipDates = []
-    tipNames = []
-    tipDateUncertainties = {}
-    for k in tree.get_external():
-        tipNames.append(k.name)
-        match = re.search(tipRegex, k.name)
-        if match:
-            date = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate)
-            if variableDate and (date[1][1] - date[1][0]) == 0: ## only keep dates that are certain for setting absolute time
-                tipDates.append(date[0]) ## date will be tuple of (date, (dateMin,dateMax)) if variableDate == True
-            elif variableDate == False:
-                tipDates.append(date)
-            
-            tipDateUncertainties[k.name] = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = True) ## logic around here might need more thinking
-        else:
-            logger.warning(f"Collection date of leaf {k.name} was not captured by regex {tipRegex}.")
-
-    assert len(tipDates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tipNames[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
-    
-    if setNodes:
-        tree.set_absolute_time(max(tipDates), justLeaves=True if tree.treeType == 'divergence' else False)
-    else:
-        for k in tree.get_external():
-            mean, interval = tipDateUncertainties[k.name]
-            k.absoluteTime = mean
-    
-    if variableDate:
-        tree._assign_date_uncertainty(tipDateUncertainties)
 
 def load_newick(treePath,
                 treeType,
@@ -46,8 +26,44 @@ def load_newick(treePath,
                 dateFmt='%Y-%m-%d',
                 variableDate=True,
                 absoluteTime=False,
-                sortBranches=True, 
+                sortBranches=True,
                 setNodes=False):
+    """
+    Load a tree from a Newick file or file-like object.
+
+    Parameters
+    ----------
+    treePath : str or file-like
+        Path to a Newick file or an open handle containing tree text.
+
+    treeType : {'divergence', 'time'}
+        Interpretation of branch lengths in the parsed tree.
+
+    tipRegex : str, optional
+        Regular expression used to extract tip dates from leaf names.
+
+    dateFmt : str, optional
+        Date format used to parse the value captured by *tipRegex*.
+
+    variableDate : bool, optional
+        Whether partially specified tip dates should be interpreted as date
+        ranges.
+
+    absoluteTime : bool, optional
+        If ``True``, assign absolute times from the tip labels.
+
+    sortBranches : bool, optional
+        If ``True``, sort branches after parsing.
+
+    setNodes : bool, optional
+        If ``True``, propagate absolute times to internal nodes when date
+        information is available.
+
+    Returns
+    -------
+    :class:`baltic.tree.Tree`
+        Parsed tree object.
+    """
     ll = None
 
     handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
@@ -60,7 +76,7 @@ def load_newick(treePath,
             logger.debug('Identified tree string')
 
     assert ll, 'Regular expression failed to find tree string'
-    
+
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if absoluteTime:
@@ -79,8 +95,47 @@ def load_nexus(treePath,
                 treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
                 variableDate=True,
                 absoluteTime=True,
-                sortBranches=True, 
+                sortBranches=True,
                 setNodes=True):
+    """
+    Load a tree from a Nexus file or file-like object.
+
+    Parameters
+    ----------
+    treePath : str or file-like
+        Path to a Nexus file or an open handle containing Nexus content.
+
+    treeType : {'divergence', 'time'}
+        Interpretation of branch lengths in the parsed tree.
+
+    tipRegex : str, optional
+        Regular expression used to extract tip dates from translated tip names.
+
+    dateFmt : str, optional
+        Date format used to parse the value captured by *tipRegex*.
+
+    treestringRegex : str, optional
+        Regular expression used to identify the tree line in the Nexus file.
+
+    variableDate : bool, optional
+        Whether partially specified tip dates should be interpreted as date
+        ranges.
+
+    absoluteTime : bool, optional
+        If ``True``, assign absolute times from the tip labels.
+
+    sortBranches : bool, optional
+        If ``True``, sort branches after parsing.
+
+    setNodes : bool, optional
+        If ``True``, propagate absolute times to internal nodes when date
+        information is available.
+
+    Returns
+    -------
+    :class:`baltic.tree.Tree`
+        Parsed tree object.
+    """
     tip_flag = False
     tips = {}
     tip_num = 0
@@ -116,7 +171,7 @@ def load_nexus(treePath,
             tip_flag = False
 
     assert ll,'Failed to find tree string using regular expression'
-    
+
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
     if len(tips) > 0:
@@ -131,15 +186,40 @@ def load_nexus(treePath,
     if any(k.name.endswith('_ancestor_taxon') for k in ll.get_external()):
         ancestorTaxa = [k for k in ll.get_external() if k.name.endswith('_ancestor_taxon')]
         regularTaxa = [k for k in ll.get_external() if k.name.endswith('_ancestor_taxon') == False]
-        
+
         logger.warning(f"{len(ancestorTaxa)} ancestral taxa ('_ancestor_taxon' suffix) from travel-aware phylogeographic analysis detected. They will be removed whilst preserving phylogenetic relationships, resulting in a multitype tree.")
 
         ll = ll.reduce_tree(regularTaxa)
-    
+
     ll.traverse_tree() ## traverse tree
     return ll
 
 def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True):
+    """
+    Load a ``baltic`` tree from an Auspice-style JSON source.
+
+    Parameters
+    ----------
+    jsonObject : str or dict
+        Local path, Nextstrain URL, or already loaded JSON object.
+
+    treeType : {'divergence', 'time'}
+        Interpretation of branch lengths in the parsed tree.
+
+    jsonTranslation : dict, optional
+        Mapping from ``baltic`` attribute names to JSON keys or callables.
+
+    sort : bool, optional
+        If ``True``, sort branches after parsing.
+
+    stats : bool, optional
+        If ``True``, report tree statistics after parsing.
+
+    Returns
+    -------
+    tuple[:class:`baltic.tree.Tree`, dict]
+        Parsed tree and the associated metadata block from the JSON.
+    """
 
     assert treeType in ['divergence', 'time'], f"Unrecognised treeType {treeType}. Must be 'divergence' or 'time'."
 
@@ -152,7 +232,7 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
         assert 'div' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'height' (default expectation: 'height': 'div')."
     elif treeType == 'time':
         assert 'num_date' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'absoluteTime' (default expectation: 'absoluteTime': 'num_date')."
-    
+
     logger.debug('Reading JSON')
 
     if isinstance(jsonObject, str): ## string provided - either nextstrain URL or local path
@@ -233,3 +313,55 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     setattr(ll, 'cmap', cmap)
 
     return ll, json_meta
+
+
+def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
+    """
+    Extract sampling dates from tip labels and assign absolute times.
+
+    Parameters
+    ----------
+    tree : :class:`baltic.tree.Tree`
+        Tree whose external branches should be inspected.
+
+    tipRegex : str
+        Regular expression used to capture the date token from each tip name.
+
+    dateFmt : str
+        Date format used to parse the captured token.
+
+    variableDate : bool
+        Whether partially specified dates should be interpreted with
+        uncertainty ranges.
+
+    setNodes : bool, optional
+        If ``True``, assign absolute times to internal nodes as well as tips.
+    """
+    tipDates = []
+    tipNames = []
+    tipDateUncertainties = {}
+    for k in tree.get_external():
+        tipNames.append(k.name)
+        match = re.search(tipRegex, k.name)
+        if match:
+            date = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = variableDate)
+            if variableDate and (date[1][1] - date[1][0]) == 0: ## only keep dates that are certain for setting absolute time
+                tipDates.append(date[0]) ## date will be tuple of (date, (dateMin,dateMax)) if variableDate == True
+            elif variableDate == False:
+                tipDates.append(date)
+
+            tipDateUncertainties[k.name] = calendar_to_decimal_date(match.group(1), fmt = dateFmt, variable = True) ## logic around here might need more thinking
+        else:
+            logger.warning(f"Collection date of leaf {k.name} was not captured by regex {tipRegex}.")
+
+    assert len(tipDates) > 0, f'Regular expression failed to find tip dates in tip names, review regex pattern or set absoluteTime option to False.\nFirst tip name encountered: {tipNames[0]}\nDate regex set to: {tipRegex}\nExpected date format: {dateFmt}'
+
+    if setNodes:
+        tree.set_absolute_time(max(tipDates), justLeaves=True if tree.treeType == 'divergence' else False)
+    else:
+        for k in tree.get_external():
+            mean, interval = tipDateUncertainties[k.name]
+            k.absoluteTime = mean
+
+    if variableDate:
+        tree._assign_date_uncertainty(tipDateUncertainties)

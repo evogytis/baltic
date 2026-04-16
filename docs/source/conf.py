@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'baltic'
-copyright = '2025, Gytis Dudas & Barney Potter'
+copyright = '2026, Gytis Dudas & Barney Potter'
 author = 'Gytis Dudas & Barney Potter'
 release = 'v0.1'
 
@@ -24,7 +24,7 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'python_docs_theme'
+html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 # Source - https://stackoverflow.com/a

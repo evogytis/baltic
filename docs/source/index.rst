@@ -34,3 +34,5 @@ New users should begin with :doc:`getting_started`, then use the API reference p
    reticulation
    tree
    bt_utils
+   curonia
+   samogitia

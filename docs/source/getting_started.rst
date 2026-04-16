@@ -69,8 +69,8 @@ If sampling dates are encoded in tip labels, use ``tipRegex`` and ``dateFmt`` to
        absoluteTime=True,
    )
 
-Explore a tree
---------------
+Extract features of a tree
+--------------------------
 
 Once loaded, a ``Tree`` exposes helpers for inspection and traversal:
 
@@ -84,15 +84,6 @@ Once loaded, a ``Tree`` exposes helpers for inspection and traversal:
 
    print(stats["treeHeight"])
    print(len(tips))
-
-Commonly used ``Tree`` methods include:
-
-- ``treeStats()`` and ``treeStatsDict()``
-- ``traverse_tree()``
-- ``sort_branches()``
-- ``rename_tips()``
-- ``subtree()``
-- ``set_absolute_time()``
 
 Plot a tree
 -----------
