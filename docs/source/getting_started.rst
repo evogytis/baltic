@@ -53,15 +53,15 @@ Examples:
 
    import baltic as bt
 
-   newick_tree = bt.load_newick("tree.nwk", treeType="divergence")
-   nexus_tree = bt.load_nexus("tree.nex", treeType="time")
-   json_tree, json_meta = bt.load_JSON("auspice.json", treeType="time")
+   newick_tree = bt.io.load_newick("tree.nwk", treeType="divergence")
+   nexus_tree = bt.io.load_nexus("tree.nex", treeType="time")
+   json_tree, json_meta = bt.io.load_JSON("auspice.json", treeType="time")
 
 If sampling dates are encoded in tip labels, use ``tipRegex`` and ``dateFmt`` to extract them:
 
 .. code-block:: python
 
-   ll = bt.load_nexus(
+   ll = bt.io.load_nexus(
        "example.tree",
        treeType="time",
        tipRegex=r"\|([0-9\-]+)$",
@@ -95,7 +95,7 @@ Plot a tree
    import matplotlib.pyplot as plt
    import baltic as bt
 
-   ll = bt.load_newick("tree.nwk", treeType="divergence")
+   ll = bt.io.load_newick("tree.nwk", treeType="divergence")
 
    fig, ax = plt.subplots(figsize=(8, 10))
    ll.plot_tree(ax)
