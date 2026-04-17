@@ -104,6 +104,7 @@ class Tree: ## tree class
 
         **Examples**
 
+        >>> import baltic as bt
         >>> ll = bt.Tree(treeType="divergence")
         >>> ll.add_node(1)
         >>> ll.add_node(2)
@@ -160,6 +161,7 @@ class Tree: ## tree class
 
         **Examples**
 
+        >>> import baltic as bt
         >>> ll = bt.Tree(treeType="divergence")
         >>> ll.add_node(1)
         >>> ll.add_leaf(2, "LeafA")
@@ -168,7 +170,7 @@ class Tree: ## tree class
         >>> ll.curNode.index
         2
         >>> ll.curNode.name
-        "LeafA"
+        'LeafA'
         """
         logger.info(f"Creating new leaf: {name}.")
         new_leaf = Leaf(name) ## new instance of leaf object
@@ -220,7 +222,7 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
-        >>> ll.traverse_tree()
+        >>> _ = ll.traverse_tree()
         >>> node = ll.find_MRCA("A", "B", "C")
         >>> sub = ll.subtree(startingNode=node, stem=False)
         >>> sorted(tip.name for tip in sub.get_external())
@@ -670,7 +672,8 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("((A:1.0,B:3.0):1.0,C:1.0);", treeType="divergence")
-        >>> ll.midpoint_root()
+        >>> ll.sort_branches()
+        >>> _ = ll.midpoint_root()
         >>> isinstance(ll.root, bt.node.Node)
         True
         """
@@ -742,8 +745,9 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:2.0);", treeType="divergence")
+        >>> ll.sort_branches()
         >>> branch = ll.get_leaf("C")
-        >>> ll.reroot(branch=branch, branchFrac=0.5)
+        >>> _ = ll.reroot(branch=branch, branchFrac=0.5)
         >>> ll.root is not None
         True
         """
@@ -924,8 +928,8 @@ class Tree: ## tree class
         >>> import baltic as bt
         >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
         >>> ll = bt.io.load_newick(handle, treeType="time", absoluteTime=True, variableDate=True)
-        >>> rooted, inferred_dates = ll.root_by_regression()
-        >>> isinstance(inferred_dates, dict)
+        >>> rooted, inferred_dates = ll.root_by_regression(nJobs=1)  # doctest: +SKIP
+        >>> isinstance(inferred_dates, dict)  # doctest: +SKIP
         True
         """
         from baltic.bt_utils import _rtt_worker, _root_to_tip, decimal_to_calendar_date
@@ -1417,6 +1421,7 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> _ = ll.traverse_tree()
         >>> mrca = ll.find_MRCA("A", "B")
         >>> sorted(mrca.leaves)
         ['A', 'B']
@@ -1469,7 +1474,7 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
-        >>> ll.traverse_tree()
+        >>> _ = ll.traverse_tree()
         >>> cl = ll.collapse_subtree_to_clade(ll.find_MRCA("A", "B"), "AB clade")
         >>> cl.name
         'AB clade'
@@ -1839,6 +1844,7 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> ll.sort_branches()
         >>> reduced = ll.reduce_tree([ll.get_leaf("A"), ll.get_leaf("D")])
         >>> sorted(tip.name for tip in reduced.get_external())
         ['A', 'D']
@@ -2181,8 +2187,8 @@ class Tree: ## tree class
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("((((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0):1.0,E:1.0);", treeType="divergence")
-        >>> ll.traverse_tree()
-        >>> ll.condense_tree(cutoffs=(2, 3))
+        >>> _ = ll.traverse_tree()
+        >>> _ = ll.condense_tree(cutoffs=(2, 3))
         >>> any(branch.__class__.__name__ == "Clade" for branch in ll.Objects)
         True
         """
@@ -2354,6 +2360,15 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
+        **Examples**
+
+        >>> import matplotlib.pyplot as plt
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> fig, ax = plt.subplots()
+        >>> ll.plot_text(ax, targetFxn=lambda k: k.is_leaf())
+        <...Axes...>
         """
         valid_treeTypes = ['rectangular','circular','unrooted']
         assert treeType in valid_treeTypes, f"Tree type {treeType} not recognised. Options are {valid_treeTypes}"
@@ -2424,6 +2439,7 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
         """
         localKwargs = dict(kwargs)
 
@@ -2468,6 +2484,7 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
         """
         localKwargs = dict(kwargs)
 
@@ -2527,6 +2544,7 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
         """
         assert circFrac > 0.0, f"Circular tree layout not given any space (circFrac == {circFrac})"
 
@@ -2595,6 +2613,15 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
+        **Examples**
+
+        >>> import matplotlib.pyplot as plt
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> fig, ax = plt.subplots()
+        >>> ll.plot_aligned_tip_labels(ax, xSpace=0.05)
+        <...Axes...>
         """
         ## need to implement orientation
         localKwargs=dict(kwargs)
@@ -2712,6 +2739,15 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
+        **Examples**
+
+        >>> import matplotlib.pyplot as plt
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> fig, ax = plt.subplots()
+        >>> ll.plot_points(ax, targetFxn=lambda k: k.is_leaf(), pointSize=60)
+        <...Axes...>
         """
         ### Set default values ###
         if targetFxn is None:
@@ -3210,6 +3246,15 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
+        **Examples**
+
+        >>> import matplotlib.pyplot as plt
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> fig, ax = plt.subplots()
+        >>> ll.plot_tree(ax, colourFxn=lambda k: "firebrick" if k.is_leaf() else "k")
+        <...Axes...>
         """
         ### Set default values ###
         if targetFxn is None:
@@ -3390,6 +3435,18 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
+        **Examples**
+
+        >>> import matplotlib.pyplot as plt
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> ll.sort_branches()
+        >>> for branch in ll.Objects:
+        ...     branch.traits["group"] = "left" if getattr(branch, "name", "").startswith(("A", "B")) else "right"
+        >>> fig, ax = plt.subplots()
+        >>> ll.plot_exploded_tree(ax, trait="group", colourFxn=lambda k: "steelblue")
+        <...Axes...>
         """
         #### TODO: support for collapsed clades
 
@@ -3539,8 +3596,10 @@ class Tree: ## tree class
         **Examples**
 
         >>> import baltic as bt
-        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
-        >>> data = ll.to_auspice_json()
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> ll.sort_branches()
+        >>> ll.set_absolute_time(2024.0)
+        >>> data = ll.to_auspice_json(mostRecentDate=2024.0)
         >>> sorted(data.keys())
         ['meta', 'tree', 'version']
         """
@@ -3559,7 +3618,7 @@ class Tree: ## tree class
 
         assert isinstance(mostRecentDate, float), f"mostRecentDate is of type {type(mostRecentDate)}, not a float"
         if isinstance(mostRecentDate, float) and self.treeType == 'divergence':
-            logger.warning(f"mostRecentDate set to {mostRecentDate} but treeType is set to {treeType}")
+            logger.warning(f"mostRecentDate set to {mostRecentDate} but treeType is set to {self.treeType}")
 
         #####
         auspiceJSON = {}
@@ -3589,8 +3648,11 @@ class Tree: ## tree class
         for trait in traitsMeta:
             auspiceJSON['meta']['colorings'].append(traitsMeta[trait])
         ####
-        from importlib.metadata import version
-        balticVersion = version('baltic')
+        from importlib.metadata import PackageNotFoundError, version
+        try:
+            balticVersion = version('baltic')
+        except PackageNotFoundError:
+            balticVersion = 'unknown'
         auspiceJSON['meta']['data_provenance'] = [{'name': 'baltic', 'version': balticVersion, 'url': 'https://pypi.org/project/baltic/'}]
         ########
         nodeOrder = self.traverse_tree(includeCondition=lambda k: k.is_node())

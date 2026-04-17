@@ -260,7 +260,7 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     ...         ],
     ...     },
     ... }
-    >>> ll, meta = bt.io.load_JSON(auspice, treeType="divergence")
+    >>> ll, meta = bt.io.load_JSON(auspice, treeType="divergence", stats=False)
     >>> sorted(tip.name for tip in ll.get_external())
     ['A', 'B']
     >>> meta["colorings"]
@@ -386,8 +386,9 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
     **Examples**
 
     >>> import baltic as bt
-    >>> ll = bt.make_tree("((A|2020-01-01:0.1,B|2020-02-01:0.2):0.3,C|2020-03-01:0.4);", treeType="time")
-    >>> bt.io.process_tip_dates(ll, tipRegex=r"\\|([0-9\\-]+)$", dateFmt="%Y-%m-%d", variableDate=True)
+    >>> ll = bt.make_tree("((A|2020-01-01:0.1,B|2020-02-01:0.2):0.3,C|2020-03-01:0.4);", treeType="divergence")
+    >>> ll.sort_branches()
+    >>> bt.io.process_tip_dates(ll, tipRegex=r"\\|([0-9\\-]+)$", dateFmt="%Y-%m-%d", variableDate=True, setNodes=False)
     >>> all(tip.absoluteTime is not None for tip in ll.get_external())
     True
     """

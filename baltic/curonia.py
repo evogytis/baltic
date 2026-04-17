@@ -873,6 +873,21 @@ def plot_root_to_tip(ax, tree,
     tuple
         ``(outliers, slope, intercept, residuals)`` where ``outliers`` is the list
         of selected outlier tips and ``residuals`` is keyed by tip name.
+
+    **Examples**
+
+    >>> import io
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> import contextlib
+    >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
+    >>> ll = bt.io.load_newick(handle, treeType="divergence", absoluteTime=True)
+    >>> fig, ax = plt.subplots()
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     result = curonia.plot_root_to_tip(ax, ll)
+    >>> len(result)
+    4
     """
 
     import math
@@ -1054,6 +1069,14 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
 
     matplotlib.axes.Axes
         The input axes.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import curonia
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_skygrid(ax, "skygrid.log", burnin=1000000, mostRecent=2024.0)  # doctest: +SKIP
+    <...Axes...>
     """
     localKwargs = dict(kwargs)
 
@@ -1193,6 +1216,20 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
     shoulderPositionFxn is a function that connects the x-axis coordinate provided by this function to the map (default: None, tips are directly connected to the map).
     colourFxn returns the colour of a tip.
     originProjection is a cartopy ccrs object used to transform the coordinate system of tipCoordinates (default: ccrs.PlateCarree()).
+
+    **Examples**
+
+    >>> import cartopy.crs as ccrs  # doctest: +SKIP
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> fig = plt.figure()  # doctest: +SKIP
+    >>> tree_ax = fig.add_subplot(121)  # doctest: +SKIP
+    >>> map_ax = fig.add_subplot(122, projection=ccrs.PlateCarree())  # doctest: +SKIP
+    >>> ll.plot_tree(tree_ax)  # doctest: +SKIP
+    >>> tip_coords = {"A": (40.0, -74.0), "B": (51.5, -0.1), "C": (35.7, 139.7)}
+    >>> curonia.connect_tree_to_map(tree_ax, map_ax, ll, tip_coords, ccrs.PlateCarree())  # doctest: +SKIP
     """
     from matplotlib.patches import ConnectionPatch
     import cartopy.crs as ccrs
@@ -1271,6 +1308,21 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
 
     list[:class:`baltic.tree.Tree`]
         The input tree list after coordinates have been assigned.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> trees = [
+    ...     bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence"),
+    ...     bt.make_tree("((A:1.0,C:1.0):1.0,B:1.5);", treeType="divergence"),
+    ... ]
+    >>> for tree in trees:
+    ...     tree.sort_branches()
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_tangled_chain(ax, trees)
+    [...]
     """
     from matplotlib.collections import LineCollection
 
@@ -1402,6 +1454,18 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
 
     Inspired by JT McCrone's visualisation: https://www.nature.com/articles/s41586-022-05200-3
     Initially implemented by Karthik Gangavarapu.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="time")
+    >>> ll.sort_branches()
+    >>> ll.set_absolute_time(2024.0)
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_gradient_clade_tree(ax, ll, designatedNodes=[ll.find_MRCA("A", "B")])
+    <...Axes...>
     """
     from matplotlib.patches import Polygon
     from matplotlib.collections import LineCollection
@@ -1533,6 +1597,19 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
 def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', width=0.5, lastTipDate=None, **kwargs):
     """
     Plot 95% height HPDs on branches with trait.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="time")
+    >>> ll.sort_branches()
+    >>> ll.set_absolute_time(2024.0)
+    >>> ll.root.traits["height_95%_HPD"] = [1.0, 1.5]
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_height_95hpds(ax, ll, lastTipDate=2024.0)
+    <...Axes...>
     """
     from matplotlib.patches import Rectangle
 
@@ -1563,6 +1640,16 @@ def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', wid
 def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, plotSegMatrix=False, segMatrixDist=1.1, segNames=None, segOrder=None, segWidth=1, segHeight=1, **kwargs):
     """
     Add a little matrix at the end of the reassortment network to indicate which segments are reassorting.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> fig, ax = plt.subplots()
+    >>> network = bt.make_tree("((A:1.0,#R1:0.5):0.5,(#R1:0.5,B:1.0):0.5);", treeType="time")
+    >>> curonia.plot_reticulations(ax, network)  # doctest: +SKIP
+    <...Axes...>
     """
     from matplotlib.collections import LineCollection
 
@@ -1680,6 +1767,18 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
 
     tuple
         ``(treeAx, matrixAx)``.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> labels = {"clade": {"A": "x", "B": "y", "C": "x"}}
+    >>> colours = {"clade": {"x": "tab:blue", "y": "tab:orange"}}
+    >>> fig, (tree_ax, matrix_ax) = plt.subplots(1, 2)
+    >>> curonia.plot_tree_matrix(tree_ax, matrix_ax, ll, labels, colours)
+    (<...Axes...>, <...Axes...>)
     """
 
     from matplotlib.patches import Rectangle
@@ -1888,6 +1987,17 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     plotORFs is a Boolean for whether to plot a schematic diagram of the alignment with feature annotations; errors if set to True without a GFF file
     minFeatLen is minimum feature length for adding text to sequence schematic
     offsetORFs is a float that represents a fraction of the tree's y-axis height to be used for positioning GFF file features below the alignment
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> SNPs = [10, 25, 40]
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_snp_alignment(ax, SNPs, "alignment.fasta", ll)  # doctest: +SKIP
+    <...Axes...>
     """
     from matplotlib.patches import Rectangle
     from matplotlib.collections import PatchCollection, LineCollection
@@ -2254,6 +2364,14 @@ def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='
     textKwargsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns a kwargs dict to be used to modify text that's plotted
     textArgsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns an args dict to be used for adding text
     minFeatLen is a threshold for adding text to features - no text is plotted for features less than this length
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import curonia
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_seq_features(ax, "reference.gff", xy=(0, 0), rescale=1000.0)  # doctest: +SKIP
+    <...Axes...>
     """
     from matplotlib.patches import FancyArrow
 
