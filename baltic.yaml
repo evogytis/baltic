@@ -1,6 +1,7 @@
 name: baltic
 channels:
   - conda-forge
+  - anaconda
   - defaults
 dependencies:
   - python>=3.10
