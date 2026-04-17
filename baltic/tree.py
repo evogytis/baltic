@@ -1,14 +1,14 @@
-"""This module provides the baltic ``Tree`` class.
+"""This module provides the ``baltic`` :class:`~baltic.tree.Tree` class.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 import copy
 import math
@@ -34,10 +34,10 @@ class Tree: ## tree class
     """
     def __init__(self, treeType):
         """
-        Initialize an empty baltic tree.
+        Initialize an empty ``baltic`` tree.
 
-        Parameters
-        ----------
+        **Parameters**
+
         treeType : {"divergence", "time"}
             Interpretation of branch lengths in the tree.
         """
@@ -64,8 +64,8 @@ class Tree: ## tree class
         """
         Create and attach a new reticulation edge below the current node.
 
-        Parameters
-        ----------
+        **Parameters**
+
         name : str
             Name assigned to the new reticulation object.
         """
@@ -84,26 +84,26 @@ class Tree: ## tree class
         Create a new internal :class:`.Node` with appropriate parent-child
         links; add it to the tree.
 
-        Parameters
-        ----------
+        **Parameters**
+
         i : int
             Unique index into the tree.
 
-        Notes
-        -----
+        **Notes**
+
         If the tree does not have a ``.root`` (i.e. a tree with no branches),
         then the new node will be set as the root of the tree.
 
         After the new node is added, ``self.curNode`` will update to the newly created node.
 
-        Raises
-        ------
+        **Raises**
+
         TypeError
             If the current node of the tree to which the new node will be added
             is not itself a valid node (e.g. if ``self.curNode`` is a :class:`.Leaf`).
 
-        Examples
-        --------
+        **Examples**
+
         >>> ll = bt.Tree(treeType="divergence")
         >>> ll.add_node(1)
         >>> ll.add_node(2)
@@ -136,30 +136,30 @@ class Tree: ## tree class
         """
         Create a new :class:`.Leaf` with appropriate parent-child links; add it to the tree.
 
-        Parameters
-        ----------
+        **Parameters**
+
         i : int
             Unique index into the tree.
 
         name : str
             Name of the new leaf.
 
-        Notes
-        -----
+        **Notes**
+
         If the tree does not have a root (i.e. a tree with no branches), then the
         new node will be set at the root of the tree.
 
         After the new node is added, ``self.curNode`` will update to the newly
         created node.
 
-        Raises
-        ------
+        **Raises**
+
         TypeError
             If the current node of the tree to which the new node will be added is not itself a
             valid node (e.g. if ``self.curNode`` is a :class:`.Leaf`).
 
-        Examples
-        --------
+        **Examples**
+
         >>> ll = bt.Tree(treeType="divergence")
         >>> ll.add_node(1)
         >>> ll.add_leaf(2, "LeafA")
@@ -192,8 +192,8 @@ class Tree: ## tree class
         """
         Generate a new subtree starting from a given root node according to a certain condition.
 
-        Parameters
-        ----------
+        **Parameters**
+
         startingNode : :class:`.BranchLike`
             The node from which the new subtree will descend.
 
@@ -212,8 +212,8 @@ class Tree: ## tree class
         stem : bool, optional
             Include the stem branch leading into the root.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Tree`
         """
         logger.info("Generating subtree.")
@@ -310,8 +310,8 @@ class Tree: ## tree class
         """
         Remove singleton internal nodes by merging them into their descendants.
 
-        Returns
-        -------
+        **Returns**
+
         None
         """
         logger.info("Converting to single-type tree.")
@@ -345,8 +345,8 @@ class Tree: ## tree class
         """
         Assign absolute times to branches from their heights.
 
-        Parameters
-        ----------
+        **Parameters**
+
         mostRecentSamplingDate : float
             Absolute date corresponding to the most recent sampled tip.
         justLeaves : bool, optional
@@ -367,8 +367,8 @@ class Tree: ## tree class
         """
         Assign absolute-time uncertainty intervals to leaf branches.
 
-        Parameters
-        ----------
+        **Parameters**
+
         dateUncertainties : dict
             Mapping from tip name to ``(date, uncertainty_range)`` tuples.
         """
@@ -381,8 +381,8 @@ class Tree: ## tree class
         """
         Multiply all branch lengths by a constant factor.
 
-        Parameters
-        ----------
+        **Parameters**
+
         factor : float
             Scaling factor applied to every branch length.
         """
@@ -396,8 +396,8 @@ class Tree: ## tree class
         """
         Print a short textual summary of tree statistics.
 
-        Returns
-        -------
+        **Returns**
+
         None
         """
         stats = self._calculate_tree_stats()
@@ -425,8 +425,8 @@ class Tree: ## tree class
         """
         Return summary statistics describing the current tree.
 
-        Returns
-        -------
+        **Returns**
+
         dict
             Dictionary of tree height, length, topology flags, and object counts.
         """
@@ -437,8 +437,8 @@ class Tree: ## tree class
         """
         Compute summary statistics for the current tree.
 
-        Returns
-        -------
+        **Returns**
+
         dict
             Dictionary of tree height, total branch length, topology flags, and
             object counts.
@@ -511,8 +511,8 @@ class Tree: ## tree class
         """
         Traverse the tree recursively while updating heights and descendant sets.
 
-        Parameters
-        ----------
+        **Parameters**
+
         curNode : :class:`.BranchLike`, optional
             Node at which to start traversal. Defaults to the root.
         includeCondition : callable, optional
@@ -522,8 +522,8 @@ class Tree: ## tree class
         collect : list, optional
             Existing collection list to append to during recursive calls.
 
-        Returns
-        -------
+        **Returns**
+
         list
             Branches satisfying ``includeCondition`` in traversal order.
         """
@@ -609,8 +609,8 @@ class Tree: ## tree class
         """
         Rename leaf nodes using a mapping.
 
-        Parameters
-        ----------
+        **Parameters**
+
         tipNameMap : dict, optional
             Mapping from current tip name to replacement name. If omitted,
             ``self.tipMap`` is used.
@@ -630,13 +630,13 @@ class Tree: ## tree class
         """
         Reroot the tree at the midpoint of the longest tip-to-tip path.
 
-        Parameters
-        ----------
+        **Parameters**
+
         fixSingletons : bool, optional
             If ``True``, collapse singleton nodes after rerooting.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Tree`
             The rerooted tree.
         """
@@ -688,8 +688,8 @@ class Tree: ## tree class
         """
         Reroot the tree on a branch or branch midpoint.
 
-        Parameters
-        ----------
+        **Parameters**
+
         branch : :class:`.BranchLike`, optional
             Branch on which the new root should be placed. If omitted, midpoint
             rooting is used.
@@ -699,8 +699,8 @@ class Tree: ## tree class
         fixSingletons : bool, optional
             If ``True``, collapse singleton nodes after rerooting.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Tree`
             The rerooted tree.
         """
@@ -845,8 +845,8 @@ class Tree: ## tree class
         """
         Reroot self according to a root-to-tip regression analysis.
 
-        Parameters
-        ----------
+        **Parameters**
+
         stat : {"r^2", "correlation", "sum of squares"}
             Which regression stat to optimize, by default ``"r^2"``
 
@@ -868,8 +868,8 @@ class Tree: ## tree class
         returnMCdates : bool, optional
             True if the best-fitting inferred dates should be returned, by default ``True``.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Tree`
 
         dict
@@ -1069,8 +1069,8 @@ class Tree: ## tree class
         """
         Reorder child lists for internal nodes and refresh plotting coordinates.
 
-        Parameters
-        ----------
+        **Parameters**
+
         descending : bool, optional
             Controls the default sort direction.
         sortFxn : callable, optional
@@ -1116,16 +1116,16 @@ class Tree: ## tree class
         """
         Assign *x* and *y* coordinates to all objects in a the tree.
 
-        Parameters
-        ----------
+        **Parameters**
+
         order : list[:class:`.BranchLike`], optional
             List of all leaves in their desired order, by default uses a pre-order traversal.
 
         padNodes : list[:class:`.BranchLike`], optional
             A list of nodes whose descendents will be padded with extra space.
 
-        Notes
-        -----
+        **Notes**
+
         formerly ``drawTree()``
         """
         if order is None:
@@ -1255,8 +1255,8 @@ class Tree: ## tree class
         """
         Assign projected Cartesian coordinates for an unrooted layout.
 
-        Parameters
-        ----------
+        **Parameters**
+
         circStart : float, optional
             Starting fraction of the circle used for the layout.
         node : :class:`.BranchLike`, optional
@@ -1351,13 +1351,13 @@ class Tree: ## tree class
         """
         Find the most recent common ancestor of a list of descendant nodes.
 
-        Parameters
-        ----------
+        **Parameters**
+
         descendants : list[:class:`.BranchLike`]
             List of node objects whose MRCA is being searched.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Node`
         """
         if len(descendants) == 1 and isinstance(descendants[0], list):
@@ -1390,8 +1390,8 @@ class Tree: ## tree class
         """
         Replace a subtree with a collapsed :class:`.Clade` placeholder.
 
-        Parameters
-        ----------
+        **Parameters**
+
         cl : :class:`.Node`
             Root of the subtree to collapse.
         givenName : str
@@ -1399,8 +1399,8 @@ class Tree: ## tree class
         widthFunction : callable, optional
             Function computing the visual width of the collapsed clade.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Clade`
             The newly created collapsed clade.
         """
@@ -1470,8 +1470,8 @@ class Tree: ## tree class
         """
         Collapse branches according to a determined function, creating polytomies.
 
-        Parameters
-        ----------
+        **Parameters**
+
         collapseIfFxn : function
             Function which determines branch collapse.
 
@@ -1585,8 +1585,8 @@ class Tree: ## tree class
         """
         Serialize the tree to Newick- or NEXUS-like text.
 
-        Parameters
-        ----------
+        **Parameters**
+
         curNode : :class:`.BranchLike`, optional
             Current node during recursive serialization.
         traits : iterable, optional
@@ -1604,8 +1604,8 @@ class Tree: ## tree class
         json : bool, optional
             Reserved compatibility flag.
 
-        Returns
-        -------
+        **Returns**
+
         str
             Serialized tree string.
         """
@@ -1716,8 +1716,8 @@ class Tree: ## tree class
         """
         Compute the pairwise TMRCA matrix for all tips in a time tree.
 
-        Returns
-        -------
+        **Returns**
+
         dict
             Nested dictionary keyed by tip names with TMRCA values.
         """
@@ -1748,13 +1748,13 @@ class Tree: ## tree class
         """
         Extract the minimal subtree spanning a set of retained tips.
 
-        Parameters
-        ----------
+        **Parameters**
+
         tipsToKeep : list[:class:`.BranchLike`]
             Leaf-like branches that should remain in the reduced tree.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Tree`
             Deep-copied reduced tree containing the embedding of the retained tips.
         """
@@ -1808,8 +1808,8 @@ class Tree: ## tree class
         """
         Count branches spanning a given time value.
 
-        Parameters
-        ----------
+        **Parameters**
+
         t : float
             Time point at which to count extant lineages.
         timeAttr : str, optional
@@ -1817,8 +1817,8 @@ class Tree: ## tree class
         inclusionConditionFxn : callable, optional
             Predicate selecting which branches contribute to the count.
 
-        Returns
-        -------
+        **Returns**
+
         int
             Number of matching lineages.
         """
@@ -1837,16 +1837,16 @@ class Tree: ## tree class
         """
         Return external branches from the tree.
 
-        Parameters
-        ----------
+        **Parameters**
+
         filterFxn : callable, optional
             Additional predicate applied to candidate branches.
         onlyLeaves : bool, optional
             If ``True``, return only true leaves; otherwise include all leaf-like
             objects such as collapsed clades.
 
-        Returns
-        -------
+        **Returns**
+
         list
             External branches satisfying the filter.
         """
@@ -1866,13 +1866,13 @@ class Tree: ## tree class
         """
         Look up a single leaf by name.
 
-        Parameters
-        ----------
+        **Parameters**
+
         tipName : str
             Tip name to match.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Leaf`
             Matching leaf.
         """
@@ -1888,13 +1888,13 @@ class Tree: ## tree class
         """
         Return internal nodes from the tree.
 
-        Parameters
-        ----------
+        **Parameters**
+
         filterFxn : callable, optional
             Additional predicate applied to nodes.
 
-        Returns
-        -------
+        **Returns**
+
         list[:class:`.Node`]
             Internal nodes satisfying the filter.
         """
@@ -1906,15 +1906,15 @@ class Tree: ## tree class
         """
         Return branches matching a predicate.
 
-        Parameters
-        ----------
+        **Parameters**
+
         filterFxn : callable, optional
             Predicate used to select branches.
         failIfNoResults : bool, optional
             If ``True``, raise an exception when no branches match.
 
-        Returns
-        -------
+        **Returns**
+
         list
             Matching branches.
         """
@@ -1942,8 +1942,8 @@ class Tree: ## tree class
         """
         Collect attribute or trait values across branches.
 
-        Parameters
-        ----------
+        **Parameters**
+
         statistic : str
             Attribute name or trait key to extract.
         useTraitsDict : bool, optional
@@ -1951,8 +1951,8 @@ class Tree: ## tree class
         filterFxn : callable, optional
             Predicate selecting which branches to inspect.
 
-        Returns
-        -------
+        **Returns**
+
         list
             Extracted values.
         """
@@ -1989,8 +1989,8 @@ class Tree: ## tree class
         """
         Split a tree into subtrees at trait transitions or custom breakpoints.
 
-        Parameters
-        ----------
+        **Parameters**
+
         trait : str, optional
             Trait name used to define subtree boundaries when its value changes.
         customFxn : callable, optional
@@ -1998,8 +1998,8 @@ class Tree: ## tree class
         stem : bool, optional
             If ``True``, include the stem branch leading into each extracted subtree.
 
-        Returns
-        -------
+        **Returns**
+
         list[:class:`.Tree`]
             Extracted subtrees.
         """
@@ -2034,8 +2034,8 @@ class Tree: ## tree class
         """
         Collapse eligible subtrees into clade placeholders.
 
-        Parameters
-        ----------
+        **Parameters**
+
         cutoffs : tuple, optional
             Inclusive ``(min_size, max_size)`` bounds for collapsible clades.
         protectedTips : list, optional
@@ -2043,8 +2043,8 @@ class Tree: ## tree class
         widthFxn : callable, optional
             Function computing the visual width of each collapsed clade.
 
-        Returns
-        -------
+        **Returns**
+
         :class:`.Tree`
             The modified tree.
         """
@@ -2076,8 +2076,8 @@ class Tree: ## tree class
         """
         Draw collapsed clades for an unrooted layout.
 
-        Parameters
-        ----------
+        **Parameters**
+
         ax : matplotlib.axes.Axes
             Axes on which to draw clades.
         xCoordinateFxn, yCoordinateFxn, endAttrFxn, targetFxn : callable
@@ -2091,8 +2091,8 @@ class Tree: ## tree class
         cladeBaseWidth : float
             Width of the clade base where it joins the branch.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2183,8 +2183,8 @@ class Tree: ## tree class
         """
         Plot text labels on branches in rectangular, circular, or unrooted layouts.
 
-        Parameters
-        ----------
+        **Parameters**
+
         ax : matplotlib.axes.Axes
             Axes on which to draw labels.
         targetFxn : callable, optional
@@ -2212,8 +2212,8 @@ class Tree: ## tree class
         ``**kwargs``
             Additional keyword arguments forwarded to ``Axes.text``.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2282,8 +2282,8 @@ class Tree: ## tree class
         """
         Plot labels for a rectangular tree layout.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2326,8 +2326,8 @@ class Tree: ## tree class
         """
         Plot labels for an unrooted tree layout.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2385,8 +2385,8 @@ class Tree: ## tree class
         """
         Plot labels for a circular tree layout.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2442,8 +2442,8 @@ class Tree: ## tree class
         """
         Plot tip labels aligned to a common terminal coordinate.
 
-        Parameters
-        ----------
+        **Parameters**
+
         ax : matplotlib.axes.Axes
             Axes on which to draw labels.
         xSpace : float, optional
@@ -2453,8 +2453,8 @@ class Tree: ## tree class
         ``**kwargs``
             Additional keyword arguments forwarded to :meth:`plot_text`.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2547,8 +2547,8 @@ class Tree: ## tree class
         """
         Plot markers on selected branches.
 
-        Parameters
-        ----------
+        **Parameters**
+
         ax : matplotlib.axes.Axes
             Axes on which to draw points.
         targetFxn : callable, optional
@@ -2570,8 +2570,8 @@ class Tree: ## tree class
         ``**kwargs``
             Additional keyword arguments forwarded to ``Axes.scatter``.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2863,8 +2863,8 @@ class Tree: ## tree class
         """
         Draw a tree in rectangular coordinates.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -2935,8 +2935,8 @@ class Tree: ## tree class
         """
         Draw a tree in circular coordinates.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -3037,8 +3037,8 @@ class Tree: ## tree class
         """
         Plot the tree in rectangular, circular, or unrooted form.
 
-        Parameters
-        ----------
+        **Parameters**
+
         ax : matplotlib.axes.Axes
             Axes on which to draw the tree.
         targetFxn : callable, optional
@@ -3068,8 +3068,8 @@ class Tree: ## tree class
         ``**kwargs``
             Additional keyword arguments forwarded to the line collection.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -3215,8 +3215,8 @@ class Tree: ## tree class
         """
         Plot subtrees extracted by trait transitions or custom split rules.
 
-        Parameters
-        ----------
+        **Parameters**
+
         ax : matplotlib.axes.Axes
             Axes on which to draw the exploded tree view.
         trait : str, optional
@@ -3248,8 +3248,8 @@ class Tree: ## tree class
         ``**kwargs``
             Additional keyword arguments forwarded to subtree plotting calls.
 
-        Returns
-        -------
+        **Returns**
+
         matplotlib.axes.Axes
             The input axes.
         """
@@ -3385,16 +3385,16 @@ class Tree: ## tree class
         """
         Convert the tree to an Auspice v2 JSON structure.
 
-        Parameters
-        ----------
+        **Parameters**
+
         traits : iterable, optional
             Trait names to export. If omitted, export all traits that look
             compatible with Auspice metadata.
         mostRecentDate : float, optional
             Most recent sampling date for time trees.
 
-        Returns
-        -------
+        **Returns**
+
         dict
             Auspice JSON payload containing ``meta`` and ``tree`` sections.
         """

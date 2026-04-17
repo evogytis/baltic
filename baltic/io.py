@@ -1,14 +1,14 @@
 """This module provides the ``baltic`` input and output functions.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 import re
 import json
@@ -31,8 +31,8 @@ def load_newick(treePath,
     """
     Load a tree from a Newick file or file-like object.
 
-    Parameters
-    ----------
+    **Parameters**
+
     treePath : str or file-like
         Path to a Newick file or an open handle containing tree text.
 
@@ -59,8 +59,8 @@ def load_newick(treePath,
         If ``True``, propagate absolute times to internal nodes when date
         information is available.
 
-    Returns
-    -------
+    **Returns**
+
     :class:`baltic.tree.Tree`
         Parsed tree object.
     """
@@ -100,8 +100,8 @@ def load_nexus(treePath,
     """
     Load a tree from a Nexus file or file-like object.
 
-    Parameters
-    ----------
+    **Parameters**
+
     treePath : str or file-like
         Path to a Nexus file or an open handle containing Nexus content.
 
@@ -131,8 +131,8 @@ def load_nexus(treePath,
         If ``True``, propagate absolute times to internal nodes when date
         information is available.
 
-    Returns
-    -------
+    **Returns**
+
     :class:`baltic.tree.Tree`
         Parsed tree object.
     """
@@ -198,8 +198,8 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     """
     Load a ``baltic`` tree from an Auspice-style JSON source.
 
-    Parameters
-    ----------
+    **Parameters**
+
     jsonObject : str or dict
         Local path, Nextstrain URL, or already loaded JSON object.
 
@@ -215,8 +215,8 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     stats : bool, optional
         If ``True``, report tree statistics after parsing.
 
-    Returns
-    -------
+    **Returns**
+
     tuple[:class:`baltic.tree.Tree`, dict]
         Parsed tree and the associated metadata block from the JSON.
     """
@@ -319,8 +319,8 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
     """
     Extract sampling dates from tip labels and assign absolute times.
 
-    Parameters
-    ----------
+    **Parameters**
+
     tree : :class:`baltic.tree.Tree`
         Tree whose external branches should be inspected.
 

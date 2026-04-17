@@ -1,14 +1,14 @@
-"""This module provides the baltic ``Leaf`` class.
+"""This module provides the ``baltic`` :class:`~baltic.leaf.Leaf` class.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 
 import logging
@@ -19,17 +19,15 @@ logger = logging.getLogger("baltic.Leaf")
 
 class Leaf(BranchLike):
     """
-    ``Leaf`` class for terminal nodes that represent individual taxa.
+    :class:`.Leaf` represents a terminal node corresponding to an individual taxon.
 
-    Inherits from :class:`.BranchLike`.
+    **Note**
 
-    Note
-    ----
     Most attributes have null default values as they are either (1) set automatically
     during tree construction, or (2) defined by the specific inherited subclass.
 
-    Attributes
-    ----------
+    **Attributes**
+
     branchType : str
         DEPRECATED: should now be checked using :meth:`~Leaf.is_leaf()`, or :meth:`~Leaf.is_node()`.
 
@@ -41,8 +39,8 @@ class Leaf(BranchLike):
         """
         Initialize a terminal leaf.
 
-        Parameters
-        ----------
+        **Parameters**
+
         name : str
             Tip label associated with the leaf.
         """
@@ -66,8 +64,8 @@ class Leaf(BranchLike):
         """
         Return a compact string representation of the leaf.
 
-        Returns
-        -------
+        **Returns**
+
         str
             Human-readable representation containing the leaf name.
         """

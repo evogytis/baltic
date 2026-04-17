@@ -1,15 +1,15 @@
-"""This module provides tools for creating composite plots that combine baltic trees with other
+"""This module provides tools for creating composite plots that combine ``baltic`` trees with other
 derived data visualisations.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 import logging
 import warnings
@@ -57,16 +57,16 @@ def make_pivots(pivots, tps):
     """
     Construct pivot locations spanning the observation range.
 
-    Parameters
-    ----------
+    **Parameters**
+
     pivots : scalar or iterable
         Either the number of pivots to generate or explicit pivot values.
     tps : np.array
         Observation time points used to determine the span when ``pivots`` is a
         scalar.
 
-    Returns
-    -------
+    **Returns**
+
     pivots : np.array
         Array of pivot values.
     """
@@ -98,15 +98,15 @@ def running_average(obs, ws):
     """
     Calculate a running average over a sequence of observations.
 
-    Parameters
-    ----------
+    **Parameters**
+
     obs : list/np.array(bool)
         Observations to smooth.
     ws : int
         Window size measured in number of consecutive points.
 
-    Returns
-    -------
+    **Returns**
+
     np.array(float)
         Running average of the observations.
     """
@@ -141,16 +141,16 @@ def logit_transform(freq, pc):
     """
     Transform frequencies to logit space after pseudocount clipping.
 
-    Parameters
-    ----------
+    **Parameters**
+
     freq : array-like
         Frequencies to transform.
 
     pc : float
         Pseudocount used to clip frequencies away from 0 and 1.
 
-    Returns
-    -------
+    **Returns**
+
     np.ndarray
         Logit-transformed frequencies.
     """
@@ -163,16 +163,16 @@ def logit_inv(logit_freq, pc):
     """
     Transform logit-space values back to clipped frequencies.
 
-    Parameters
-    ----------
+    **Parameters**
+
     logit_freq : array-like
         Values in logit space.
 
     pc : float
         Pseudocount used to clip the reconstructed frequencies.
 
-    Returns
-    -------
+    **Returns**
+
     np.ndarray
         Frequencies constrained to the interval ``[pc, 1 - pc]``.
     """
@@ -186,13 +186,13 @@ def pq(p):
     """
     Compute the Bernoulli variance term ``p * (1 - p)``.
 
-    Parameters
-    ----------
+    **Parameters**
+
     p : array-like
         Frequencies or probabilities.
 
-    Returns
-    -------
+    **Returns**
+
     np.ndarray
         Elementwise Bernoulli variance term.
     """
@@ -217,8 +217,8 @@ class frequency_estimator(object):
                  tol=1e-3, pc=1e-4, ws=100, log_thres=10,
                  method='powell', **kwargs):
         """
-        Parameters
-        ----------
+        **Parameters**
+
         tps : list/np.array(float)
             array with numerical dates (one per sample)
         obs : list/np.array(bool)
@@ -252,13 +252,13 @@ class frequency_estimator(object):
         """
         Construct an initial frequency trajectory estimate on the pivot grid.
 
-        Parameters
-        ----------
+        **Parameters**
+
         pc : float, optional
             Pseudocount used to clip the initial estimate away from 0 and 1.
 
-        Returns
-        -------
+        **Returns**
+
         np.ndarray
             Initial frequency values at each pivot.
         """
@@ -283,8 +283,8 @@ class frequency_estimator(object):
         """
         Compute the smoothness penalty term of the trajectory likelihood.
 
-        Returns
-        -------
+        **Returns**
+
         float
             Log-likelihood contribution from the diffusion-style smoothness
             prior.
@@ -303,8 +303,8 @@ class frequency_estimator(object):
         """
         Fit the frequency trajectory by numerical optimization.
 
-        Parameters
-        ----------
+        **Parameters**
+
         initial_guess : callable, optional
             Function that accepts the pivot grid and returns an initial
             frequency trajectory.
@@ -369,8 +369,8 @@ class freq_est_clipped(object):
         """
         Initialize a clipped frequency estimator around the observation window.
 
-        Parameters
-        ----------
+        **Parameters**
+
         tps : array-like
             Observation times.
 
@@ -465,8 +465,8 @@ class nested_frequencies(object):
 
     def __init__(self, tps, obs, pivots, **kwargs):
         """
-        Parameters
-        ----------
+        **Parameters**
+
         tps : np.array
             array of numerical dates (one per sample in this parent node)
         obs : dict[str, np.array(bool)]
@@ -484,8 +484,8 @@ class nested_frequencies(object):
         """
         Estimate mutually exclusive child frequencies on a shared pivot grid.
 
-        Returns
-        -------
+        **Returns**
+
         dict
             Mapping of observation key to estimated pivot frequencies.
         """
@@ -516,8 +516,8 @@ class tree_frequencies(object):
     """
     Frequency estimator on an abstract lineage tree.
 
-    Notes
-    -----
+    **Notes**
+
     - There is a SINGLE global list of observation times stored at the root:
       ``tree.root.traits['tps']`` -> ``np.array`` of shape ``(N,)``
       where N is the number of sequences.
@@ -532,8 +532,8 @@ class tree_frequencies(object):
         """
         Initialize a tree-wide clade frequency estimator.
 
-        Parameters
-        ----------
+        **Parameters**
+
         tree : :class:`baltic.tree.Tree`
             Tree whose nodes carry observation metadata.
 
@@ -841,8 +841,8 @@ def plot_root_to_tip(ax, tree,
     """
     Plot a root-to-tip regression for a divergence tree with dated tips.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : matplotlib.axes.Axes
         Axes on which to draw the regression.
     tree : :class:`baltic.tree.Tree`
@@ -868,8 +868,8 @@ def plot_root_to_tip(ax, tree,
         Additional keyword arguments forwarded to the point, regression-line, and
         tree plotting calls respectively.
 
-    Returns
-    -------
+    **Returns**
+
     tuple
         ``(outliers, slope, intercept, residuals)`` where ``outliers`` is the list
         of selected outlier tips and ``residuals`` is keyed by tip name.
@@ -1029,8 +1029,8 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
     """
     Plot a BEAST skygrid trajectory from a tab-delimited log file.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : matplotlib.axes.Axes
         Axes on which to draw the skygrid.
     logFile : str or path-like
@@ -1050,8 +1050,8 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
     ``**kwargs``
         Additional keyword arguments forwarded to the plotting primitives.
 
-    Returns
-    -------
+    **Returns**
+
     matplotlib.axes.Axes
         The input axes.
     """
@@ -1186,7 +1186,7 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
     """
     treeAx is the Axes object where the tree is plotted already.
     mapAx is the Axes object where the map is plotted already.
-    tree is a baltic Tree object.
+    tree is a :class:`baltic.tree.Tree` object.
     tipCoordinates is a dict of {tip_name: (x, y)} coordinates.
     destinationProjection is a cartopy ccrs projection object used in mapAx Axes.
     targetFxn is a filtering function for tree tips (default: always True).
@@ -1247,8 +1247,8 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
     """
     Plot a sequence of trees joined by tip-matching connector lines.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : matplotlib.axes.Axes
         Axes on which to draw the chain.
     treeList : list[:class:`baltic.tree.Tree`]
@@ -1267,8 +1267,8 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
     ``**kwargs``
         Additional keyword arguments passed to the connector ``LineCollection``.
 
-    Returns
-    -------
+    **Returns**
+
     list[:class:`baltic.tree.Tree`]
         The input tree list after coordinates have been assigned.
     """
@@ -1657,8 +1657,8 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
     """
     Plot a tree alongside a rectangular annotation matrix aligned to its tips.
 
-    Parameters
-    ----------
+    **Parameters**
+
     treeAx : matplotlib.axes.Axes
         Axes used for the tree.
     matrixAx : matplotlib.axes.Axes
@@ -1676,8 +1676,8 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
     ``**kwargs``
         Additional keyword arguments forwarded to the matrix ``PatchCollection``.
 
-    Returns
-    -------
+    **Returns**
+
     tuple
         ``(treeAx, matrixAx)``.
     """

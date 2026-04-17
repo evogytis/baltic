@@ -1,14 +1,15 @@
-"""This module provides the core baltic functions ``make_tree`` and ``make_tree_json``.
+"""This module provides the core ``baltic`` functions :func:`make_tree` and :func:`make_tree_JSON`.
 
+=====
 Notes
------
+=====
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
 Attributes
-----------
+^^^^^^^^^^
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 __all__ = ['make_tree', 'make_tree_JSON']
 import re
@@ -24,10 +25,10 @@ sys.setrecursionlimit(9001)
 
 def make_tree(data, treeType, tre=None):
     """
-    Parse a Newick-like tree string into a ``baltic`` tree object.
+    Parse a Newick-like tree string into a :class:`baltic.tree.Tree`.
 
     Parameters
-    ----------
+    ^^^^^^^^^^
     data : str
         Tree string to parse.
 
@@ -37,13 +38,13 @@ def make_tree(data, treeType, tre=None):
     tre : :class:`baltic.tree.Tree`, optional
         Existing tree object to populate. If omitted, a new tree is created.
 
-    Returns
-    -------
+    **Returns**
+
     :class:`baltic.tree.Tree`
         Parsed tree object.
 
-    Raises
-    ------
+    **Raises**
+
     AssertionError
         If the input string is malformed or cannot be fully parsed.
     """
@@ -239,10 +240,10 @@ def make_tree(data, treeType, tre=None):
 
 def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
     """
-    Build a ``baltic`` tree from an Auspice-style JSON node hierarchy.
+    Build a :class:`baltic.tree.Tree` from an Auspice-style JSON node hierarchy.
 
-    Parameters
-    ----------
+    **Parameters**
+
     jsonNode : dict
         Root JSON node to parse.
 
@@ -256,8 +257,8 @@ def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
         Existing tree object to populate recursively. If omitted, a new tree
         is created.
 
-    Returns
-    -------
+    **Returns**
+
     :class:`baltic.tree.Tree`
         Parsed tree object.
     """

@@ -1,14 +1,14 @@
-"""This module provides the baltic ``BranchLike`` superclass.
+"""This module provides the ``baltic`` :class:`~baltic.branchLike.BranchLike` superclass.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 import logging
 
@@ -17,18 +17,18 @@ logger = logging.getLogger("baltic.BranchLike")
 
 class BranchLike:
     """
-    ``BranchLike`` class serves as super class that gets inherited by
+    :class:`.BranchLike` serves as the superclass inherited by
     :class:`.Clade`, :class:`.Leaf`, :class:`.Node`, and :class:`.Reticulation`.
 
     This class defines the recursive structures of which ``baltic`` :class:`.Tree` objects are built.
 
-    Note
-    ----
+    **Note**
+
     Most attributes have null default values as they are either (1) set automatically
     during tree construction, or (2) defined by the specific inherited subclass.
 
-    Attributes
-    ----------
+    **Attributes**
+
     branchType : str
         DEPRECATED: should now be checked using :meth:`is_leaf()`, or :meth:`is_node()`.
 
@@ -41,7 +41,7 @@ class BranchLike:
     absoluteTime : float
         Branch end point in absolute time.
 
-    parent : baltic.branchLike
+    parent : :class:`baltic.branchLike.BranchLike`
         Reference to parent of ``self``.
 
     traits : dict, default={}
@@ -71,8 +71,8 @@ class BranchLike:
         """
         Initialize a generic branch-like object.
 
-        Parameters
-        ----------
+        **Parameters**
+
         length : float, optional
             Length of the incoming branch. Defaults to ``0.0``.
 
@@ -111,13 +111,13 @@ class BranchLike:
 
         Operates by adding itself to the path, then recursively calling ``get_path_to_root`` on the current node's parent.
 
-        Parameters
-        ----------
+        **Parameters**
+
         path : list[:class:`.BranchLike`]
             The path that has been traversed so far.
 
-        Returns
-        -------
+        **Returns**
+
         path : list[:class:`.BranchLike`]
         """
         if path is None: path = []
@@ -133,13 +133,13 @@ class BranchLike:
     def get_siblings(self, include_self=False):
         """Get a list of the current node's siblings (i.e. the children of its parent).
 
-        Parameters
-        ----------
+        **Parameters**
+
         include_self : bool, default=False
             ``True`` if the list of siblings should include the current node.
 
-        Returns
-        -------
+        **Returns**
+
         list[:class:`.BranchLike`]
         """
         if self.parent is None:
@@ -155,12 +155,12 @@ class BranchLike:
     def is_leaflike(self) -> bool:
         """Returns ``True`` if the current node is a terminal node (i.e. :class:`.Leaf`, :class:`.Clade`, or :class:`.Reticulation`).
 
-        Returns
-        -------
+        **Returns**
+
         bool
 
-        Note
-        ----
+        **Note**
+
         This is set to always return ``False``, however this behavior is overwritten by the appropriate subclasses.
         """
         return False
@@ -169,12 +169,12 @@ class BranchLike:
     def is_leaf(self) -> bool:
         """Returns ``True`` if the current node is a :class:`.Leaf` node.
 
-        Returns
-        -------
+        **Returns**
+
         bool
 
-        Note
-        ----
+        **Note**
+
         This is set to always return ``False``, however this behavior is overwritten by the :class:`.Leaf` subclass.
         """
         return False
@@ -183,13 +183,13 @@ class BranchLike:
     def is_node(self) -> bool:
         """Returns ``True`` if the current node is an internal node.
 
-        Returns
-        -------
+        **Returns**
+
         bool
 
-        Note
-        ----
-        This is set to always return ``False``, however this behavior is overwritten by the ``Node`` subclass.
+        **Note**
+
+        This is set to always return ``False``, however this behavior is overwritten by the :class:`.Node` subclass.
         """
         return False
 
@@ -198,8 +198,8 @@ class BranchLike:
         """
         Return a compact string representation of the branch.
 
-        Returns
-        -------
+        **Returns**
+
         str
             Human-readable representation containing the branch index.
         """

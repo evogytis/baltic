@@ -1,15 +1,15 @@
 """This module provides tools for processing posterior distributions of trees and their assoicated
 BEAST log files.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 import re
 import logging
@@ -23,8 +23,8 @@ def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt
     """
     Iterate over tree strings in a posterior ``.trees`` file after burn-in.
 
-    Parameters
-    ----------
+    **Parameters**
+
     treesPath : str
         Path to the posterior tree file.
 
@@ -47,8 +47,8 @@ def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt
         Regular expression used to identify tree lines and extract state
         numbers.
 
-    Yields
-    ------
+    **Yields**
+
     tuple
         Tuple ``(i, state, treeString, tips, maxDate)`` for each sampled tree.
     """
@@ -126,8 +126,8 @@ def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, o
     """
     Process a posterior tree set with a parallel worker function.
 
-    Parameters
-    ----------
+    **Parameters**
+
     treesPath : str
         Path to the posterior ``.trees`` file.
 
@@ -203,8 +203,8 @@ def label_timepoints(times, edges, labels):
     """
     Assign string labels to times based on interval start times.
 
-    Parameters
-    ----------
+    **Parameters**
+
     times : array-like
         Time points to label (e.g. from np.linspace).
     edges : array-like
@@ -214,8 +214,8 @@ def label_timepoints(times, edges, labels):
     labels : array-like
         Label for each interval start (same length as edges).
 
-    Returns
-    -------
+    **Returns**
+
     np.ndarray of object
         Labels for each time; None if time is < min(edges)
         or > max(edges).
@@ -247,8 +247,8 @@ def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tip
     """
     Track lineage trait states backward in time for one or more focal tips.
 
-    Parameters
-    ----------
+    **Parameters**
+
     i : int
         Tree index within the posterior sample.
 
@@ -276,8 +276,8 @@ def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tip
     headerMode : bool, optional
         If ``True``, return output column names instead of values.
 
-    Returns
-    -------
+    **Returns**
+
     tuple
         Tuple ``(i, state, values)`` suitable for the posterior-processing
         pipeline.
@@ -322,8 +322,8 @@ def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictM
     """
     Compute TMRCA values for one or more named tip sets in a sampled tree.
 
-    Parameters
-    ----------
+    **Parameters**
+
     i : int
         Tree index within the posterior sample.
 
@@ -349,8 +349,8 @@ def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictM
     headerMode : bool, optional
         If ``True``, return output column names instead of values.
 
-    Returns
-    -------
+    **Returns**
+
     tuple
         Tuple ``(i, state, values)`` suitable for the posterior-processing
         pipeline.
@@ -388,8 +388,8 @@ def tree_length_worker(i, state, treeString, tipRenameDict, maxDate, headerMode 
     """
     Compute total branch length for a sampled posterior tree.
 
-    Parameters
-    ----------
+    **Parameters**
+
     i : int
         Tree index within the posterior sample.
 
@@ -409,8 +409,8 @@ def tree_length_worker(i, state, treeString, tipRenameDict, maxDate, headerMode 
     headerMode : bool, optional
         If ``True``, return output column names instead of values.
 
-    Returns
-    -------
+    **Returns**
+
     tuple
         Tuple ``(i, state, values)`` suitable for the posterior-processing
         pipeline.

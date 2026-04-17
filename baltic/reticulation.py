@@ -1,14 +1,14 @@
-"""This module provides the baltic ``Node`` class.
+"""This module provides the ``baltic`` :class:`~baltic.reticulation.Reticulation` class.
 
-Notes
------
+**Notes**
+
 This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
 
 
-Attributes
-----------
+**Attributes**
+
 logger : ``logging.Logger``
-    Default logger which will be passed to other baltic functions.
+    Default logger which will be passed to other ``baltic`` functions.
 """
 
 import logging
@@ -19,17 +19,15 @@ logger = logging.getLogger("baltic.Reticulation")
 
 class Reticulation(BranchLike):
     """
-    ``Reticulation`` class for external nodes that represent recombination, conversion, and reassortment events.
+    :class:`.Reticulation` represents an external node for recombination, conversion, and reassortment events.
 
-    Inherits from :class:`.BranchLike`.
+    **Note**
 
-    Note
-    ----
     Most attributes have null default values as they are either (1) set automatically
     during tree construction, or (2) defined by the specific inherited subclass.
 
-    Attributes
-    ----------
+    **Attributes**
+
     branchType : str
         DEPRECATED: should now be checked using :meth:`~Reticulation.is_leaf()`, or :meth:`~Reticulation.is_node()`.
 
@@ -54,8 +52,8 @@ class Reticulation(BranchLike):
         """
         Initialize a reticulation branch.
 
-        Parameters
-        ----------
+        **Parameters**
+
         name : str
             Identifier for the reticulation event.
 
@@ -87,8 +85,8 @@ class Reticulation(BranchLike):
         """
         Return a compact string representation of the reticulation.
 
-        Returns
-        -------
+        **Returns**
+
         str
             Human-readable representation containing the reticulation name.
         """

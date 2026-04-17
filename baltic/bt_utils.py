@@ -17,8 +17,8 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
     Convert a calendar date of a specified format into a decimal number.
 
-    Parameters
-    ----------
+    **Parameters**
+
     date : str
         Date string to be converted.
 
@@ -32,12 +32,12 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
         looping over ``["2025-01-01", "2025-02"]``). Will use highest
         precision available.
 
-    Returns
-    -------
+    **Returns**
+
     str
 
-    Example
-    -------
+    **Example**
+
     >>> calendar_to_decimal_date("1253-07-06")
     1253.509589041096
     """
@@ -151,16 +151,16 @@ def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
     """
     Convert a decimal year value to a formatted calendar date string.
 
-    Parameters
-    ----------
+    **Parameters**
+
     timepoint : float
         Decimal year to convert.
 
     fmt : str, optional
         Output date format passed to :func:`datetime.datetime.strftime`.
 
-    Returns
-    -------
+    **Returns**
+
     str
         Formatted calendar date.
     """
@@ -176,8 +176,8 @@ def convert_date_format(dateString,startFormat,endFormat):
     """
     Reformat a date string from one ``datetime`` format to another.
 
-    Parameters
-    ----------
+    **Parameters**
+
     dateString : str
         Input date string.
 
@@ -187,8 +187,8 @@ def convert_date_format(dateString,startFormat,endFormat):
     endFormat : str
         Format used to render the output string.
 
-    Returns
-    -------
+    **Returns**
+
     str
         Reformatted date string.
     """
@@ -250,8 +250,8 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
     """
     Generate a list of calendar breakpoints between two dates.
 
-    Parameters
-    ----------
+    **Parameters**
+
     startDateStr : str
         Start date of the interval.
 
@@ -268,8 +268,8 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
     roundDates : bool, optional
         Whether to align the timeline to calendar boundaries when possible.
 
-    Returns
-    -------
+    **Returns**
+
     list[str]
         Sequence of formatted date strings.
     """
@@ -331,8 +331,8 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
     """
     Plot a scale bar on the given axes.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the scale bar will be plotted.
 
@@ -371,25 +371,25 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
     textKwargs : dict, optional
         Additional keyword arguments passed to the ``matplotlib`` text plotting function for the scale bar label.
 
-    Returns
-    -------
+    **Returns**
+
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
 
-    Notes
-    -----
+    **Notes**
+
     - If both *L* and *tree* are provided, *L* takes precedence.
     - If *alnL* is provided for a divergence tree, the scale bar will be labeled in mutation counts instead of substitutions per site.
     - The *style* parameter determines whether the scale bar has simple or fancy end markers.
     - The *orientation* parameter determines whether the scale bar is drawn horizontally or vertically.
 
-    Raises
-    ------
+    **Raises**
+
     ValueError
         If an invalid *style* or *orientation* is provided.
 
-    Warnings
-    --------
+    **Warnings**
+
     - If neither *L* nor *tree* is provided, the scale bar defaults to a length of ``0.001`` with units of "subs/site".
     - If both *tree* and *ySpan* are provided, *ySpan* will be ignored in favor of the tree's *ySpan*.
     """
@@ -552,16 +552,16 @@ def _process_trait_prob_set(node, traitName):
     """
     Combine discrete trait states and probabilities into a lookup dictionary.
 
-    Parameters
-    ----------
+    **Parameters**
+
     node : :class:`baltic.branchLike.BranchLike`
         Branch carrying ``traitName.set`` and ``traitName.set.prob`` entries.
 
     traitName : str
         Trait prefix used to locate the state and probability arrays.
 
-    Returns
-    -------
+    **Returns**
+
     dict
         Mapping from state label to posterior probability.
     """
@@ -576,7 +576,7 @@ def _process_trait_prob_set(node, traitName):
 
 def branch_to_json(curNode, treeType, traits, mostRecentDate, treeDict=None):
     """
-    Formats a baltic branchLike object into a dict that will be converted into auspice JSON
+    Format a :class:`baltic.branchLike.BranchLike` object into a dictionary suitable for Auspice JSON.
     """
 
     if treeDict is None:
@@ -635,8 +635,8 @@ def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 1
     """
     Plot a stacked bar summarizing discrete trait probabilities for a node.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the bar should be drawn.
 
@@ -743,8 +743,8 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
     """
     Plot a treemap summarizing discrete trait probabilities for a node.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the treemap should be drawn.
 
@@ -818,8 +818,8 @@ def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, r
     """
     Plot a pie chart summarizing discrete trait probabilities for a node.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the pie chart should be drawn.
 
@@ -878,8 +878,8 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     """
     Plot a KDE-based posterior density for a TMRCA statistic from a log file.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the posterior should be drawn.
 
@@ -923,8 +923,8 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
         Keyword arguments forwarded to the violin fill, outline, and connector
         line artists.
 
-    Returns
-    -------
+    **Returns**
+
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
     """
@@ -1080,8 +1080,8 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     """
     Shade alternating time intervals on an axis.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the spans should be drawn.
 
@@ -1105,8 +1105,8 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
         Additional keyword arguments forwarded to ``ax.axvspan`` or
         ``ax.axhspan``.
 
-    Returns
-    -------
+    **Returns**
+
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
     """
@@ -1150,8 +1150,8 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     """
     Format tick positions and labels for a time-grid axis.
 
-    Parameters
-    ----------
+    **Parameters**
+
     ax : :obj:`matplotlib.axes.Axes`
         Axes whose ticks should be updated.
 
@@ -1173,8 +1173,8 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     ``**kwargs``
         Additional keyword arguments forwarded to the tick label setters.
 
-    Returns
-    -------
+    **Returns**
+
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
     """
@@ -1230,8 +1230,8 @@ def untangle(tree, reference, min_shared=2, maxPolytomy=9):
     """
     Reorder internal node children across multiple trees to reduce tip crossing.
 
-    Parameters
-    ----------
+    **Parameters**
+
     trees : list[:class:`.Tree`]
         Trees to reorder in sequence.
 
@@ -1244,13 +1244,13 @@ def untangle(tree, reference, min_shared=2, maxPolytomy=9):
     iterations : int, optional
         Number of untangling passes to perform. Defaults to ``3``.
 
-    Returns
-    -------
+    **Returns**
+
     list[:class:`.Tree`]
         The input trees with child orderings updated in place.
 
-    Raises
-    ------
+    **Raises**
+
     RuntimeWarning
         If a node has ten or more children, making exhaustive permutation
         search impractical.
@@ -1330,8 +1330,8 @@ def untangle_trees(
     """
     Untangle a list of trees for tanglegram visualisation.
 
-    Parameters
-    ----------
+    **Parameters**
+
     trees : list[Tree]
         Trees ordered as they will appear in the tanglegram.
         Trees are modified in place.
@@ -1344,8 +1344,8 @@ def untangle_trees(
     bidirectional : bool
         Whether to do backward passes as well as forward passes.
 
-    Returns
-    -------
+    **Returns**
+
     list[Tree]
         The same list, untangled.
     """
@@ -1385,8 +1385,8 @@ def unnest(nodeList, towardsRoot = True):
     """
     Remove nested nodes from a selection until descendant sets no longer overlap.
 
-    Parameters
-    ----------
+    **Parameters**
+
     nodeList : iterable[:class:`baltic.branchLike.BranchLike`]
         Nodes or leaf-like branches to filter.
 
@@ -1394,8 +1394,8 @@ def unnest(nodeList, towardsRoot = True):
         If ``True``, preferentially keep deeper nodes; otherwise keep more
         tip-proximal entries.
 
-    Returns
-    -------
+    **Returns**
+
     list
         Filtered list with nested overlaps removed.
     """
@@ -1421,8 +1421,8 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     """
     Evaluate a root-to-tip regression for a candidate root position.
 
-    Parameters
-    ----------
+    **Parameters**
+
     rootCandidate : :class:`baltic.branchLike.BranchLike`
         Candidate root branch or node.
 
@@ -1444,8 +1444,8 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     frac : float, optional
         Optional position along a branch associated with *rootCandidate*.
 
-    Returns
-    -------
+    **Returns**
+
     dict
         Updated regression summary.
     """
@@ -1482,8 +1482,8 @@ def _rtt_worker(args):
     """
     Evaluate one candidate root in a Monte Carlo root-to-tip analysis.
 
-    Parameters
-    ----------
+    **Parameters**
+
     args : tuple
         Tuple containing:
 
@@ -1498,8 +1498,8 @@ def _rtt_worker(args):
         - ``forcePositive``: whether negative regression slopes should be
           rejected.
 
-    Returns
-    -------
+    **Returns**
+
     dict
         Best regression result found for the candidate root, with the root
         stored by index rather than by object reference.
@@ -1628,8 +1628,8 @@ def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
     """
     Convert rectangular tree coordinates to Cartesian coordinates on a circle.
 
-    Parameters
-    ----------
+    **Parameters**
+
     x : float
         Radial distance from the origin.
 
@@ -1645,8 +1645,8 @@ def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
     circleFraction : float, optional
         Fraction of the circle used by the layout.
 
-    Returns
-    -------
+    **Returns**
+
     tuple[float, float]
         Projected Cartesian coordinates.
     """
@@ -1666,8 +1666,8 @@ def project_polar_vector(x,y,radians,length):
     """
     Translate a point by a vector specified in polar coordinates.
 
-    Parameters
-    ----------
+    **Parameters**
+
     x, y : float
         Starting point.
 
@@ -1677,8 +1677,8 @@ def project_polar_vector(x,y,radians,length):
     length : float
         Vector length.
 
-    Returns
-    -------
+    **Returns**
+
     tuple[float, float]
         Endpoint coordinates.
     """
@@ -1693,8 +1693,8 @@ def desaturate(colour, desat=0.65, out="auto"):
     """
     Desaturate a colour by scaling its HSV saturation component.
 
-    Parameters
-    ----------
+    **Parameters**
+
     colour : str or tuple
         Input colour specification.
 
@@ -1704,8 +1704,8 @@ def desaturate(colour, desat=0.65, out="auto"):
     out : {'auto', 'hex', 'rgb', 'rgba'}, optional
         Output format for the desaturated colour.
 
-    Returns
-    -------
+    **Returns**
+
     str or tuple
         Desaturated colour in the requested format.
     """
@@ -1811,16 +1811,16 @@ def desaturate_cmap(cmap, desat=0.65):
     """
     Create a desaturated version of a matplotlib colormap.
 
-    Parameters
-    ----------
+    **Parameters**
+
     cmap : :obj:`matplotlib.colors.Colormap`
         Colormap to desaturate.
 
     desat : float, optional
         Saturation multiplier applied to sampled colours.
 
-    Returns
-    -------
+    **Returns**
+
     :obj:`matplotlib.colors.ListedColormap`
         Desaturated colormap.
     """
@@ -1836,22 +1836,22 @@ def hpd(data, level=0.95):
     """
     Compute the highest posterior density interval for a sample.
 
-    Parameters
-    ----------
+    **Parameters**
+
     data : sequence[float]
         Posterior samples.
 
     level : float, optional
         Posterior mass to include in the interval. Defaults to ``0.95``.
 
-    Returns
-    -------
+    **Returns**
+
     tuple[float, float] or None
         Lower and upper bounds of the highest posterior density interval, or
         ``None`` if there are too few samples to estimate the interval.
 
-    Notes
-    -----
+    **Notes**
+
     Original implementation copyright (C) 2010 Joseph Heled.
     """
     d = list(data)
@@ -1983,8 +1983,8 @@ def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineW
     """
     Construct a simple stroked text/line path effect stack.
 
-    Parameters
-    ----------
+    **Parameters**
+
     mainColour : color, optional
         Foreground colour for the inner stroke.
 
@@ -1997,8 +1997,8 @@ def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineW
     outlineWeight : float, optional
         Line width of the outer stroke.
 
-    Returns
-    -------
+    **Returns**
+
     list
         Matplotlib path-effect objects.
     """
