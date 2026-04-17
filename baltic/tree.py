@@ -215,6 +215,16 @@ class Tree: ## tree class
         **Returns**
 
         :class:`.Tree`
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> ll.traverse_tree()
+        >>> node = ll.find_MRCA("A", "B", "C")
+        >>> sub = ll.subtree(startingNode=node, stem=False)
+        >>> sorted(tip.name for tip in sub.get_external())
+        ['A', 'B', 'C']
         """
         logger.info("Generating subtree.")
         if startingNode is None:
@@ -526,6 +536,14 @@ class Tree: ## tree class
 
         list
             Branches satisfying ``includeCondition`` in traversal order.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> leaves = ll.traverse_tree(includeCondition=lambda k: k.is_leaf())
+        >>> [tip.name for tip in leaves]
+        ['A', 'B', 'C']
         """
         logger.info("Beginning tree traversal.")
         if curNode is None:  ## if no starting point defined - start from root
@@ -614,6 +632,14 @@ class Tree: ## tree class
         tipNameMap : dict, optional
             Mapping from current tip name to replacement name. If omitted,
             ``self.tipMap`` is used.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> ll.rename_tips({"A": "sample_1", "B": "sample_2", "C": "sample_3"})
+        >>> sorted(tip.name for tip in ll.get_external())
+        ['sample_1', 'sample_2', 'sample_3']
         """
         if tipNameMap is None:
             if self.tipMap is not None:
@@ -639,6 +665,14 @@ class Tree: ## tree class
 
         :class:`.Tree`
             The rerooted tree.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:3.0):1.0,C:1.0);", treeType="divergence")
+        >>> ll.midpoint_root()
+        >>> isinstance(ll.root, bt.node.Node)
+        True
         """
         logger.debug("No branch provided, rooting at midpoint")
         # Identify the largest pairwise distance
@@ -703,6 +737,15 @@ class Tree: ## tree class
 
         :class:`.Tree`
             The rerooted tree.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:2.0);", treeType="divergence")
+        >>> branch = ll.get_leaf("C")
+        >>> ll.reroot(branch=branch, branchFrac=0.5)
+        >>> ll.root is not None
+        True
         """
         if self.treeType == "time":
             logger.error("Cannot reroot a time-calibrated tree.")
@@ -874,6 +917,16 @@ class Tree: ## tree class
 
         dict
             Mapping of tip names to the best-fitting dates.
+
+        **Examples**
+
+        >>> import io
+        >>> import baltic as bt
+        >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
+        >>> ll = bt.io.load_newick(handle, treeType="time", absoluteTime=True, variableDate=True)
+        >>> rooted, inferred_dates = ll.root_by_regression()
+        >>> isinstance(inferred_dates, dict)
+        True
         """
         from baltic.bt_utils import _rtt_worker, _root_to_tip, decimal_to_calendar_date
         from concurrent.futures import ProcessPoolExecutor
@@ -1359,6 +1412,14 @@ class Tree: ## tree class
         **Returns**
 
         :class:`.Node`
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> mrca = ll.find_MRCA("A", "B")
+        >>> sorted(mrca.leaves)
+        ['A', 'B']
         """
         if len(descendants) == 1 and isinstance(descendants[0], list):
             descendants = descendants[0]
@@ -1403,6 +1464,15 @@ class Tree: ## tree class
 
         :class:`.Clade`
             The newly created collapsed clade.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> ll.traverse_tree()
+        >>> cl = ll.collapse_subtree_to_clade(ll.find_MRCA("A", "B"), "AB clade")
+        >>> cl.name
+        'AB clade'
         """
         assert cl.is_node(), "Cannot collapse non-node class"
         collapsedClade = Clade(givenName)
@@ -1608,6 +1678,13 @@ class Tree: ## tree class
 
         str
             Serialized tree string.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> ll.to_string().endswith(";")
+        True
         """
         #TODO this feels like it should go in io.py, not here
         if curNode is None:
@@ -1757,6 +1834,14 @@ class Tree: ## tree class
 
         :class:`.Tree`
             Deep-copied reduced tree containing the embedding of the retained tips.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> reduced = ll.reduce_tree([ll.get_leaf("A"), ll.get_leaf("D")])
+        >>> sorted(tip.name for tip in reduced.get_external())
+        ['A', 'D']
         """
         assert len(tipsToKeep) > 0, "No tips given to reduce the tree to."
         assert (
@@ -1849,6 +1934,13 @@ class Tree: ## tree class
 
         list
             External branches satisfying the filter.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> [tip.name for tip in ll.get_external(lambda k: k.name != "B")]
+        ['A', 'C']
         """
         externals = list(
             filter(
@@ -1875,6 +1967,13 @@ class Tree: ## tree class
 
         :class:`.Leaf`
             Matching leaf.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> ll.get_leaf("B").name
+        'B'
         """
         assert isinstance(tipName, str), f"tipName should be str, not {type(tipName)}"
 
@@ -1897,6 +1996,13 @@ class Tree: ## tree class
 
         list[:class:`.Node`]
             Internal nodes satisfying the filter.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> len(ll.get_internal())
+        2
         """
         internals = list(filter(filterFxn, filter(lambda k: k.is_node(), self.Objects)))
         return internals
@@ -1917,6 +2023,14 @@ class Tree: ## tree class
 
         list
             Matching branches.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> selected = ll.get_branches(lambda k: getattr(k, "length", 0) >= 1.0)
+        >>> len(selected) >= 3
+        True
         """
         select = list(filter(filterFxn, self.Objects))
 
@@ -1955,6 +2069,13 @@ class Tree: ## tree class
 
         list
             Extracted values.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:2.0):1.0,C:3.0);", treeType="divergence")
+        >>> sorted(ll.get_parameter_list("length"))
+        [0.0, 1.0, 1.0, 2.0, 3.0]
         """
         if filterFxn is None:
             branches = self.Objects
@@ -2002,6 +2123,14 @@ class Tree: ## tree class
 
         list[:class:`.Tree`]
             Extracted subtrees.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+        >>> subtrees = ll.explode_tree(customFxn=lambda k: k.is_node() and len(k.leaves) == 3, stem=False)
+        >>> len(subtrees)
+        2
         """
 
         if trait is not None and customFxn is not None:
@@ -2047,6 +2176,15 @@ class Tree: ## tree class
 
         :class:`.Tree`
             The modified tree.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0):1.0,E:1.0);", treeType="divergence")
+        >>> ll.traverse_tree()
+        >>> ll.condense_tree(cutoffs=(2, 3))
+        >>> any(branch.__class__.__name__ == "Clade" for branch in ll.Objects)
+        True
         """
         ## cutoffs is a tuple of values that define the minimum and maximum sizes of clades designated for collapsing
         ## protectedTips is a list of tips names as str that will remain uncollapsed
@@ -3397,6 +3535,14 @@ class Tree: ## tree class
 
         dict
             Auspice JSON payload containing ``meta`` and ``tree`` sections.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> data = ll.to_auspice_json()
+        >>> sorted(data.keys())
+        ['meta', 'tree', 'version']
         """
         #TODO this should be in io
         from baltic.bt_utils import branch_to_json

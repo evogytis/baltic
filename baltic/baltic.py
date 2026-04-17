@@ -47,6 +47,13 @@ def make_tree(data, treeType, tre=None):
 
     AssertionError
         If the input string is malformed or cannot be fully parsed.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> ll = bt.make_tree("((A:1.0,B:1.5):0.5,C:2.0);", treeType="divergence")
+    >>> [tip.name for tip in ll.get_external()]
+    ['A', 'B', 'C']
     """
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
@@ -261,6 +268,22 @@ def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
 
     :class:`baltic.tree.Tree`
         Parsed tree object.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> json_tree = {
+    ...     "name": "root",
+    ...     "node_attrs": {"div": 0.0},
+    ...     "children": [
+    ...         {"name": "A", "node_attrs": {"div": 1.0}},
+    ...         {"name": "B", "node_attrs": {"div": 1.2}},
+    ...     ],
+    ... }
+    >>> translation = {"name": "name", "height": "div"}
+    >>> ll = bt.make_tree_JSON(json_tree, translation, treeType="divergence")
+    >>> sorted(tip.name for tip in ll.get_external())
+    ['A', 'B']
     """
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()

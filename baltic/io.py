@@ -63,6 +63,15 @@ def load_newick(treePath,
 
     :class:`baltic.tree.Tree`
         Parsed tree object.
+
+    **Examples**
+
+    >>> import io
+    >>> import baltic as bt
+    >>> handle = io.StringIO("((A:1.0,B:1.5):0.5,C:2.0);")
+    >>> ll = bt.io.load_newick(handle, treeType="divergence")
+    >>> len(ll.get_external())
+    3
     """
     ll = None
 
@@ -135,6 +144,23 @@ def load_nexus(treePath,
 
     :class:`baltic.tree.Tree`
         Parsed tree object.
+
+    **Examples**
+
+    >>> import io
+    >>> import baltic as bt
+    >>> nexus = io.StringIO(
+    ...     "#NEXUS\\n"
+    ...     "Begin trees;\\n"
+    ...     "Translate\\n"
+    ...     "    1 A|2020-01-01,\\n"
+    ...     "    2 B|2020-02-01;\\n"
+    ...     "tree TREE1 = [&R] (1:0.1,2:0.2);\\n"
+    ...     "End;\\n"
+    ... )
+    >>> ll = bt.io.load_nexus(nexus, treeType="time")
+    >>> sorted(tip.name for tip in ll.get_external())
+    ['A|2020-01-01', 'B|2020-02-01']
     """
     tip_flag = False
     tips = {}
@@ -219,6 +245,26 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
 
     tuple[:class:`baltic.tree.Tree`, dict]
         Parsed tree and the associated metadata block from the JSON.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> auspice = {
+    ...     "meta": {"colorings": []},
+    ...     "tree": {
+    ...         "name": "root",
+    ...         "node_attrs": {"div": 0.0},
+    ...         "children": [
+    ...             {"name": "A", "node_attrs": {"div": 1.0}},
+    ...             {"name": "B", "node_attrs": {"div": 1.2}},
+    ...         ],
+    ...     },
+    ... }
+    >>> ll, meta = bt.io.load_JSON(auspice, treeType="divergence")
+    >>> sorted(tip.name for tip in ll.get_external())
+    ['A', 'B']
+    >>> meta["colorings"]
+    []
     """
 
     assert treeType in ['divergence', 'time'], f"Unrecognised treeType {treeType}. Must be 'divergence' or 'time'."
@@ -336,6 +382,14 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
 
     setNodes : bool, optional
         If ``True``, assign absolute times to internal nodes as well as tips.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> ll = bt.make_tree("((A|2020-01-01:0.1,B|2020-02-01:0.2):0.3,C|2020-03-01:0.4);", treeType="time")
+    >>> bt.io.process_tip_dates(ll, tipRegex=r"\\|([0-9\\-]+)$", dateFmt="%Y-%m-%d", variableDate=True)
+    >>> all(tip.absoluteTime is not None for tip in ll.get_external())
+    True
     """
     tipDates = []
     tipNames = []
