@@ -5,7 +5,7 @@ commands:
   quickstart:
     unix: sphinx-quickstart
   build:
-    unix: make html
+    unix: rm -rf build & sphinx-build -b html ./source ./build
   serve:
     unix: python -m http.server --directory ./build
 
@@ -30,6 +30,7 @@ env_specs:
       - seaborn
       - pip:
           - python-docs-theme
+          - furo
 
 channels:
   - defaults

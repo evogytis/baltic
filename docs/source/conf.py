@@ -24,11 +24,8 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+# html_theme = 'sphinx_rtd_theme'
+html_theme = 'furo'
 html_static_path = ['_static']
 
-# Source - https://stackoverflow.com/a
-# Posted by shry, modified by community. See post 'Timeline' for change history
-# Retrieved 2025-12-08, License - CC BY-SA 3.0
-
-html_sidebars = { '**': ['globaltoc.html', 'relations.html', 'sourcelink.html', 'searchbox.html'] }
+# Let ``furo`` use its built-in sidebar configuration.
