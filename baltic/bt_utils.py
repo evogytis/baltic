@@ -163,6 +163,12 @@ def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
 
     str
         Formatted calendar date.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.decimal_to_calendar_date(2020.5)
+    '2020-07-02'
     """
     year = int(timepoint)
     rem = timepoint - year
@@ -191,6 +197,12 @@ def convert_date_format(dateString,startFormat,endFormat):
 
     str
         Reformatted date string.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.convert_date_format("2020-03-15", "%Y-%m-%d", "%b %Y")
+    'Mar 2020'
     """
     return dt.datetime.strftime(dt.datetime.strptime(dateString,startFormat),endFormat)
     try: #TODO deal with stuff that comes after the return statement
@@ -203,6 +215,21 @@ def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False
     """
     Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
     Also known by the name of Phylotype maps/trees.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+    >>> ll.sort_branches()
+    >>> for branch in ll.Objects:
+    ...     branch.traits["state"] = "X" if getattr(branch, "name", "").startswith(("A", "B")) else "Y"
+    >>> collapsed = bt_utils.state_collapse_tree(
+    ...     ll,
+    ...     switchFxn=lambda k: k.traits.get("state") != k.parent.traits.get("state") if k.parent else True,
+    ... )
+    >>> len(collapsed.get_external()) <= len(ll.get_external())
+    True
     """
     import copy
 
@@ -272,6 +299,12 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
 
     list[str]
         Sequence of formatted date strings.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.generate_calendar_timeline("2020-01-01", "2020-04-01", spacing="monthly")
+    ['2020-01-01', '2020-02-01', '2020-03-01', '2020-04-01']
     """
     assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
 
@@ -392,6 +425,19 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
 
     - If neither *L* nor *tree* is provided, the scale bar defaults to a length of ``0.001`` with units of "subs/site".
     - If both *tree* and *ySpan* are provided, *ySpan* will be ignored in favor of the tree's *ySpan*.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> fig, ax = plt.subplots()
+    >>> ll.plot_tree(ax)
+    <...Axes...>
+    >>> bt_utils.plot_scale_bar(ax, xy=(0.1, 0.2), tree=ll)
+    <...Axes...>
     """
 
     assert style in ['simple', 'fancy'], f"Scale bar style {style} not recognised. Must be 'simple' or 'fancy'."
@@ -673,6 +719,16 @@ def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 1
     ``**kwargs``
         Additional keyword arguments forwarded to
         :class:`matplotlib.patches.Rectangle`.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> class DummyNode:
+    ...     x, y = 0.0, 0.0
+    ...     traits = {"location.set": ["A", "B"], "location.set.prob": [0.7, 0.3]}
+    >>> fig, ax = plt.subplots()
+    >>> bt_utils.plot_node_bar(ax, DummyNode(), "location", {"A": "tab:blue", "B": "tab:orange"})
     """
     from matplotlib.patches import Rectangle
 
@@ -772,6 +828,17 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
     ``**kwargs``
         Additional keyword arguments forwarded to
         :class:`matplotlib.patches.Rectangle`.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> class DummyNode:
+    ...     x, y = 0.0, 0.0
+    ...     traits = {"location.set": ["A", "B"], "location.set.prob": [0.7, 0.3]}
+    >>> fig, ax = plt.subplots()
+    >>> bt_utils.plot_node_treemap(ax, DummyNode(), "location", {"A": "tab:blue", "B": "tab:orange"}, height=1.0, width=1.0)  # doctest: +SKIP
+    <...Axes...>
     """
 
     assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
@@ -844,6 +911,17 @@ def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, r
     ``**kwargs``
         Additional keyword arguments forwarded to
         :meth:`matplotlib.axes.Axes.pie`.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> class DummyNode:
+    ...     x, y = 0.0, 0.0
+    ...     traits = {"location.set": ["A", "B"], "location.set.prob": [0.7, 0.3]}
+    >>> fig, ax = plt.subplots()
+    >>> bt_utils.plot_node_piechart(ax, DummyNode(), "location", {"A": "tab:blue", "B": "tab:orange"})
+    <...Axes...>
     """
     assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
     assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
@@ -927,6 +1005,14 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
 
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> fig, ax = plt.subplots()
+    >>> bt_utils.plot_tmrca_posterior(ax, "tmrca.log", tmrcaName="age(root)", burnin=1000000)  # doctest: +SKIP
+    <...Axes...>
     """
 
     ### certain tree orientations will require xCoord too
@@ -1109,6 +1195,15 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
 
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> fig, ax = plt.subplots()
+    >>> timeline = ["2020-01-01", "2020-04-01", "2020-07-01", "2020-10-01"]
+    >>> bt_utils.plot_time_grid(ax, timeline, colour="lightgray")
+    <...Axes...>
     """
 
     if colour is not None and colourFxn is not None:
@@ -1177,6 +1272,15 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
 
     :obj:`matplotlib.axes.Axes`
         The modified matplotlib Axes object.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> fig, ax = plt.subplots()
+    >>> timeline = ["2020-01-01", "2020-04-01", "2020-07-01", "2020-10-01"]
+    >>> bt_utils.format_time_grid(ax, timeline)
+    <...Axes...>
     """
     assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
@@ -1207,6 +1311,14 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
 def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLabels = 'both'):
     """
     Remove selected spines, suppress ticks and ticklabels on x, y or both axes.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> fig, ax = plt.subplots()
+    >>> bt_utils.clean_axes(ax, hideSpines=["top", "right"], removeTickLabels="x")
+    <...Axes...>
     """
     validSpines = ['left', 'top', 'right', 'bottom']
     assert set(validSpines) >= set(hideSpines), f"Spine {[val for val in hideSpines if val not in validSpines]} not recognised. Must belong to the set {validSpines}."
@@ -1254,6 +1366,18 @@ def untangle(tree, reference, min_shared=2, maxPolytomy=9):
     RuntimeWarning
         If a node has ten or more children, making exhaustive permutation
         search impractical.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> tree = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+    >>> reference = bt.make_tree("((A:1.0,C:1.0):1.0,(B:1.0,D:1.0):1.0);", treeType="divergence")
+    >>> _ = tree.traverse_tree()
+    >>> _ = reference.traverse_tree()
+    >>> untangled = bt_utils.untangle(tree, reference)
+    >>> untangled is tree
+    True
     """
     from itertools import permutations
 
@@ -1348,6 +1472,18 @@ def untangle_trees(
 
     list[Tree]
         The same list, untangled.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> trees = [
+    ...     bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence"),
+    ...     bt.make_tree("((A:1.0,C:1.0):1.0,B:1.0);", treeType="divergence"),
+    ... ]
+    >>> result = bt_utils.untangle_trees(trees, iterations=1)
+    >>> len(result)
+    2
     """
 
     logger.warning(f"Untangled trees can be misleading! Tangle lines can be perfectly parallel without much topological congruence between trees. Use at your own peril.")
@@ -1398,6 +1534,17 @@ def unnest(nodeList, towardsRoot = True):
 
     list
         Filtered list with nested overlaps removed.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> nodes = [ll.find_MRCA("A", "B"), ll.find_MRCA("A", "B", "C")]
+    >>> kept = bt_utils.unnest(nodes, towardsRoot=True)
+    >>> len(kept)
+    1
     """
     nodeList = list(nodeList) ## make sure removal of nested nodes is not in-place
     assert all([(k.is_node() or k.is_leaflike()) for k in nodeList]), f"nodeList contains objects that are not baltic branch objects (node or leaflike): {', '.join([k for k in nodeList if k.is_node() == False and k.is_leaflike() == False])}"
@@ -1649,6 +1796,12 @@ def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
 
     tuple[float, float]
         Projected Cartesian coordinates.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.project_to_polar(1.0, 0.0, 10.0)
+    (0.0, 1.0)
     """
 
     # circle_start_radians = 2*math.pi * circleStart ## convert starting point to radians
@@ -1681,6 +1834,13 @@ def project_polar_vector(x,y,radians,length):
 
     tuple[float, float]
         Endpoint coordinates.
+
+    **Examples**
+
+    >>> import math
+    >>> from baltic import bt_utils
+    >>> bt_utils.project_polar_vector(0.0, 0.0, math.pi / 2, 2.0)
+    (1.2246467991473532e-16, 2.0)
     """
 
     new_x = x + length * math.cos(radians)
@@ -1708,6 +1868,12 @@ def desaturate(colour, desat=0.65, out="auto"):
 
     str or tuple
         Desaturated colour in the requested format.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.desaturate("#ff0000", desat=0.5)
+    '#ff8080'
     """
     if not (0 <= desat <= 1):
         raise ValueError(f"invalid desat value: {desat}, must be within interval [0, 1].")
@@ -1761,6 +1927,13 @@ def make_cmap(colours, position=None, name="custom_cmap"):
         - Hex strings "#RRGGBB" or "RRGGBB"
         - HTML/CSS names ("red", "steelblue")
         - Matplotlib shorthand ("r", "C0")
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> cmap = bt_utils.make_cmap(["#0000ff", "#ffffff", "#ff0000"])
+    >>> cmap.name
+    'custom_cmap'
     """
 
     from matplotlib.colors import LinearSegmentedColormap, to_rgb
@@ -1823,6 +1996,14 @@ def desaturate_cmap(cmap, desat=0.65):
 
     :obj:`matplotlib.colors.ListedColormap`
         Desaturated colormap.
+
+    **Examples**
+
+    >>> import matplotlib as mpl
+    >>> from baltic import bt_utils
+    >>> cmap = bt_utils.desaturate_cmap(mpl.cm.viridis, desat=0.4)
+    >>> cmap.N
+    256
     """
     from matplotlib.colors import ListedColormap
 
@@ -1853,6 +2034,12 @@ def hpd(data, level=0.95):
     **Notes**
 
     Original implementation copyright (C) 2010 Joseph Heled.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.hpd([1, 2, 2, 3, 4], level=0.8)
+    (1, 3)
     """
     d = list(data)
     d.sort()
@@ -1879,6 +2066,13 @@ def five_point_bezier(points, precision=50):
     """
     Quartic Bézier curve (5 control points).
     Returns arrays of x and y coordinates.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> xs, ys = bt_utils.five_point_bezier([(0, 0), (1, 0), (1, 1), (2, 1), (2, 0)], precision=5)
+    >>> len(xs), len(ys)
+    (5, 5)
     """
     p0, p1, p2, p3, p4 = map(lambda x: np.array(x, dtype=float), points)
 
@@ -1917,6 +2111,20 @@ def draw_gradient_polygon(
     ):
     """
     Draw an RGBA gradient image and clip it to a polygon.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import bt_utils
+    >>> fig, ax = plt.subplots()
+    >>> im, patch = bt_utils.draw_gradient_polygon(
+    ...     ax,
+    ...     polygonXY=[(0, 0), (1, 0), (1, 1), (0, 1)],
+    ...     extent=[0, 1, 0, 1],
+    ...     colour="steelblue",
+    ... )
+    >>> patch.__class__.__name__
+    'Polygon'
     """
     import numpy as np
     import matplotlib as mpl
@@ -2001,6 +2209,13 @@ def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineW
 
     list
         Matplotlib path-effect objects.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> effects = bt_utils.get_path_effects(mainColour="black", outlineColour="white")
+    >>> len(effects)
+    2
     """
 
     import matplotlib.patheffects as path_effects
