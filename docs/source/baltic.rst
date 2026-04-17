@@ -7,3 +7,4 @@
 
 .. automodule:: baltic.baltic
     :members:
+    :member-order: alphabetical

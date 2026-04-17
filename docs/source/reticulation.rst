@@ -5,5 +5,7 @@
 ``Reticulation``
 ===================
 
-.. automodule:: baltic.reticulation
+.. autoclass:: baltic.reticulation.Reticulation
     :members:
+    :member-order: alphabetical
+    :show-inheritance:

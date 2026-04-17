@@ -5,5 +5,7 @@
 ``Clade``
 ===================
 
-.. automodule:: baltic.clade
+.. autoclass:: baltic.clade.Clade
     :members:
+    :member-order: alphabetical
+    :show-inheritance:

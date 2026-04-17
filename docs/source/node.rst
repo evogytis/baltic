@@ -5,5 +5,7 @@
 ``Node``
 ===================
 
-.. automodule:: baltic.node
+.. autoclass:: baltic.node.Node
     :members:
+    :member-order: alphabetical
+    :show-inheritance:

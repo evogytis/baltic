@@ -5,5 +5,5 @@
 ``Tree``
 ========
 
-.. automodule:: baltic.tree
+.. autoclass:: baltic.tree.Tree
     :members:

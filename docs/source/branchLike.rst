@@ -5,5 +5,7 @@
 ``BranchLike``
 ===================
 
-.. automodule:: baltic.branchLike
+.. autoclass:: baltic.branchLike.BranchLike
     :members:
+    :member-order: alphabetical
+    :show-inheritance:

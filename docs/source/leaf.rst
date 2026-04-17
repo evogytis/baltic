@@ -5,5 +5,7 @@
 ``Leaf``
 ===================
 
-.. automodule:: baltic.leaf
+.. autoclass:: baltic.leaf.Leaf
     :members:
+    :member-order: alphabetical
+    :show-inheritance:
