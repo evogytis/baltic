@@ -27,8 +27,8 @@ def make_tree(data, treeType, tre=None):
     """
     Parse a Newick-like tree string into a :class:`baltic.tree.Tree`.
 
-    Parameters
-    ^^^^^^^^^^
+    **Parameters**
+
     data : str
         Tree string to parse.
 
