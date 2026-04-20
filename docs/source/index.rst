@@ -19,7 +19,6 @@ New users should begin with :doc:`getting_started`, then use the API reference p
    :maxdepth: 2
 
    getting_started
-   publications
 
 Source code
 -----------
@@ -43,7 +42,6 @@ Even if suggested manipulations/visualisations don't make it into baltic's code 
 
    baltic
    io
-   branchLike
    node
    leaf
    clade
@@ -52,3 +50,4 @@ Even if suggested manipulations/visualisations don't make it into baltic's code 
    bt_utils
    curonia
    samogitia
+   publications
