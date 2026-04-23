@@ -17,6 +17,8 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
     Convert a calendar date of a specified format into a decimal number.
 
+    This is the inverse of :func:`decimal_to_calendar_date`.
+
     **Parameters**
 
     date : str
@@ -36,10 +38,16 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
 
     str
 
-    **Example**
+    **Examples**
 
-    >>> calendar_to_decimal_date("1253-07-06")
+    >>> from baltic import bt_utils
+    >>> bt_utils.calendar_to_decimal_date("1253-07-06")
     1253.509589041096
+    >>> midpoint, bounds = bt_utils.calendar_to_decimal_date("2020-03", variable=True)
+    >>> round(midpoint, 3)
+    2020.205
+    >>> len(bounds)
+    2
     """
 
     if not fmt:
@@ -182,6 +190,9 @@ def convert_date_format(dateString,startFormat,endFormat):
     """
     Reformat a date string from one ``datetime`` format to another.
 
+    This helper is commonly paired with :func:`calendar_to_decimal_date` when
+    preparing axis labels.
+
     **Parameters**
 
     dateString : str
@@ -215,6 +226,23 @@ def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False
     """
     Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
     Also known by the name of Phylotype maps/trees.
+
+    **Parameters**
+
+    tree : :class:`baltic.tree.Tree`
+        Tree to collapse by partition state.
+
+    switchFxn : callable
+        Function that receives a branch and returns ``True`` when a new
+        partition should start at that branch.
+
+    keepLast : bool, optional
+        If ``True``, retain the most recent descendant branch for each
+        partition. If ``False``, retain the earliest descendant instead.
+
+    adjustEarlyHeights : bool, optional
+        If ``True`` and ``keepLast`` is ``False``, adjust the retained early
+        descendants to end at the most recent representative height.
 
     **Examples**
 
@@ -276,6 +304,9 @@ def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False
 def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
     """
     Generate a list of calendar breakpoints between two dates.
+
+    The output is designed for :func:`plot_time_grid` and
+    :func:`format_time_grid`.
 
     **Parameters**
 
@@ -397,6 +428,10 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
     ySpan : float, optional
         Vertical span of the scale bar, used to calculate default label positions. If not provided, it will be
         inferred from the tree.
+
+    fancyWidth : float, optional
+        Width of the terminal markers for ``style='fancy'`` expressed as a
+        fraction of the scale-bar length.
 
     lineKwargs : dict, optional
         Additional keyword arguments passed to the ``matplotlib`` line plotting function for the scale bar.
@@ -623,6 +658,35 @@ def _process_trait_prob_set(node, traitName):
 def branch_to_json(curNode, treeType, traits, mostRecentDate, treeDict=None):
     """
     Format a :class:`baltic.branchLike.BranchLike` object into a dictionary suitable for Auspice JSON.
+
+    **Parameters**
+
+    curNode : :class:`baltic.branchLike.BranchLike`
+        Current branch being serialized.
+
+    treeType : {'divergence', 'time'}
+        Interpretation of branch lengths in the exported tree.
+
+    traits : iterable[str]
+        Trait names to include in the exported node attributes.
+
+    mostRecentDate : float
+        Most recent sampling date used when exporting time-based confidence
+        intervals.
+
+    treeDict : dict, optional
+        Existing dictionary to populate during recursive export.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+    >>> _ = ll.traverse_tree()
+    >>> ll.set_absolute_time(2020.0)
+    >>> payload = bt_utils.branch_to_json(ll.root, "time", [], ll.mostRecent)
+    >>> sorted(payload.keys())
+    ['children', 'node_attrs']
     """
 
     if treeDict is None:
@@ -716,7 +780,7 @@ def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 1
     orientation : {'vertical', 'horizontal'}, optional
         Orientation of the stacked bar.
 
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to
         :class:`matplotlib.patches.Rectangle`.
 
@@ -825,7 +889,7 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
     other_thres : float, optional
         Probability threshold below which states are grouped into ``other``.
 
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to
         :class:`matplotlib.patches.Rectangle`.
 
@@ -908,7 +972,7 @@ def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, r
     other_thres : float, optional
         Probability threshold below which states are grouped into ``other``.
 
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to
         :meth:`matplotlib.axes.Axes.pie`.
 
@@ -1166,6 +1230,9 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     """
     Shade alternating time intervals on an axis.
 
+    This helper is typically used with timelines from
+    :func:`generate_calendar_timeline`.
+
     **Parameters**
 
     ax : :obj:`matplotlib.axes.Axes`
@@ -1187,7 +1254,7 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     axis : {'x', 'y'}, optional
         Axis along which spans should be drawn.
 
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to ``ax.axvspan`` or
         ``ax.axhspan``.
 
@@ -1245,6 +1312,8 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     """
     Format tick positions and labels for a time-grid axis.
 
+    This helper complements :func:`plot_time_grid` on the same axes.
+
     **Parameters**
 
     ax : :obj:`matplotlib.axes.Axes`
@@ -1265,7 +1334,7 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     axis : {'x', 'y'}, optional
         Axis whose ticks should be updated.
 
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to the tick label setters.
 
     **Returns**
@@ -1312,6 +1381,19 @@ def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLa
     """
     Remove selected spines, suppress ticks and ticklabels on x, y or both axes.
 
+    It is often used after :meth:`baltic.tree.Tree.plot_tree`.
+
+    **Parameters**
+
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes to modify.
+
+    hideSpines : list[str], optional
+        Spine names to hide.
+
+    removeTickLabels : {'x', 'y', 'both', 'none'}, optional
+        Tick-label groups to remove.
+
     **Examples**
 
     >>> import matplotlib.pyplot as plt
@@ -1344,17 +1426,19 @@ def untangle(tree, reference, min_shared=2, maxPolytomy=9):
 
     **Parameters**
 
-    trees : list[:class:`.Tree`]
-        Trees to reorder in sequence.
+    tree : :class:`baltic.tree.Tree`
+        Tree whose child orderings will be updated.
 
-    costFxn : callable, optional
-        Function used to score the discrepancy between the y-positions of a
-        shared tip in adjacent trees. The function must accept a pair of
-        numeric positions and return a scalar cost. If omitted, squared
-        distance is used.
+    reference : :class:`baltic.tree.Tree`
+        Reference tree whose tip ordering guides the untangling.
 
-    iterations : int, optional
-        Number of untangling passes to perform. Defaults to ``3``.
+    min_shared : int, optional
+        Minimum number of shared descendant tips required before a child set is
+        considered in the local ordering score.
+
+    maxPolytomy : int, optional
+        Maximum number of children for which exhaustive permutation search will
+        be attempted.
 
     **Returns**
 
@@ -1454,6 +1538,8 @@ def untangle_trees(
     """
     Untangle a list of trees for tanglegram visualisation.
 
+    This repeatedly applies :func:`untangle` across the tree list.
+
     **Parameters**
 
     trees : list[Tree]
@@ -1463,8 +1549,8 @@ def untangle_trees(
         Number of global passes along the chain.
     costFxn : callable
         Function mapping (y_ref, y_tree) -> cost.
-    maxPoly : int
-        Maximum polytomy size to brute-force.
+    maxPolytomy : int
+        Maximum polytomy size to brute-force while reordering child sets.
     bidirectional : bool
         Whether to do backward passes as well as forward passes.
 
@@ -1629,6 +1715,8 @@ def _rtt_worker(args):
     """
     Evaluate one candidate root in a Monte Carlo root-to-tip analysis.
 
+    This helper is used internally by :meth:`baltic.tree.Tree.root_by_regression`.
+
     **Parameters**
 
     args : tuple
@@ -1759,6 +1847,9 @@ def _adjust_tip_dates_by_regression(
     intercept: float):
     """
     Receives a list of tips with uncertain dates and regression parameters, adjusts .absoluteTime (within uncertainty range .absoluteTimeRange) to be as close to regression line as possible.
+
+    This helper supports :meth:`baltic.tree.Tree.root_by_regression` after
+    :func:`_root_to_tip` has estimated a line.
     """
     adjustedDates = {}
 
@@ -1774,6 +1865,8 @@ def _adjust_tip_dates_by_regression(
 def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
     """
     Convert rectangular tree coordinates to Cartesian coordinates on a circle.
+
+    This projection underlies circular layouts in :meth:`baltic.tree.Tree.plot_tree`.
 
     **Parameters**
 
@@ -1819,6 +1912,8 @@ def project_polar_vector(x,y,radians,length):
     """
     Translate a point by a vector specified in polar coordinates.
 
+    This helper complements :func:`project_to_polar` for circular tree layouts.
+
     **Parameters**
 
     x, y : float
@@ -1852,6 +1947,9 @@ def project_polar_vector(x,y,radians,length):
 def desaturate(colour, desat=0.65, out="auto"):
     """
     Desaturate a colour by scaling its HSV saturation component.
+
+    Use :func:`desaturate_cmap` to apply the same transformation to an entire
+    colormap.
 
     **Parameters**
 
@@ -1928,6 +2026,25 @@ def make_cmap(colours, position=None, name="custom_cmap"):
         - HTML/CSS names ("red", "steelblue")
         - Matplotlib shorthand ("r", "C0")
 
+    The resulting colormap can be passed to :func:`desaturate_cmap`.
+
+    **Parameters**
+
+    colours : sequence
+        Sequence of colors to interpolate between.
+
+    position : sequence[float], optional
+        Positions associated with each color. Must start at ``0`` and end at
+        ``1`` when provided.
+
+    name : str, optional
+        Name assigned to the resulting colormap.
+
+    **Returns**
+
+    :obj:`matplotlib.colors.LinearSegmentedColormap`
+        Colormap built from the provided colors.
+
     **Examples**
 
     >>> from baltic import bt_utils
@@ -1984,6 +2101,8 @@ def desaturate_cmap(cmap, desat=0.65):
     """
     Create a desaturated version of a matplotlib colormap.
 
+    This applies :func:`desaturate` across sampled colours from the input map.
+
     **Parameters**
 
     cmap : :obj:`matplotlib.colors.Colormap`
@@ -2016,6 +2135,9 @@ def desaturate_cmap(cmap, desat=0.65):
 def hpd(data, level=0.95):
     """
     Compute the highest posterior density interval for a sample.
+
+    This summary is used by plotting helpers such as
+    :func:`baltic.curonia.plot_skygrid`.
 
     **Parameters**
 
@@ -2067,6 +2189,22 @@ def five_point_bezier(points, precision=50):
     Quartic Bézier curve (5 control points).
     Returns arrays of x and y coordinates.
 
+    This geometry helper supports routines such as
+    :func:`baltic.curonia.plot_gradient_clade_tree`.
+
+    **Parameters**
+
+    points : sequence[tuple[float, float]]
+        Five control points defining the quartic Bézier curve.
+
+    precision : int, optional
+        Number of samples to evaluate along the curve.
+
+    **Returns**
+
+    tuple[numpy.ndarray, numpy.ndarray]
+        Arrays of x and y coordinates sampled along the curve.
+
     **Examples**
 
     >>> from baltic import bt_utils
@@ -2111,6 +2249,56 @@ def draw_gradient_polygon(
     ):
     """
     Draw an RGBA gradient image and clip it to a polygon.
+
+    **Parameters**
+
+    ax : :obj:`matplotlib.axes.Axes`
+        Axes on which to draw the clipped gradient.
+
+    polygonXY : array-like
+        Polygon vertices used as the clipping path.
+
+    extent : sequence[float]
+        Image extent passed to :meth:`matplotlib.axes.Axes.imshow` as
+        ``[xmin, xmax, ymin, ymax]``.
+
+    colour : color
+        Base color used for the gradient.
+
+    minAlpha, maxAlpha : float, optional
+        Alpha range used to build the gradient ramp.
+
+    n : int, optional
+        Number of gradient samples.
+
+    axis : {'x', 'y'}, optional
+        Direction along which alpha should vary.
+
+    origin : {'lower', 'upper'}, optional
+        Image origin passed to ``imshow``.
+
+    reverse : bool, optional
+        If ``True``, reverse the alpha ramp.
+
+    zorder : float, optional
+        Z-order for the gradient image and default clipping patch.
+
+    interpolation : str, optional
+        Interpolation mode used by ``imshow``.
+
+    addPatch : bool, optional
+        If ``True``, add the clipping patch to the axes.
+
+    patchKwargs : dict, optional
+        Additional keyword arguments forwarded to the polygon patch.
+
+    imshowKwargs : dict, optional
+        Additional keyword arguments forwarded to ``imshow``.
+
+    **Returns**
+
+    tuple
+        ``(image, patch)`` for the gradient image and the clipping polygon.
 
     **Examples**
 
@@ -2190,6 +2378,8 @@ def draw_gradient_polygon(
 def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineWeight=4):
     """
     Construct a simple stroked text/line path effect stack.
+
+    These effects are useful with :meth:`baltic.tree.Tree.plot_text`.
 
     **Parameters**
 

@@ -27,6 +27,25 @@ logger = logging.getLogger("baltic.curonia")
 def indexObs(node, count = 0):
     """
     Traverse tree structure, assign an index to every observation.
+
+    **Parameters**
+
+    node : :class:`baltic.branchLike.BranchLike`
+        Branch whose descendant observations will be indexed.
+
+    count : int, optional
+        Starting index value.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+    >>> for branch in ll.Objects:
+    ...     branch.traits["tps"] = np.array([branch.height])
+    >>> _ = curonia.indexObs(ll.root)
+    >>> ll.root.traits["leafs"].tolist()
+    [0]
     """
     # node.traits['tps']=[bt.decimalDate(meta[strain]['date']) for strain in node['strains']]
     descendants = len(node.traits['tps'])
@@ -45,6 +64,29 @@ def indexObs(node, count = 0):
 def propagateParentObs(node, traitName):
     """
     Propagate observations to parent node from unique counts of each branch.
+
+    **Parameters**
+
+    node : :class:`baltic.branchLike.BranchLike`
+        Branch whose descendants contribute observations.
+
+    traitName : str
+        Trait key containing the observation arrays to merge.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> for branch in ll.Objects:
+    ...     branch.traits["samples"] = np.array([], dtype=int)
+    >>> ll.get_leaf("A").traits["samples"] = np.array([1, 2])
+    >>> ll.get_leaf("B").traits["samples"] = np.array([3])
+    >>> ll.get_leaf("C").traits["samples"] = np.array([4])
+    >>> merged = curonia.propagateParentObs(ll.root, "samples")
+    >>> sorted(merged.tolist())
+    [1, 2, 3, 4]
     """
     if node.is_node():
         for child in node.children:
@@ -56,6 +98,9 @@ def propagateParentObs(node, traitName):
 def make_pivots(pivots, tps):
     """
     Construct pivot locations spanning the observation range.
+
+    These pivots are consumed by :func:`count_observations` and
+    :class:`frequency_estimator`.
 
     **Parameters**
 
@@ -69,6 +114,14 @@ def make_pivots(pivots, tps):
 
     pivots : np.array
         Array of pivot values.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.make_pivots(3, np.array([1.0, 2.0, 3.0])).shape
+    (3,)
+    >>> curonia.make_pivots([0.0, 0.5, 1.0], [0.2, 0.8]).tolist()
+    [0.0, 0.5, 1.0]
     """
     if np.isscalar(pivots):
         tps = np.asarray(tps)
@@ -86,6 +139,21 @@ def make_pivots(pivots, tps):
 def count_observations(pivots, tps):
     """
     Count how many individual observations fall into each pivot interval.
+
+    **Parameters**
+
+    pivots : scalar or iterable
+        Pivot specification passed to :func:`make_pivots`.
+
+    tps : sequence[float]
+        Observation time points to bin.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> counts = curonia.count_observations(np.array([0.0, 1.0, 2.0]), [0.1, 0.9, 1.2])
+    >>> counts.tolist()
+    [2, 1, 0]
     """
     pivots = make_pivots(pivots, tps)
     dt = pivots[1] - pivots[0]
@@ -98,6 +166,8 @@ def running_average(obs, ws):
     """
     Calculate a running average over a sequence of observations.
 
+    This smoother is used by :meth:`frequency_estimator.initial_guess`.
+
     **Parameters**
 
     obs : list/np.array(bool)
@@ -109,6 +179,12 @@ def running_average(obs, ws):
 
     np.array(float)
         Running average of the observations.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.running_average([0, 1, 1, 0], 2).round(2).tolist()
+    [0.0, 0.5, 1.0, 0.5]
     """
     ws = int(ws)
     try:
@@ -130,6 +206,22 @@ def fix_freq(freq, pc):
     '''
     restricts frequencies to the interval [pc, 1-pc]
     removes np.nan values and avoids taking logarithms of 0 or divisions by 0
+
+    This clipping is used by :func:`logit_transform` and :func:`logit_inv`.
+
+    **Parameters**
+
+    freq : array-like
+        Frequencies to clip.
+
+    pc : float
+        Lower and upper clipping bound.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.fix_freq([0.0, 0.5, 1.0], 0.1).tolist()
+    [0.1, 0.5, 0.9]
     '''
     freq = np.asarray(freq)
     freq = freq.copy()
@@ -140,6 +232,8 @@ def fix_freq(freq, pc):
 def logit_transform(freq, pc):
     """
     Transform frequencies to logit space after pseudocount clipping.
+
+    The inverse transform is :func:`logit_inv`.
 
     **Parameters**
 
@@ -153,6 +247,12 @@ def logit_transform(freq, pc):
 
     np.ndarray
         Logit-transformed frequencies.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.logit_transform([0.25, 0.75], 1e-4).round(3).tolist()
+    [-1.099, 1.099]
     """
     freq = np.asarray(freq)
     f = fix_freq(freq, pc)
@@ -162,6 +262,8 @@ def logit_transform(freq, pc):
 def logit_inv(logit_freq, pc):
     """
     Transform logit-space values back to clipped frequencies.
+
+    This inverts :func:`logit_transform`.
 
     **Parameters**
 
@@ -175,6 +277,12 @@ def logit_inv(logit_freq, pc):
 
     np.ndarray
         Frequencies constrained to the interval ``[pc, 1 - pc]``.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.logit_inv([-1.09861229, 1.09861229], 1e-4).round(2).tolist()
+    [0.25, 0.75]
     """
     logit_freq = np.asarray(logit_freq)
     tmp = np.exp(logit_freq)
@@ -186,6 +294,8 @@ def pq(p):
     """
     Compute the Bernoulli variance term ``p * (1 - p)``.
 
+    This quantity appears in :meth:`frequency_estimator.stiffLH`.
+
     **Parameters**
 
     p : array-like
@@ -195,6 +305,12 @@ def pq(p):
 
     np.ndarray
         Elementwise Bernoulli variance term.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.pq([0.25, 0.5, 0.75]).tolist()
+    [0.1875, 0.25, 0.1875]
     """
     p = np.asarray(p)
     return p * (1 - p)
@@ -226,6 +342,29 @@ class frequency_estimator(object):
         pivots : int/np.array(float)
             either integer specifying the number of pivot values,
             or list of explicit pivots
+        stiffness : float, optional
+            Smoothness penalty weight.
+        inertia : float, optional
+            Inertia penalty applied to frequency changes.
+        tol : float, optional
+            Optimizer tolerance.
+        pc : float, optional
+            Pseudocount used to clip frequencies.
+        ws : int, optional
+            Window size used for the initial running-average guess.
+        log_thres : float, optional
+            Threshold controlling log-space optimization behaviour.
+        method : str, optional
+            Optimization method passed to :func:`scipy.optimize.minimize`.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments reserved for future optimizer options.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
+        >>> fe.pivots.shape
+        (3,)
         """
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
         self.tps = tmp_obs[:, 0]
@@ -252,6 +391,8 @@ class frequency_estimator(object):
         """
         Construct an initial frequency trajectory estimate on the pivot grid.
 
+        This initializer is typically followed by :meth:`frequency_estimator.learn`.
+
         **Parameters**
 
         pc : float, optional
@@ -261,6 +402,14 @@ class frequency_estimator(object):
 
         np.ndarray
             Initial frequency values at each pivot.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
+        >>> guess = fe.initial_guess()
+        >>> guess.shape
+        (3,)
         """
         # generate a useful initial guess from a running average of the counts
         if self.tps.size == 0:
@@ -283,11 +432,22 @@ class frequency_estimator(object):
         """
         Compute the smoothness penalty term of the trajectory likelihood.
 
+        This penalty is evaluated during :meth:`frequency_estimator.learn`.
+
         **Returns**
 
         float
             Log-likelihood contribution from the diffusion-style smoothness
             prior.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
+        >>> fe.dt = np.diff(fe.pivots)
+        >>> fe.pivot_freq = fe.initial_guess()
+        >>> isinstance(fe.stiffLH(), float)
+        True
         """
         freq = self.pivot_freq
         dfreq = np.diff(freq)
@@ -303,11 +463,22 @@ class frequency_estimator(object):
         """
         Fit the frequency trajectory by numerical optimization.
 
+        This method refines the trajectory initialized by
+        :meth:`frequency_estimator.initial_guess`.
+
         **Parameters**
 
         initial_guess : callable, optional
             Function that accepts the pivot grid and returns an initial
             frequency trajectory.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0, 3.0], [0, 1, 1, 0], 4)
+        >>> fe.learn()
+        >>> fe.pivot_freq.shape
+        (4,)
         """
         self.dt = np.diff(self.pivots)
 
@@ -386,9 +557,16 @@ class freq_est_clipped(object):
         dtps : float, optional
             Additional margin around the first and last positive observation.
 
-        **kwargs
+        \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to
             :class:`frequency_estimator`.
+
+        **Examples**
+
+        >>> from baltic.curonia import freq_est_clipped
+        >>> fe = freq_est_clipped([0.0, 1.0, 2.0], [0, 1, 1], np.array([0.0, 1.0, 2.0]), name="demo")
+        >>> fe.valid
+        True
         """
         super(freq_est_clipped, self).__init__()
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
@@ -443,6 +621,16 @@ class freq_est_clipped(object):
     def learn(self):
         """
         Fit the clipped frequency estimator and expand the result to the full pivot grid.
+
+        This wraps :meth:`frequency_estimator.learn` on a reduced pivot window.
+
+        **Examples**
+
+        >>> from baltic.curonia import freq_est_clipped
+        >>> fe = freq_est_clipped([0.0, 1.0, 2.0, 3.0], [0, 1, 1, 0], np.array([0.0, 1.0, 2.0, 3.0]), name="demo")
+        >>> fe.learn()
+        >>> fe.pivot_freq.shape
+        (4,)
         """
         if not self.valid:
             self.pivot_freq = np.zeros_like(self.pivots)
@@ -465,6 +653,8 @@ class nested_frequencies(object):
 
     def __init__(self, tps, obs, pivots, **kwargs):
         """
+        Initialize a nested collection of :class:`freq_est_clipped` estimators.
+
         **Parameters**
 
         tps : np.array
@@ -473,6 +663,20 @@ class nested_frequencies(object):
             mapping: key -> boolean array (same length as tps)
         pivots : np.array
             pivot values
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to nested frequency
+            estimators.
+
+        **Examples**
+
+        >>> from baltic.curonia import nested_frequencies
+        >>> nf = nested_frequencies(
+        ...     np.array([0.0, 1.0, 2.0]),
+        ...     {"A": np.array([True, False, False]), "B": np.array([False, True, True])},
+        ...     np.array([0.0, 1.0, 2.0]),
+        ... )
+        >>> sorted(nf.obs)
+        ['A', 'B']
         """
         super(nested_frequencies, self).__init__()
         self.tps = np.asarray(tps)
@@ -484,10 +688,24 @@ class nested_frequencies(object):
         """
         Estimate mutually exclusive child frequencies on a shared pivot grid.
 
+        Each child trajectory is estimated with :class:`freq_est_clipped`.
+
         **Returns**
 
         dict
             Mapping of observation key to estimated pivot frequencies.
+
+        **Examples**
+
+        >>> from baltic.curonia import nested_frequencies
+        >>> nf = nested_frequencies(
+        ...     np.array([0.0, 1.0, 2.0, 3.0]),
+        ...     {"A": np.array([True, True, False, False]), "B": np.array([False, False, True, True])},
+        ...     np.array([0.0, 1.0, 2.0, 3.0]),
+        ... )
+        >>> freqs = nf.calc_freqs()
+        >>> sorted(freqs)
+        ['A', 'B']
         """
         # sort by total number of positives per clade (largest first)
         sorted_obs = sorted(self.obs.items(), key=lambda x: x[1].sum(), reverse=True)
@@ -547,8 +765,21 @@ class tree_frequencies(object):
         pc : float, optional
             Pseudocount used to clip frequencies away from 0 and 1.
 
-        ``**kwargs``
+        \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to nested estimators.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> tf.pivots.shape
+        (4,)
         """
 
         self.tree = tree
@@ -565,6 +796,21 @@ class tree_frequencies(object):
             - grab global tps from root
             - initialize root frequency trajectory
             - precompute counts per pivot
+
+        This is the setup stage for :meth:`tree_frequencies.estimate_clade_frequencies`.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> tf.counts.shape
+        (4,)
         """
         # CHANGED: operate on abstract lineage tree with global tps
         indexObs(self.tree.root) ## assign indices to observations
@@ -599,7 +845,21 @@ class tree_frequencies(object):
         For each internal node:
           - restrict to its descendant sample indices
           - build a per-child boolean obs array w.r.t. those indices
-          - run nested_frequencies
+          - run :class:`nested_frequencies`
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> freqs = tf.estimate_clade_frequencies()
+        >>> ll.root.index in freqs
+        True
         """
 
         # internal nodes in pre-order (root first)
@@ -659,6 +919,24 @@ class tree_frequencies(object):
     def calc_confidence(self):
         """
         Approximate confidence using Bernoulli sampling variance.
+
+        This operates on trajectories produced by
+        :meth:`tree_frequencies.estimate_clade_frequencies`.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> _ = tf.estimate_clade_frequencies()
+        >>> confidence = tf.calc_confidence()
+        >>> ll.root.index in confidence
+        True
         """
         self.confidence = {}
         for key, freq in self.frequencies.items():
@@ -674,6 +952,22 @@ class tree_frequencies(object):
 def clip_freq(ys,threshold=0.00):
     """
     Clip a list of frequencies to the first non-zero and the last non-zero values.
+
+    This is used by :func:`plot_Muller` when trimming lineage polygons.
+
+    **Parameters**
+
+    ys : sequence[float]
+        Frequency trajectory to trim.
+
+    threshold : float, optional
+        Minimum frequency required for inclusion.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.clip_freq([0.0, 0.2, 0.5, 0.0], threshold=0.1)
+    [1, 2]
     """
     if sum(ys) == 0.0:
         return []
@@ -710,7 +1004,91 @@ def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = 
     labelFxn = None, Muller = True, normaliseFreqFxn = None, orientation = 'horizontal',
     filterFxn = None, clipThreshold = 0.001, level = None, **kwargs):
     """
-    Plot a Muller plot on ax starting from a node and accessing its frequency using the size function along a timeline grid.
+    Plot a Muller-style stacked frequency area for a node and its descendants.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which the frequency polygon should be drawn.
+
+    node : :class:`baltic.branchLike.BranchLike`
+        Root branch of the clade or lineage to plot.
+
+    timeline : sequence
+        Ordered x- or y-axis positions corresponding to the sampled frequency
+        values in ``frequenciesDict``.
+
+    frequenciesDict : dict
+        Mapping from branch index to a sequence of frequencies defined on
+        ``timeline``.
+
+    bottom : sequence, optional
+        Baseline coordinates for the current lineage. If omitted, the lineage is
+        centred on zero before descendants are stacked into it.
+
+    colourFxn : callable, optional
+        Function mapping a branch to its fill colour.
+
+    outlineColourFxn : callable, optional
+        Function mapping a branch to its outline colour.
+
+    labelFxn : callable, optional
+        Function returning the legend label for each plotted branch.
+
+    Muller : bool, optional
+        If ``True``, add padding between descendant lineages so they render as a
+        Muller plot. If ``False``, descendants are stacked without that extra
+        spacing.
+
+    normaliseFreqFxn : callable, optional
+        Function applied to each lineage frequency vector before plotting.
+
+    orientation : {'horizontal', 'vertical'}, optional
+        Direction in which the timeline should be plotted.
+
+    filterFxn : callable, optional
+        Predicate used to decide whether a branch should be drawn.
+
+    clipThreshold : float, optional
+        Minimum frequency used when trimming leading and trailing zero-like
+        regions from a lineage.
+
+    level : int, optional
+        Z-order level used for the current branch and incremented recursively
+        for descendants.
+
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments forwarded to
+        :meth:`matplotlib.axes.Axes.fill_between` or
+        :meth:`matplotlib.axes.Axes.fill_betweenx`.
+
+    **Returns**
+
+    list[float]
+        Updated baseline values after adding the current node's frequency
+        profile.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> root = ll.root
+    >>> internal = ll.find_MRCA("A", "B")
+    >>> timeline = [0, 1, 2]
+    >>> frequencies = {
+    ...     root.index: [0.6, 0.7, 0.5],
+    ...     internal.index: [0.3, 0.4, 0.2],
+    ...     ll.get_leaf("A").index: [0.1, 0.2, 0.1],
+    ...     ll.get_leaf("B").index: [0.1, 0.1, 0.05],
+    ...     ll.get_leaf("C").index: [0.2, 0.2, 0.25],
+    ... }
+    >>> fig, ax = plt.subplots()
+    >>> top = curonia.plot_Muller(ax, root, timeline, frequencies, colourFxn=lambda k: "steelblue")
+    >>> len(top)
+    3
     """
     from collections import Counter
 
@@ -808,6 +1186,26 @@ def position_Bezier_control(pointA, pointB, height, frac):
     Given a line defined by 2 points A & B,
     find a third point at a given distance (height) that defines a line perpendicular to line AB which intercepts AB at fraction (frac) along AB.
     Equation derived by Luiz Max Fagundes de Carvalho (University of Edinburgh).
+
+    This geometry helper is used by :func:`plot_gradient_clade_tree`.
+
+    **Parameters**
+
+    pointA, pointB : tuple[float, float]
+        Endpoints of the line segment.
+
+    height : float
+        Distance of the control point from the segment.
+
+    frac : float
+        Fractional position along the segment at which the perpendicular is
+        constructed.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> tuple(round(x, 2) for x in curonia.position_Bezier_control((0.0, 0.0), (2.0, 0.0), 1.0, 0.5))
+    (1.0, 1.0)
     """
     x1, y1 = pointA
     x2, y2 = pointB
@@ -1044,6 +1442,8 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
     """
     Plot a BEAST skygrid trajectory from a tab-delimited log file.
 
+    HPD intervals are summarized with :func:`baltic.bt_utils.hpd`.
+
     **Parameters**
 
     ax : matplotlib.axes.Axes
@@ -1062,7 +1462,7 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
         If ``True``, use a logarithmic axis for population size.
     plotRootHPD : bool, optional
         If ``True``, draw the HPD interval for the root date.
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to the plotting primitives.
 
     **Returns**
@@ -1217,6 +1617,39 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
     colourFxn returns the colour of a tip.
     originProjection is a cartopy ccrs object used to transform the coordinate system of tipCoordinates (default: ccrs.PlateCarree()).
 
+    **Parameters**
+
+    treeAx : matplotlib.axes.Axes
+        Axes containing the tree plot.
+
+    mapAx : matplotlib.axes.Axes
+        Axes containing the map plot.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree whose tips will be connected to geographic coordinates.
+
+    tipCoordinates : dict
+        Mapping from tip name to ``(latitude, longitude)`` coordinates.
+
+    destinationProjection : object
+        Cartopy projection used by ``mapAx``.
+
+    targetFxn : callable, optional
+        Predicate selecting which tips to connect.
+
+    shoulderPositionFxn : callable, optional
+        Function returning an intermediate x-position on the tree panel before
+        routing to the map.
+
+    colourFxn : callable, optional
+        Function mapping tips to connector colours.
+
+    originProjection : object, optional
+        Projection in which ``tipCoordinates`` are defined.
+
+    \\*\\*lineKwargs : dict, optional
+        Additional keyword arguments forwarded to connector plotting.
+
     **Examples**
 
     >>> import cartopy.crs as ccrs  # doctest: +SKIP
@@ -1301,7 +1734,7 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
     treeKwargs, pointKwargs : dict, optional
         Keyword arguments forwarded to :meth:`baltic.tree.Tree.plot_tree` and
         :meth:`baltic.tree.Tree.plot_points`.
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments passed to the connector ``LineCollection``.
 
     **Returns**
@@ -1455,6 +1888,53 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
     Inspired by JT McCrone's visualisation: https://www.nature.com/articles/s41586-022-05200-3
     Initially implemented by Karthik Gangavarapu.
 
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw the gradient clades.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree providing the branch geometry.
+
+    designatedNodes : sequence, optional
+        Explicit nodes to render as gradient clades.
+
+    nodeDesignationFxn : callable, optional
+        Predicate selecting nodes to render as gradient clades.
+
+    colour, colourFxn : optional
+        Constant fill colour or colour function for gradient clades.
+
+    controlPointFraction : float, optional
+        Fraction of clade length used to place Bézier control points.
+
+    tipLen : float, optional
+        Fraction of descendant branch length shown with the fading overlay.
+
+    padY : float, optional
+        Vertical padding around each gradient clade envelope.
+
+    outlineColour, outlineColourFxn : optional
+        Constant outline colour or outline colour function.
+
+    minAlpha, maxAlpha : float, optional
+        Alpha range used for the gradient fill.
+
+    outline : bool, optional
+        If ``True``, draw clade outline curves.
+
+    precision : int, optional
+        Number of interpolation steps used for clade geometry.
+
+    outlineKwargs : dict, optional
+        Additional keyword arguments forwarded to clade outline plotting.
+
+    treeKwargs : dict, optional
+        Additional keyword arguments forwarded to the surrounding tree plot.
+
+    cladeBranchKwargs : dict, optional
+        Additional keyword arguments forwarded to descendant branch segments.
+
     **Examples**
 
     >>> import matplotlib.pyplot as plt
@@ -1598,6 +2078,30 @@ def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', wid
     """
     Plot 95% height HPDs on branches with trait.
 
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw HPD bars.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree containing branch HPD annotations.
+
+    targetFxn : callable, optional
+        Predicate selecting which branches to annotate.
+
+    traitName : str, optional
+        Trait key containing ``[low, high]`` HPD intervals.
+
+    width : float, optional
+        Vertical thickness of each HPD bar.
+
+    lastTipDate : float, optional
+        Most recent tip date used to convert heights into absolute dates.
+
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments forwarded to
+        :class:`matplotlib.patches.Rectangle`.
+
     **Examples**
 
     >>> import matplotlib.pyplot as plt
@@ -1640,6 +2144,38 @@ def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', wid
 def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, plotSegMatrix=False, segMatrixDist=1.1, segNames=None, segOrder=None, segWidth=1, segHeight=1, **kwargs):
     """
     Add a little matrix at the end of the reassortment network to indicate which segments are reassorting.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw reticulation edges.
+
+    tree : :class:`baltic.tree.Tree`
+        Reassortment network containing reticulation branches.
+
+    excludeFxn : callable, optional
+        Predicate selecting reticulations to skip.
+
+    colour, colourFxn : optional
+        Constant colour or colour function for reticulation edges.
+
+    plotSegMatrix : bool, optional
+        If ``True``, draw a segment matrix next to each reticulation.
+
+    segMatrixDist : float, optional
+        Distance multiplier used to place the segment matrix beyond the tree.
+
+    segNames : dict, optional
+        Mapping from segment indices to display names.
+
+    segOrder : sequence, optional
+        Display order for segment names in the matrix.
+
+    segWidth, segHeight : float, optional
+        Dimensions of each segment matrix cell.
+
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments reserved for future reticulation styling.
 
     **Examples**
 
@@ -1760,7 +2296,7 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
         Explicit left-to-right column order.
     width : float, optional
         Width of each matrix column.
-    ``**kwargs``
+    \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to the matrix ``PatchCollection``.
 
     **Returns**
@@ -1844,6 +2380,8 @@ def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fast
     """
     Computes consensus from an alignment file provided.
     Optionally can compute SNP consensus
+
+    This helper is used by :func:`_get_refSeq` and :func:`plot_snp_alignment`.
     """
     from collections import Counter
     from Bio import SeqIO
@@ -1874,6 +2412,9 @@ def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refS
     """
     Retrieve reference sequence - compute consensus from alignment, fetch from alignment file or grab from path.
     Returns sequence as str
+
+    This helper supports :func:`get_variable_aln_sites` and
+    :func:`plot_snp_alignment`.
     """
     from Bio import SeqIO
 
@@ -1904,6 +2445,8 @@ def _default_variable_site_selection_fxn(columnDict, validNtFxn, refNt):
     """
     Takes a dict of {seq name: nucleotide}, validNtFxn to identify whether a nucleotide is valid, and nucleotide at reference sequence
     This function identifies whether the column dict contains variable sites (at least 2 unique values) and that the 2nd most common allele is found it at least 2 sequences.
+
+    This is the default selector for :func:`get_variable_aln_sites`.
     """
     variable = False
     clean_column = [columnDict[seq] for seq in columnDict if validNtFxn(columnDict[seq])] ## filter to valid nucleotides
@@ -1924,6 +2467,40 @@ def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, valid
     refSeqFmt is sequence format of external reference file (default: 'fasta')
     trimStart, trimEnd is how many positions to ignore at either end of the alnFile
     returns indices of sites that pass selectionFxn
+
+    **Parameters**
+
+    alnFile : str
+        Alignment file to scan.
+
+    refSeq : str, optional
+        Reference sequence selector.
+
+    selectionFxn : callable, optional
+        Function deciding whether a column should be retained.
+
+    validNucleotideFxn : callable, optional
+        Function identifying valid nucleotide characters.
+
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
+
+    refSeqFmt : str, optional
+        Sequence format for an external reference file.
+
+    trimStart, trimEnd : int, optional
+        Number of positions to ignore at the start and end of the alignment.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> import tempfile
+    >>> fasta = '>A\\nACGT\\n>B\\nATGT\\n'
+    >>> with tempfile.NamedTemporaryFile('w+', suffix='.fasta') as handle:
+    ...     _ = handle.write(fasta)
+    ...     _ = handle.flush()
+    ...     curonia.get_variable_aln_sites(handle.name)
+    [1]
     """
     from collections import Counter
     from Bio import SeqIO
@@ -1987,6 +2564,72 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     plotORFs is a Boolean for whether to plot a schematic diagram of the alignment with feature annotations; errors if set to True without a GFF file
     minFeatLen is minimum feature length for adding text to sequence schematic
     offsetORFs is a float that represents a fraction of the tree's y-axis height to be used for positioning GFF file features below the alignment
+
+    **Parameters**
+
+    alnAx : matplotlib.axes.Axes
+        Axes on which to draw the alignment.
+
+    SNPs : sequence[int]
+        Alignment columns to include.
+
+    alnFile : str
+        Alignment file path.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree used to order sequences vertically.
+
+    refSeq : str, optional
+        Reference sequence selector.
+
+    ntColours : dict, optional
+        Mapping from nucleotide states to colours.
+
+    textKwargs : dict, optional
+        Keyword arguments for nucleotide text labels.
+
+    rectangleKwargs : dict, optional
+        Keyword arguments for alignment rectangles.
+
+    treeAx : matplotlib.axes.Axes, optional
+        Optional axes on which to draw the companion tree.
+
+    fmtSeqNamesFxn : callable, optional
+        Function used to format sequence names.
+
+    treeKwargs : dict, optional
+        Additional keyword arguments forwarded to :meth:`baltic.tree.Tree.plot_tree`.
+
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
+
+    validNucleotideFxn : callable, optional
+        Function identifying valid nucleotide characters.
+
+    coding : bool, optional
+        If ``True``, annotate columns in coding-sequence terms.
+
+    gffFile : str, optional
+        GFF file describing sequence features.
+
+    featType : str, optional
+        Feature type to extract from the GFF file.
+
+    geneName : str, optional
+        Feature qualifier used for gene labels.
+
+    refSeqFmt : str, optional
+        Format of an external reference file.
+
+    plotORFs : bool, optional
+        If ``True``, draw an ORF schematic below the alignment.
+
+    minFeatLen : int, optional
+        Minimum feature length required before text is added to the ORF
+        schematic.
+
+    offsetORFs : float, optional
+        Vertical offset of the ORF schematic as a fraction of tree height.
 
     **Examples**
 
@@ -2201,6 +2844,8 @@ def _identify_gene(site, seqFeatures, featType, geneName):
     Site is 0-indexed position in alignment.
     seqFeatures is a list of Biopython seq features (assumed loaded from a GFF file earlier)
     featType and geneName are the feature type and feature key for extraction from GFF file
+
+    This helper supports :func:`_format_coding_aln_column`.
     """
     hits = []
 
@@ -2227,6 +2872,8 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
     - "1410 nt" if site was outside of a coding feature
     - "23012 nt S: E484K (A) / E484A (C)" for a site that changes the amino acid sequence (lists all aa variants and nucleotide change associated with each outcome)
     - "24853 nt S: 1097 aa" for a site that's within a coding feature but the mutation is synonymous
+
+    This helper is used by :func:`plot_snp_alignment`.
     """
     from Bio.Seq import Seq
 
@@ -2305,6 +2952,8 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
 def _load_gff(gffFile):
     """
     Loads and returns features from a GFF file.
+
+    The returned features are consumed by :func:`plot_seq_features`.
     """
     try:
         from BCBio import GFF
@@ -2327,6 +2976,8 @@ def _assign_tracks(features):
 
     features: list of (feat_obj, start, end)
     Returns: dict {feature_index: track_index}
+
+    This helper supports :func:`plot_seq_features`.
     """
     # Give each feature a stable index
     indexed = [(i, feat, start, end) for i, (feat, start, end) in enumerate(features)]
@@ -2364,6 +3015,40 @@ def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='
     textKwargsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns a kwargs dict to be used to modify text that's plotted
     textArgsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns an args dict to be used for adding text
     minFeatLen is a threshold for adding text to features - no text is plotted for features less than this length
+
+    This helper is commonly paired with :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw sequence features.
+
+    gffFile : str
+        GFF file containing the feature annotations.
+
+    xy : tuple[float, float], optional
+        Origin of the feature schematic.
+
+    rescale : float, optional
+        Scaling factor applied to feature coordinates.
+
+    width : float, optional
+        Arrow width used for feature glyphs.
+
+    geneName : str, optional
+        Feature qualifier used for gene labels.
+
+    arrowKwargsFxn : callable, optional
+        Function returning keyword arguments for each arrow.
+
+    textArgsFxn : callable, optional
+        Function returning positional text arguments for each label.
+
+    textKwargsFxn : callable, optional
+        Function returning keyword arguments for each label.
+
+    minFeatLen : int, optional
+        Minimum feature length required before a label is drawn.
 
     **Examples**
 
