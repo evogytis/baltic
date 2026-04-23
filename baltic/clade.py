@@ -83,6 +83,13 @@ class Clade(BranchLike): ## clade class
 
         width : float, optional
             Plotting width assigned to the clade. Defaults to ``1.0``.
+
+        **Examples**
+
+        >>> from baltic.clade import Clade
+        >>> clade = Clade("example", width=2.0)
+        >>> clade.name, clade.width
+        ('example', 2.0)
         """
         super().__init__() # Inherit traits from BranchLike
         self.name=name
@@ -94,20 +101,22 @@ class Clade(BranchLike): ## clade class
         self.width=width
 
     def is_leaflike(self):
-        """Returns ``True``."""
+        """Returns ``True`` because :class:`.Clade` behaves like a terminal placeholder."""
         return True
 
     def is_leaf(self):
-        """Returns ``False``."""
+        """Returns ``False`` because :class:`.Clade` is not a true :class:`baltic.leaf.Leaf`."""
         return False
 
     def is_node(self):
-        """Returns False"""
+        """Returns ``False`` because :class:`.Clade` is not an internal :class:`baltic.node.Node`."""
         return False
 
     def __str__(self):
         """
         Return a compact string representation of the clade.
+
+        Matches the readable style used for :class:`.Clade` placeholders.
 
         **Returns**
 

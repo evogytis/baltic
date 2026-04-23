@@ -64,6 +64,13 @@ class Node(BranchLike):
 
         leaves : set[str], optional
             Descendant leaf names associated with the node.
+
+        **Examples**
+
+        >>> from baltic.node import Node
+        >>> node = Node(leaves={"A", "B"})
+        >>> sorted(node.leaves)
+        ['A', 'B']
         """
         super().__init__()
         self.branchType='node'
@@ -73,20 +80,22 @@ class Node(BranchLike):
 
 
     def is_leaflike(self):
-        """Returns ``False``."""
+        """Returns ``False`` because :class:`.Node` is not terminal like :class:`baltic.leaf.Leaf`."""
         return False
 
     def is_leaf(self):
-        """Returns ``False``."""
+        """Returns ``False`` because :class:`.Node` is distinct from :class:`baltic.leaf.Leaf`."""
         return False
 
     def is_node(self):
-        """Returns ``True``."""
+        """Returns ``True`` for :class:`.Node` objects."""
         return True
 
     def __str__(self):
         """
         Return a compact string representation of the node.
+
+        Matches the readable style used for :class:`.Node` debugging output.
 
         **Returns**
 

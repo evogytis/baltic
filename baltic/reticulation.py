@@ -62,6 +62,13 @@ class Reticulation(BranchLike):
 
         target : :class:`.BranchLike`, optional
             Destination branch into which the reticulation merges.
+
+        **Examples**
+
+        >>> from baltic.reticulation import Reticulation
+        >>> ret = Reticulation("R1", width=1.0)
+        >>> ret.name, ret.width
+        ('R1', 1.0)
         """
         super().__init__() # Inherit traits from BranchLike
         self.name=name
@@ -70,20 +77,22 @@ class Reticulation(BranchLike):
         self.target=target
 
     def is_leaflike(self):
-        """Returns ``True``."""
+        """Returns ``True`` because :class:`.Reticulation` is handled as a terminal branch."""
         return True
 
     def is_leaf(self):
-        """Returns ``False``."""
+        """Returns ``False`` because :class:`.Reticulation` is not a true :class:`baltic.leaf.Leaf`."""
         return False
 
     def is_node(self):
-        """Returns ``False``."""
+        """Returns ``False`` because :class:`.Reticulation` is not an internal :class:`baltic.node.Node`."""
         return False
 
     def __str__(self):
         """
         Return a compact string representation of the reticulation.
+
+        Matches the readable style used for :class:`.Reticulation` objects.
 
         **Returns**
 

@@ -39,30 +39,42 @@ class Leaf(BranchLike):
         """
         Initialize a terminal leaf.
 
+        This constructor specializes :class:`baltic.branchLike.BranchLike`
+        for terminal taxa.
+
         **Parameters**
 
         name : str
             Tip label associated with the leaf.
+
+        **Examples**
+
+        >>> from baltic.leaf import Leaf
+        >>> leaf = Leaf("A")
+        >>> leaf.name
+        'A'
         """
         super().__init__() # all of leaf's traits come from BranchLike
         self.branchType='leaf'
         self.name=name
 
     def is_leaflike(self):
-        """Returns ``True``."""
+        """Returns ``True`` for :class:`.Leaf` objects."""
         return True
 
     def is_leaf(self):
-        """Returns ``True``."""
+        """Returns ``True`` for :class:`.Leaf` objects."""
         return True
 
     def is_node(self):
-        """Returns ``False``."""
+        """Returns ``False`` because :class:`.Leaf` is not a :class:`baltic.node.Node`."""
         return False
 
     def __str__(self):
         """
         Return a compact string representation of the leaf.
+
+        Matches the readable style used throughout :class:`.Leaf` handling.
 
         **Returns**
 

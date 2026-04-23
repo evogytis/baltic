@@ -90,6 +90,13 @@ class BranchLike:
 
         traits : dict, optional
             Mapping of parsed annotations associated with the branch.
+
+        **Examples**
+
+        >>> from baltic.branchLike import BranchLike
+        >>> branch = BranchLike(length=0.5, traits={"posterior": 1.0})
+        >>> branch.length
+        0.5
         """
         self.branchType=None
         self.length=length
@@ -119,6 +126,13 @@ class BranchLike:
         **Returns**
 
         path : list[:class:`.BranchLike`]
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> [branch.index for branch in ll.get_leaf("A").get_path_to_root()]
+        [2, 1]
         """
         if path is None: path = []
 
@@ -141,6 +155,14 @@ class BranchLike:
         **Returns**
 
         list[:class:`.BranchLike`]
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> siblings = ll.get_leaf("A").get_siblings()
+        >>> [branch.name for branch in siblings]
+        ['B']
         """
         if self.parent is None:
             logger.warning("Attempted to find siblings of root node. Returning empty list.")
@@ -197,6 +219,9 @@ class BranchLike:
     def __str__(self):
         """
         Return a compact string representation of the branch.
+
+        Mirrors the compact representations used by other
+        :class:`.BranchLike` subclasses.
 
         **Returns**
 
