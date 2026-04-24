@@ -582,6 +582,16 @@ class Tree: ## tree class
         Use case example: label parts of a tree that are introduced into a new location and stay in that location, generating a new label for exports to other countries.
 
         This helper is used by :func:`baltic.bt_utils.state_collapse_tree`.
+
+        **Parameters**
+
+        partitionFxn : callable
+            Predicate that decides whether the current branch starts a new
+            partition.
+        node : :class:`.BranchLike`, optional
+            Current branch in the recursive walk. Defaults to the tree root.
+        partitionLabel : str, optional
+            Label propagated to descendants when no new partition is created.
         """
         if node is None: node = self.root
 
@@ -2402,8 +2412,14 @@ class Tree: ## tree class
 
         ax : matplotlib.axes.Axes
             Axes on which to draw clades.
-        xCoordinateFxn, yCoordinateFxn, endAttrFxn, targetFxn : callable
-            Coordinate and selection functions used during plotting.
+        xCoordinateFxn : callable
+            Function returning the projected x coordinate for a branch.
+        yCoordinateFxn : callable
+            Function returning the projected y coordinate for a branch.
+        endAttrFxn : callable
+            Function returning the terminal extent of a collapsed clade.
+        targetFxn : callable
+            Predicate selecting which clades to draw.
         colour : color or callable
             Clade face colour or colour function.
         precision : int
@@ -2412,6 +2428,9 @@ class Tree: ## tree class
             Shape interpolation mode for clade boundaries.
         cladeBaseWidth : float
             Width of the clade base where it joins the branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.patches.Polygon`.
 
         **Returns**
 
@@ -2617,6 +2636,28 @@ class Tree: ## tree class
 
         This is the rectangular-layout helper used by :meth:`plot_text`.
 
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw labels.
+        targetFxn : callable
+            Predicate selecting branches to label.
+        xCoordinateFxn : callable
+            Function returning the x coordinate for each label.
+        yCoordinateFxn : callable
+            Function returning the y coordinate for each label.
+        textContentFxn : callable
+            Function returning the text content for each branch.
+        orientation : {"horizontal", "vertical"}
+            Orientation of the plotted labels.
+        cladeEndAttrFxn : callable
+            Function returning the far edge of collapsed clades. Accepted for
+            API consistency with :meth:`plot_text`.
+        colourFxn : callable
+            Function returning the text colour for each branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to ``Axes.text``.
+
         **Returns**
 
         matplotlib.axes.Axes
@@ -2663,6 +2704,26 @@ class Tree: ## tree class
         Plot labels for an unrooted tree layout.
 
         This is the unrooted-layout helper used by :meth:`plot_text`.
+
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw labels.
+        targetFxn : callable
+            Predicate selecting branches to label.
+        xCoordinateFxn : callable
+            Function returning the projected x coordinate for each branch.
+        yCoordinateFxn : callable
+            Function returning the projected y coordinate for each branch.
+        textContentFxn : callable
+            Function returning the text content for each branch.
+        cladeEndAttrFxn : callable
+            Function returning the far edge of collapsed clades. Accepted for
+            API consistency with :meth:`plot_text`.
+        colourFxn : callable
+            Function returning the text colour for each branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to ``Axes.text``.
 
         **Returns**
 
@@ -2725,6 +2786,35 @@ class Tree: ## tree class
         Plot labels for a circular tree layout.
 
         This is the circular-layout helper used by :meth:`plot_text`.
+
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw labels.
+        targetFxn : callable
+            Predicate selecting branches to label.
+        textContentFxn : callable
+            Function returning the text content for each branch.
+        xCoordinateFxn : callable
+            Function returning the branch coordinate along the informative axis.
+        yCoordinateFxn : callable
+            Function returning the branch coordinate along the non-informative
+            axis.
+        circStart : float
+            Fraction of the circle at which plotting begins.
+        circFrac : float
+            Fraction of the full circle used for the layout.
+        inwardSpace : float
+            Radial offset applied before projection.
+        normaliseHeight : callable
+            Function that normalizes branch heights to the circular radius.
+        cladeEndAttrFxn : callable
+            Function returning the far edge of collapsed clades. Accepted for
+            API consistency with :meth:`plot_text`.
+        colourFxn : callable
+            Function returning the text colour for each branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to ``Axes.text``.
 
         **Returns**
 
@@ -3100,6 +3190,30 @@ class Tree: ## tree class
         """Adds triangles for plotting collapsed clades.
 
         This is the rectangular clade helper used by :meth:`plot_tree`.
+
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw clades.
+        xCoordinateFxn : callable
+            Function returning the x coordinate for a branch.
+        yCoordinateFxn : callable
+            Function returning the y coordinate for a branch.
+        endAttrFxn : callable
+            Function returning the terminal extent of a collapsed clade.
+        targetFxn : callable
+            Predicate selecting which clades to draw.
+        colour : color or callable
+            Clade face colour or colour function.
+        orientation : {"horizontal", "vertical"}
+            Orientation of the rectangular tree.
+        style : {"equal", "skewed"}
+            Shape interpolation mode for collapsed clades.
+        cladeBaseWidth : float
+            Width of the clade base where it joins the branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.patches.Polygon`.
         """
 
         valid_styles=['equal', 'skewed']
@@ -3150,6 +3264,43 @@ class Tree: ## tree class
         """Adds triangles for plotting collapsed clades.
 
         This is the circular clade helper used by :meth:`plot_tree`.
+
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw clades.
+        xCoordinateFxn : callable
+            Function returning the branch coordinate along the informative axis.
+        yCoordinateFxn : callable
+            Function returning the branch coordinate along the non-informative
+            axis.
+        endAttrFxn : callable
+            Function returning the terminal extent of a collapsed clade.
+        targetFxn : callable
+            Predicate selecting which clades to draw.
+        colour : color or callable
+            Clade face colour or colour function.
+        widthFxn : callable or float
+            Line width specification used for clade outlines.
+        circStart : float
+            Fraction of the circle at which plotting begins.
+        circFrac : float
+            Fraction of the full circle used for the layout.
+        inwardSpace : float
+            Radial offset applied before projection.
+        normaliseHeight : callable
+            Function that normalizes branch heights to the circular radius.
+        precision : int
+            Number of points used to approximate curves.
+        shape : {"triangle", "rectangle"}
+            Base geometry used for collapsed clades.
+        style : {"equal", "skewed"}
+            Shape interpolation mode for collapsed clades.
+        cladeBaseWidth : float
+            Width of the clade base where it joins the branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.patches.Polygon`.
         """
         valid_styles=['equal', 'skewed']
         assert style in valid_styles, f"Style {style} not recognised. Options are {valid_styles}"
@@ -3231,6 +3382,38 @@ class Tree: ## tree class
 
         This is the rooted-layout helper used by :meth:`plot_tree`.
 
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw the tree.
+        connectionType : {"baltic", "elbow", "direct"}
+            Branch connection geometry to use.
+        xCoordinateFxn : callable
+            Function returning the x coordinate for a branch.
+        yCoordinateFxn : callable
+            Function returning the y coordinate for a branch.
+        targetFxn : callable
+            Predicate selecting branches to draw.
+        widthFxn : callable or float
+            Line width specification for branches.
+        colourFxn : callable
+            Function returning the branch colour for each branch.
+        orientation : {"horizontal", "vertical"}
+            Orientation of the rectangular tree.
+        plotClades : bool
+            Whether collapsed clades should be rendered.
+        cladeColour : color or callable
+            Colour specification for collapsed clades.
+        cladeEndAttrFxn : callable
+            Function returning the terminal extent of a collapsed clade.
+        cladeStyle : {"equal", "skewed"}
+            Shape interpolation mode for collapsed clades.
+        cladeBaseWidth : float
+            Width of the clade base where it joins the branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.collections.LineCollection`.
+
         **Returns**
 
         matplotlib.axes.Axes
@@ -3304,6 +3487,51 @@ class Tree: ## tree class
         Draw a tree in circular coordinates.
 
         This is the circular-layout helper used by :meth:`plot_tree`.
+
+        **Parameters**
+
+        ax : matplotlib.axes.Axes
+            Axes on which to draw the tree.
+        targetFxn : callable
+            Predicate selecting branches to draw.
+        xCoordinateFxn : callable
+            Function returning the branch coordinate along the informative axis.
+        yCoordinateFxn : callable
+            Function returning the branch coordinate along the non-informative
+            axis.
+        widthFxn : callable or float
+            Line width specification for branches.
+        colourFxn : callable
+            Function returning the branch colour for each branch.
+        circStart : float
+            Fraction of the circle at which plotting begins.
+        circFrac : float
+            Fraction of the full circle used for the layout.
+        inwardSpace : float
+            Radial offset applied before projection.
+        normaliseHeight : callable
+            Function that normalizes branch heights to the circular radius.
+        connectionType : {"baltic", "elbow", "direct"}
+            Branch connection geometry to use.
+        padNodes : dict
+            Mapping of branches to additional spacing values.
+        precision : int
+            Number of interpolation points used for arcs.
+        plotClades : bool
+            Whether collapsed clades should be rendered.
+        cladeColour : color or callable
+            Colour specification for collapsed clades.
+        cladeEndAttrFxn : callable
+            Function returning the terminal extent of a collapsed clade.
+        cladeStyle : {"equal", "skewed"}
+            Shape interpolation mode for collapsed clades.
+        cladeShape : {"triangle", "rectangle"}
+            Base geometry used for collapsed clades.
+        cladeBaseWidth : float
+            Width of the clade base where it joins the branch.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to
+            :class:`matplotlib.collections.LineCollection`.
 
         **Returns**
 

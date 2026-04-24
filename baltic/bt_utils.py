@@ -1850,6 +1850,16 @@ def _adjust_tip_dates_by_regression(
 
     This helper supports :meth:`baltic.tree.Tree.root_by_regression` after
     :func:`_root_to_tip` has estimated a line.
+
+    **Parameters**
+
+    uncertainTips : sequence[:class:`baltic.leaf.Leaf`]
+        Tips whose ``absoluteTime`` values should be adjusted within their
+        allowed ``absoluteTimeRange``.
+    slope : float
+        Regression slope estimated from the root-to-tip fit.
+    intercept : float
+        Regression intercept estimated from the root-to-tip fit.
     """
     adjustedDates = {}
 

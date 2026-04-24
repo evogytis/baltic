@@ -2382,6 +2382,19 @@ def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fast
     Optionally can compute SNP consensus
 
     This helper is used by :func:`_get_refSeq` and :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    alnFile : str or file-like
+        Alignment source passed to :mod:`Bio.SeqIO`.
+    SNPs : list[int], optional
+        Alignment columns to summarize. If omitted, summarize the full
+        alignment.
+    validNucleotideFxn : callable, optional
+        Predicate used to filter valid nucleotide symbols before consensus
+        counting.
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
     """
     from collections import Counter
     from Bio import SeqIO
@@ -2415,6 +2428,20 @@ def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refS
 
     This helper supports :func:`get_variable_aln_sites` and
     :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    refSeq : str
+        Reference selector, either ``"consensus"``, a sequence name present in
+        the alignment, or a path to an external reference file.
+    validNucleotideFxn : callable, optional
+        Predicate used when computing a consensus reference.
+    alnFile : str or file-like, optional
+        Alignment source used to resolve consensus or named references.
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
+    refSeqFmt : str, optional
+        Sequence format for an external reference file.
     """
     from Bio import SeqIO
 
@@ -2447,6 +2474,18 @@ def _default_variable_site_selection_fxn(columnDict, validNtFxn, refNt):
     This function identifies whether the column dict contains variable sites (at least 2 unique values) and that the 2nd most common allele is found it at least 2 sequences.
 
     This is the default selector for :func:`get_variable_aln_sites`.
+
+    **Parameters**
+
+    columnDict : dict[str, str]
+        Mapping from sequence name to the nucleotide observed at one alignment
+        column.
+    validNtFxn : callable
+        Predicate used to decide whether a nucleotide should be retained for
+        the variability check.
+    refNt : str
+        Reference nucleotide at the same column. This argument is accepted for
+        compatibility with custom selection call signatures.
     """
     variable = False
     clean_column = [columnDict[seq] for seq in columnDict if validNtFxn(columnDict[seq])] ## filter to valid nucleotides
@@ -2846,6 +2885,17 @@ def _identify_gene(site, seqFeatures, featType, geneName):
     featType and geneName are the feature type and feature key for extraction from GFF file
 
     This helper supports :func:`_format_coding_aln_column`.
+
+    **Parameters**
+
+    site : int
+        Zero-indexed alignment column to annotate.
+    seqFeatures : sequence
+        Sequence features loaded from a GFF annotation.
+    featType : str
+        Feature type to match when scanning the annotation.
+    geneName : str
+        Qualifier key used to recover a human-readable gene label.
     """
     hits = []
 
@@ -2874,6 +2924,21 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
     - "24853 nt S: 1097 aa" for a site that's within a coding feature but the mutation is synonymous
 
     This helper is used by :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    site : int
+        Zero-indexed alignment column to describe.
+    alnDict : dict[str, Bio.SeqRecord.SeqRecord]
+        Alignment records keyed by sequence name.
+    referenceSeq : str
+        Reference sequence string with the same length as the alignment.
+    seqFeatures : sequence, optional
+        Sequence features loaded from a GFF annotation.
+    featType : str, optional
+        Feature type to match when resolving coding annotations.
+    geneName : str, optional
+        Qualifier key used to recover feature names from the annotation.
     """
     from Bio.Seq import Seq
 
@@ -2954,6 +3019,11 @@ def _load_gff(gffFile):
     Loads and returns features from a GFF file.
 
     The returned features are consumed by :func:`plot_seq_features`.
+
+    **Parameters**
+
+    gffFile : str or file-like
+        GFF source containing sequence feature annotations.
     """
     try:
         from BCBio import GFF
