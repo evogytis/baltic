@@ -2,5 +2,6 @@
 .pyc__pycache__/
 baltic/__pycache__/
 *.pyc
+docs/build/
 docs/envs/
-docs/build
+docs/.cache/

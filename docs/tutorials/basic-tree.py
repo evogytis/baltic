@@ -17,7 +17,7 @@ gs = GridSpec(1,1)
 ax = plt.subplot(gs[0])
 
 ll.plot_tree(ax)
-ll.plot_text(ax, size = 26)
+ll.plot_text(ax, xCoordinateFxn=lambda k: k.x+0.1, size = 26)
 ll.plot_points(ax)
 
 bt_utils.plot_scale_bar(ax, xy = (0.5, 0.1), tree = ll, style = 'fancy', textKwargs={'fontsize': 18})

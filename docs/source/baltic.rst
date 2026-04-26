@@ -2,8 +2,9 @@
    :hidden:
    :maxdepth: 2
 
-API reference
-================
+``baltic`` treebuliders
+=======================
 
 .. automodule:: baltic.baltic
     :members:
+    :member-order: alphabetical

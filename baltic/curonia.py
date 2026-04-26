@@ -1,3 +1,16 @@
+"""This module provides tools for creating composite plots that combine ``baltic`` trees with other
+derived data visualisations.
+
+**Notes**
+
+This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
+**Attributes**
+
+logger : ``logging.Logger``
+    Default logger which will be passed to other ``baltic`` functions.
+"""
 import logging
 import warnings
 import os
@@ -14,48 +27,102 @@ logger = logging.getLogger("baltic.curonia")
 def indexObs(node, count = 0):
     """
     Traverse tree structure, assign an index to every observation.
+
+    **Parameters**
+
+    node : :class:`baltic.branchLike.BranchLike`
+        Branch whose descendant observations will be indexed.
+
+    count : int, optional
+        Starting index value.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+    >>> for branch in ll.Objects:
+    ...     branch.traits["tps"] = np.array([branch.height])
+    >>> _ = curonia.indexObs(ll.root)
+    >>> ll.root.traits["leafs"].tolist()
+    [0]
     """
     # node.traits['tps']=[bt.decimalDate(meta[strain]['date']) for strain in node['strains']]
     descendants = len(node.traits['tps'])
-    
+
     node.traits['leafs'] = np.array(range(count, count + descendants), dtype = np.int_)
-    
+
     count += descendants
-    
+
     if node.is_node():
         for child in node.children:
             count = indexObs(child, count)
-    
+
     return count
 
 
 def propagateParentObs(node, traitName):
     """
     Propagate observations to parent node from unique counts of each branch.
+
+    **Parameters**
+
+    node : :class:`baltic.branchLike.BranchLike`
+        Branch whose descendants contribute observations.
+
+    traitName : str
+        Trait key containing the observation arrays to merge.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> for branch in ll.Objects:
+    ...     branch.traits["samples"] = np.array([], dtype=int)
+    >>> ll.get_leaf("A").traits["samples"] = np.array([1, 2])
+    >>> ll.get_leaf("B").traits["samples"] = np.array([3])
+    >>> ll.get_leaf("C").traits["samples"] = np.array([4])
+    >>> merged = curonia.propagateParentObs(ll.root, "samples")
+    >>> sorted(merged.tolist())
+    [1, 2, 3, 4]
     """
     if node.is_node():
         for child in node.children:
             node.traits[traitName] = np.hstack((node.traits[traitName], propagateParentObs(child, traitName)))
-    
+
     return node.traits[traitName]
 
 
-
 def make_pivots(pivots, tps):
-    '''
-    if pivots is a scalar, make a grid of pivot points covering the entire range
-    Parameters
-    ----------
+    """
+    Construct pivot locations spanning the observation range.
+
+    These pivots are consumed by :func:`count_observations` and
+    :class:`frequency_estimator`.
+
+    **Parameters**
+
     pivots : scalar or iterable
-        either number of pivots (a scalar) or the actual pivots
-        (will be cast to array and returned)
+        Either the number of pivots to generate or explicit pivot values.
     tps : np.array
-        observation time points. Will generate pivots spanning min/max
-    Returns
-    -------
+        Observation time points used to determine the span when ``pivots`` is a
+        scalar.
+
+    **Returns**
+
     pivots : np.array
-        array of pivot values
-    '''
+        Array of pivot values.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.make_pivots(3, np.array([1.0, 2.0, 3.0])).shape
+    (3,)
+    >>> curonia.make_pivots([0.0, 0.5, 1.0], [0.2, 0.8]).tolist()
+    [0.0, 0.5, 1.0]
+    """
     if np.isscalar(pivots):
         tps = np.asarray(tps)
         if tps.size < 2:
@@ -72,6 +139,21 @@ def make_pivots(pivots, tps):
 def count_observations(pivots, tps):
     """
     Count how many individual observations fall into each pivot interval.
+
+    **Parameters**
+
+    pivots : scalar or iterable
+        Pivot specification passed to :func:`make_pivots`.
+
+    tps : sequence[float]
+        Observation time points to bin.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> counts = curonia.count_observations(np.array([0.0, 1.0, 2.0]), [0.1, 0.9, 1.2])
+    >>> counts.tolist()
+    [2, 1, 0]
     """
     pivots = make_pivots(pivots, tps)
     dt = pivots[1] - pivots[0]
@@ -81,21 +163,29 @@ def count_observations(pivots, tps):
 
 
 def running_average(obs, ws):
-    '''
-    calculates a running average
-    obs     --  observations
-    ws      --  window size (number of points to average)
-    Parameters
-    ----------
+    """
+    Calculate a running average over a sequence of observations.
+
+    This smoother is used by :meth:`frequency_estimator.initial_guess`.
+
+    **Parameters**
+
     obs : list/np.array(bool)
-        observations
+        Observations to smooth.
     ws : int
-        window size as measured in number of consecutive points
-    Returns
-    -------
+        Window size measured in number of consecutive points.
+
+    **Returns**
+
     np.array(float)
-        running average of the boolean observations
-    '''
+        Running average of the observations.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.running_average([0, 1, 1, 0], 2).round(2).tolist()
+    [0.0, 0.5, 1.0, 0.5]
+    """
     ws = int(ws)
     try:
         tmp_vals = np.convolve(np.ones(ws, dtype=float) / ws, obs, mode='same')
@@ -116,6 +206,22 @@ def fix_freq(freq, pc):
     '''
     restricts frequencies to the interval [pc, 1-pc]
     removes np.nan values and avoids taking logarithms of 0 or divisions by 0
+
+    This clipping is used by :func:`logit_transform` and :func:`logit_inv`.
+
+    **Parameters**
+
+    freq : array-like
+        Frequencies to clip.
+
+    pc : float
+        Lower and upper clipping bound.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.fix_freq([0.0, 0.5, 1.0], 0.1).tolist()
+    [0.1, 0.5, 0.9]
     '''
     freq = np.asarray(freq)
     freq = freq.copy()
@@ -124,12 +230,60 @@ def fix_freq(freq, pc):
 
 
 def logit_transform(freq, pc):
+    """
+    Transform frequencies to logit space after pseudocount clipping.
+
+    The inverse transform is :func:`logit_inv`.
+
+    **Parameters**
+
+    freq : array-like
+        Frequencies to transform.
+
+    pc : float
+        Pseudocount used to clip frequencies away from 0 and 1.
+
+    **Returns**
+
+    np.ndarray
+        Logit-transformed frequencies.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.logit_transform([0.25, 0.75], 1e-4).round(3).tolist()
+    [-1.099, 1.099]
+    """
     freq = np.asarray(freq)
     f = fix_freq(freq, pc)
     return np.log(f / (1 - f))
 
 
 def logit_inv(logit_freq, pc):
+    """
+    Transform logit-space values back to clipped frequencies.
+
+    This inverts :func:`logit_transform`.
+
+    **Parameters**
+
+    logit_freq : array-like
+        Values in logit space.
+
+    pc : float
+        Pseudocount used to clip the reconstructed frequencies.
+
+    **Returns**
+
+    np.ndarray
+        Frequencies constrained to the interval ``[pc, 1 - pc]``.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.logit_inv([-1.09861229, 1.09861229], 1e-4).round(2).tolist()
+    [0.25, 0.75]
+    """
     logit_freq = np.asarray(logit_freq)
     tmp = np.exp(logit_freq)
     tmp = np.maximum(pc / (1 - pc), np.minimum((1 - pc) / pc, tmp))  # CHANGED: tighter symmetric clipping
@@ -137,6 +291,27 @@ def logit_inv(logit_freq, pc):
 
 
 def pq(p):
+    """
+    Compute the Bernoulli variance term ``p * (1 - p)``.
+
+    This quantity appears in :meth:`frequency_estimator.stiffLH`.
+
+    **Parameters**
+
+    p : array-like
+        Frequencies or probabilities.
+
+    **Returns**
+
+    np.ndarray
+        Elementwise Bernoulli variance term.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.pq([0.25, 0.5, 0.75]).tolist()
+    [0.1875, 0.25, 0.1875]
+    """
     p = np.asarray(p)
     return p * (1 - p)
 
@@ -158,8 +333,8 @@ class frequency_estimator(object):
                  tol=1e-3, pc=1e-4, ws=100, log_thres=10,
                  method='powell', **kwargs):
         """
-        Parameters
-        ----------
+        **Parameters**
+
         tps : list/np.array(float)
             array with numerical dates (one per sample)
         obs : list/np.array(bool)
@@ -167,6 +342,29 @@ class frequency_estimator(object):
         pivots : int/np.array(float)
             either integer specifying the number of pivot values,
             or list of explicit pivots
+        stiffness : float, optional
+            Smoothness penalty weight.
+        inertia : float, optional
+            Inertia penalty applied to frequency changes.
+        tol : float, optional
+            Optimizer tolerance.
+        pc : float, optional
+            Pseudocount used to clip frequencies.
+        ws : int, optional
+            Window size used for the initial running-average guess.
+        log_thres : float, optional
+            Threshold controlling log-space optimization behaviour.
+        method : str, optional
+            Optimization method passed to :func:`scipy.optimize.minimize`.
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments reserved for future optimizer options.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
+        >>> fe.pivots.shape
+        (3,)
         """
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
         self.tps = tmp_obs[:, 0]
@@ -190,6 +388,29 @@ class frequency_estimator(object):
         self.obs = self.obs[good_tps]
 
     def initial_guess(self, pc=0.01):
+        """
+        Construct an initial frequency trajectory estimate on the pivot grid.
+
+        This initializer is typically followed by :meth:`frequency_estimator.learn`.
+
+        **Parameters**
+
+        pc : float, optional
+            Pseudocount used to clip the initial estimate away from 0 and 1.
+
+        **Returns**
+
+        np.ndarray
+            Initial frequency values at each pivot.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
+        >>> guess = fe.initial_guess()
+        >>> guess.shape
+        (3,)
+        """
         # generate a useful initial guess from a running average of the counts
         if self.tps.size == 0:
             # CHANGED: guard against empty tps
@@ -208,6 +429,26 @@ class frequency_estimator(object):
         return pivot_freq
 
     def stiffLH(self):
+        """
+        Compute the smoothness penalty term of the trajectory likelihood.
+
+        This penalty is evaluated during :meth:`frequency_estimator.learn`.
+
+        **Returns**
+
+        float
+            Log-likelihood contribution from the diffusion-style smoothness
+            prior.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
+        >>> fe.dt = np.diff(fe.pivots)
+        >>> fe.pivot_freq = fe.initial_guess()
+        >>> isinstance(fe.stiffLH(), float)
+        True
+        """
         freq = self.pivot_freq
         dfreq = np.diff(freq)
         dfreq_penalty = dfreq[1:] - self.inertia * dfreq[:-1]
@@ -219,6 +460,26 @@ class frequency_estimator(object):
         )
 
     def learn(self, initial_guess=None):
+        """
+        Fit the frequency trajectory by numerical optimization.
+
+        This method refines the trajectory initialized by
+        :meth:`frequency_estimator.initial_guess`.
+
+        **Parameters**
+
+        initial_guess : callable, optional
+            Function that accepts the pivot grid and returns an initial
+            frequency trajectory.
+
+        **Examples**
+
+        >>> from baltic.curonia import frequency_estimator
+        >>> fe = frequency_estimator([0.0, 1.0, 2.0, 3.0], [0, 1, 1, 0], 4)
+        >>> fe.learn()
+        >>> fe.pivot_freq.shape
+        (4,)
+        """
         self.dt = np.diff(self.pivots)
 
         def logLH(x):
@@ -276,6 +537,37 @@ class freq_est_clipped(object):
     """
 
     def __init__(self, tps, obs, pivots, name=None, dtps=None, **kwargs):
+        """
+        Initialize a clipped frequency estimator around the observation window.
+
+        **Parameters**
+
+        tps : array-like
+            Observation times.
+
+        obs : array-like
+            Boolean observations aligned with *tps*.
+
+        pivots : np.ndarray
+            Pivot grid on which frequencies will be estimated.
+
+        name : str, optional
+            Label used in diagnostic messages.
+
+        dtps : float, optional
+            Additional margin around the first and last positive observation.
+
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to
+            :class:`frequency_estimator`.
+
+        **Examples**
+
+        >>> from baltic.curonia import freq_est_clipped
+        >>> fe = freq_est_clipped([0.0, 1.0, 2.0], [0, 1, 1], np.array([0.0, 1.0, 2.0]), name="demo")
+        >>> fe.valid
+        True
+        """
         super(freq_est_clipped, self).__init__()
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
         self.tps = tmp_obs[:, 0]
@@ -327,6 +619,19 @@ class freq_est_clipped(object):
                                       self.pivots[self.good_pivots], **kwargs)
 
     def learn(self):
+        """
+        Fit the clipped frequency estimator and expand the result to the full pivot grid.
+
+        This wraps :meth:`frequency_estimator.learn` on a reduced pivot window.
+
+        **Examples**
+
+        >>> from baltic.curonia import freq_est_clipped
+        >>> fe = freq_est_clipped([0.0, 1.0, 2.0, 3.0], [0, 1, 1, 0], np.array([0.0, 1.0, 2.0, 3.0]), name="demo")
+        >>> fe.learn()
+        >>> fe.pivot_freq.shape
+        (4,)
+        """
         if not self.valid:
             self.pivot_freq = np.zeros_like(self.pivots)
             return
@@ -348,14 +653,30 @@ class nested_frequencies(object):
 
     def __init__(self, tps, obs, pivots, **kwargs):
         """
-        Parameters
-        ----------
+        Initialize a nested collection of :class:`freq_est_clipped` estimators.
+
+        **Parameters**
+
         tps : np.array
             array of numerical dates (one per sample in this parent node)
         obs : dict[str, np.array(bool)]
             mapping: key -> boolean array (same length as tps)
         pivots : np.array
             pivot values
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to nested frequency
+            estimators.
+
+        **Examples**
+
+        >>> from baltic.curonia import nested_frequencies
+        >>> nf = nested_frequencies(
+        ...     np.array([0.0, 1.0, 2.0]),
+        ...     {"A": np.array([True, False, False]), "B": np.array([False, True, True])},
+        ...     np.array([0.0, 1.0, 2.0]),
+        ... )
+        >>> sorted(nf.obs)
+        ['A', 'B']
         """
         super(nested_frequencies, self).__init__()
         self.tps = np.asarray(tps)
@@ -364,6 +685,28 @@ class nested_frequencies(object):
         self.kwargs = kwargs
 
     def calc_freqs(self):
+        """
+        Estimate mutually exclusive child frequencies on a shared pivot grid.
+
+        Each child trajectory is estimated with :class:`freq_est_clipped`.
+
+        **Returns**
+
+        dict
+            Mapping of observation key to estimated pivot frequencies.
+
+        **Examples**
+
+        >>> from baltic.curonia import nested_frequencies
+        >>> nf = nested_frequencies(
+        ...     np.array([0.0, 1.0, 2.0, 3.0]),
+        ...     {"A": np.array([True, True, False, False]), "B": np.array([False, False, True, True])},
+        ...     np.array([0.0, 1.0, 2.0, 3.0]),
+        ... )
+        >>> freqs = nf.calc_freqs()
+        >>> sorted(freqs)
+        ['A', 'B']
+        """
         # sort by total number of positives per clade (largest first)
         sorted_obs = sorted(self.obs.items(), key=lambda x: x[1].sum(), reverse=True)
 
@@ -391,18 +734,53 @@ class tree_frequencies(object):
     """
     Frequency estimator on an abstract lineage tree.
 
-    Assumptions:
-    -----------
+    **Notes**
+
     - There is a SINGLE global list of observation times stored at the root:
-        tree.root.traits['tps'] -> np.array of shape (N,)
+      ``tree.root.traits['tps']`` -> ``np.array`` of shape ``(N,)``
       where N is the number of sequences.
     - Each node (internal or leaf) has:
-        node.traits['leafs'] -> np.array of integer indices into root.traits['tps']
+      ``node.traits['leafs']`` -> ``np.array`` of integer indices into
+      ``root.traits['tps']``
       corresponding to all samples descended from that lineage.
     - The tree itself is small (lineage-level), but N can be large.
     """
 
     def __init__(self, tree, timepoints, verbose=0, pc=1e-4, **kwargs):
+        """
+        Initialize a tree-wide clade frequency estimator.
+
+        **Parameters**
+
+        tree : :class:`baltic.tree.Tree`
+            Tree whose nodes carry observation metadata.
+
+        timepoints : int or array-like
+            Number of pivots or explicit pivot locations used for frequency
+            estimation.
+
+        verbose : int, optional
+            Verbosity flag for diagnostic output.
+
+        pc : float, optional
+            Pseudocount used to clip frequencies away from 0 and 1.
+
+        \\*\\*kwargs : dict, optional
+            Additional keyword arguments forwarded to nested estimators.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> tf.pivots.shape
+        (4,)
+        """
 
         self.tree = tree
         self.timepoints = timepoints
@@ -418,6 +796,21 @@ class tree_frequencies(object):
             - grab global tps from root
             - initialize root frequency trajectory
             - precompute counts per pivot
+
+        This is the setup stage for :meth:`tree_frequencies.estimate_clade_frequencies`.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> tf.counts.shape
+        (4,)
         """
         # CHANGED: operate on abstract lineage tree with global tps
         indexObs(self.tree.root) ## assign indices to observations
@@ -452,7 +845,21 @@ class tree_frequencies(object):
         For each internal node:
           - restrict to its descendant sample indices
           - build a per-child boolean obs array w.r.t. those indices
-          - run nested_frequencies
+          - run :class:`nested_frequencies`
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> freqs = tf.estimate_clade_frequencies()
+        >>> ll.root.index in freqs
+        True
         """
 
         # internal nodes in pre-order (root first)
@@ -512,6 +919,24 @@ class tree_frequencies(object):
     def calc_confidence(self):
         """
         Approximate confidence using Bernoulli sampling variance.
+
+        This operates on trajectories produced by
+        :meth:`tree_frequencies.estimate_clade_frequencies`.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> from baltic.curonia import tree_frequencies
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="time")
+        >>> _ = ll.traverse_tree()
+        >>> ll.set_absolute_time(2020.0)
+        >>> for branch in ll.Objects:
+        ...     branch.traits["tps"] = np.array([branch.absoluteTime])
+        >>> tf = tree_frequencies(ll, 4)
+        >>> _ = tf.estimate_clade_frequencies()
+        >>> confidence = tf.calc_confidence()
+        >>> ll.root.index in confidence
+        True
         """
         self.confidence = {}
         for key, freq in self.frequencies.items():
@@ -523,9 +948,26 @@ class tree_frequencies(object):
             )
         return self.confidence
 
+
 def clip_freq(ys,threshold=0.00):
     """
     Clip a list of frequencies to the first non-zero and the last non-zero values.
+
+    This is used by :func:`plot_Muller` when trimming lineage polygons.
+
+    **Parameters**
+
+    ys : sequence[float]
+        Frequency trajectory to trim.
+
+    threshold : float, optional
+        Minimum frequency required for inclusion.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> curonia.clip_freq([0.0, 0.2, 0.5, 0.0], threshold=0.1)
+    [1, 2]
     """
     if sum(ys) == 0.0:
         return []
@@ -558,25 +1000,109 @@ def clip_freq(ys,threshold=0.00):
     return list(xs)[start-1:end+1]
 
 
-def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = None, outlineColourFxn = None, 
-    labelFxn = None, Muller = True, normaliseFreqFxn = None, orientation = 'horizontal', 
+def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = None, outlineColourFxn = None,
+    labelFxn = None, Muller = True, normaliseFreqFxn = None, orientation = 'horizontal',
     filterFxn = None, clipThreshold = 0.001, level = None, **kwargs):
     """
-    Plot a Muller plot on ax starting from a node and accessing its frequency using the size function along a timeline grid.
+    Plot a Muller-style stacked frequency area for a node and its descendants.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which the frequency polygon should be drawn.
+
+    node : :class:`baltic.branchLike.BranchLike`
+        Root branch of the clade or lineage to plot.
+
+    timeline : sequence
+        Ordered x- or y-axis positions corresponding to the sampled frequency
+        values in ``frequenciesDict``.
+
+    frequenciesDict : dict
+        Mapping from branch index to a sequence of frequencies defined on
+        ``timeline``.
+
+    bottom : sequence, optional
+        Baseline coordinates for the current lineage. If omitted, the lineage is
+        centred on zero before descendants are stacked into it.
+
+    colourFxn : callable, optional
+        Function mapping a branch to its fill colour.
+
+    outlineColourFxn : callable, optional
+        Function mapping a branch to its outline colour.
+
+    labelFxn : callable, optional
+        Function returning the legend label for each plotted branch.
+
+    Muller : bool, optional
+        If ``True``, add padding between descendant lineages so they render as a
+        Muller plot. If ``False``, descendants are stacked without that extra
+        spacing.
+
+    normaliseFreqFxn : callable, optional
+        Function applied to each lineage frequency vector before plotting.
+
+    orientation : {'horizontal', 'vertical'}, optional
+        Direction in which the timeline should be plotted.
+
+    filterFxn : callable, optional
+        Predicate used to decide whether a branch should be drawn.
+
+    clipThreshold : float, optional
+        Minimum frequency used when trimming leading and trailing zero-like
+        regions from a lineage.
+
+    level : int, optional
+        Z-order level used for the current branch and incremented recursively
+        for descendants.
+
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments forwarded to
+        :meth:`matplotlib.axes.Axes.fill_between` or
+        :meth:`matplotlib.axes.Axes.fill_betweenx`.
+
+    **Returns**
+
+    list[float]
+        Updated baseline values after adding the current node's frequency
+        profile.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> root = ll.root
+    >>> internal = ll.find_MRCA("A", "B")
+    >>> timeline = [0, 1, 2]
+    >>> frequencies = {
+    ...     root.index: [0.6, 0.7, 0.5],
+    ...     internal.index: [0.3, 0.4, 0.2],
+    ...     ll.get_leaf("A").index: [0.1, 0.2, 0.1],
+    ...     ll.get_leaf("B").index: [0.1, 0.1, 0.05],
+    ...     ll.get_leaf("C").index: [0.2, 0.2, 0.25],
+    ... }
+    >>> fig, ax = plt.subplots()
+    >>> top = curonia.plot_Muller(ax, root, timeline, frequencies, colourFxn=lambda k: "steelblue")
+    >>> len(top)
+    3
     """
     from collections import Counter
 
     valid_orientations = ['vertical', 'horizontal']
     assert orientation in valid_orientations, f"Orientation '{orientation}' not recognised. Must be one of {', '.join(valid_orientations)}."
-    
+
     if level is None: level=1
     if filterFxn is None: filterFxn=lambda n: True
 
     if colourFxn is None: colourFxn = lambda k: 'lightgray'
     if outlineColourFxn is None: outlineColourFxn = lambda k: 'white'
-    
+
     localKwargs = dict(kwargs)
-    
+
     if 'facecolor' in localKwargs or 'fc' in localKwargs:
         warnings.warn("facecolor/fc provided in kwargs will be ignored. Muller plot colours are controlled via colourFxn.")
     if 'edgecolor' in localKwargs or 'ec' in localKwargs:
@@ -587,24 +1113,24 @@ def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = 
     ys=frequenciesDict[node.index] ## returns values of a node over time
     if normaliseFreqFxn: ## if normalise function available - normalise frequencies
         ys=normaliseFreqFxn(ys)
-    
-    bottom=[0-y/2 for y in ys] if bottom==None else bottom ## if no bottom provided - compute it 
-    
+
+    bottom=[0-y/2 for y in ys] if bottom==None else bottom ## if no bottom provided - compute it
+
     xs=range(len(ys)) ## indices of frequencies
     xx=clip_freq(ys, clipThreshold) ## reindex frequencies to clip zeroes at the beginning and end
-    
+
     localKwargs['fc'] = colourFxn(node)
     localKwargs['ec'] = outlineColourFxn(node)
     localKwargs['zorder'] = level
     if 'alpha' not in localKwargs: localKwargs['alpha'] = 1.0
-    
+
     clipped_timeline = [timeline[t] for t in xx]
     clipped_bottom = [bottom[t] for t in xx]
     clipped_values = [bottom[t] + ys[t] for t in xx]
 
     label = labelFxn(node) if labelFxn else ''
 
-    
+
     if orientation == 'horizontal':
         fillBetweenFxn = ax.fill_between
     elif orientation == 'vertical':
@@ -612,40 +1138,40 @@ def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = 
 
     if filterFxn(node):
         fillBetweenFxn(clipped_timeline, clipped_bottom, clipped_values, label = label, **localKwargs) ## plot frequency
-    
+
     if node.is_node(): ## if node has children
         children = node.children ## children of node
-        
+
         clipped_children = [list(clip_freq(frequenciesDict[ch.index], clipThreshold)) for ch in children] ## clip frequencies of child
         clipped_freqs = Counter(sum(clipped_children, [])) ## count how many timeline indices are left
-        
+
         children_sum=[sum([frequenciesDict[ch.index][t] for ch in children]) for t in xs] ## total frequency of children
-        
+
         if normaliseFreqFxn:
             children_sum = normaliseFreqFxn(children_sum) ## if normalise available - normalise child frequencies
-        
+
         available_space = [(ys[t] - children_sum[t]) for t in xs] ## node frequency - all children frequencies = padding space left
         N_children = [clipped_freqs[t] + 1 if clipped_freqs[t] > 0 else 1 for t in xs] ## count+1 of indices = number of children at any point
         unique_space = [available_space[t] / N_children[t] for t in xs] ## how much padding to add
-        
+
         temp_bottom = bottom ## start with bottom
-    
+
         for c,child in enumerate(children): ## iterate over children
-            
+
             child_freq = clip_freq(frequenciesDict[child.index], clipThreshold) ## clip child frequencies
 
             if Muller:
                 padded_bottom = [temp_bottom[t] + unique_space[t] if t in child_freq else temp_bottom[t] for t in xs] ## pad bottom with space available, if a child is present
             else:
                 padded_bottom = [temp_bottom[t] if t in child_freq else temp_bottom[t] for t in xs]
-            
-            
-            temp_bottom = plot_Muller(ax = ax, node = child, timeline = timeline, 
-                               frequenciesDict = frequenciesDict, bottom = padded_bottom, 
-                               colourFxn = colourFxn, outlineColourFxn = outlineColourFxn, 
-                               labelFxn = labelFxn, Muller = Muller, normaliseFreqFxn = normaliseFreqFxn, 
+
+
+            temp_bottom = plot_Muller(ax = ax, node = child, timeline = timeline,
+                               frequenciesDict = frequenciesDict, bottom = padded_bottom,
+                               colourFxn = colourFxn, outlineColourFxn = outlineColourFxn,
+                               labelFxn = labelFxn, Muller = Muller, normaliseFreqFxn = normaliseFreqFxn,
                                filterFxn = filterFxn, orientation = orientation, clipThreshold = clipThreshold, **kwargs) ## draw frequency for each child, padding as you go
-        
+
     return [bottom[t] + ys[t] for t in xs] ## new bottom is bottom+this node's values
 
 
@@ -656,10 +1182,30 @@ def plot_Muller(ax, node, timeline, frequenciesDict, bottom = None, colourFxn = 
 
 
 def position_Bezier_control(pointA, pointB, height, frac):
-    """ 
-    Given a line defined by 2 points A & B, 
+    """
+    Given a line defined by 2 points A & B,
     find a third point at a given distance (height) that defines a line perpendicular to line AB which intercepts AB at fraction (frac) along AB.
     Equation derived by Luiz Max Fagundes de Carvalho (University of Edinburgh).
+
+    This geometry helper is used by :func:`plot_gradient_clade_tree`.
+
+    **Parameters**
+
+    pointA, pointB : tuple[float, float]
+        Endpoints of the line segment.
+
+    height : float
+        Distance of the control point from the segment.
+
+    frac : float
+        Fractional position along the segment at which the perpendicular is
+        constructed.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> tuple(round(x, 2) for x in curonia.position_Bezier_control((0.0, 0.0), (2.0, 0.0), 1.0, 0.5))
+    (1.0, 1.0)
     """
     x1, y1 = pointA
     x2, y2 = pointB
@@ -670,7 +1216,7 @@ def position_Bezier_control(pointA, pointB, height, frac):
 
     slope = (y2 - y1) / (x2 - x1)
     d=np.sqrt((y2 - y1)**2 + (x2 - x1)**2) ## distance between points
-    
+
     h=np.sqrt(height**2 + (d * frac)**2) ## distance between desired height and point along line
 
     n1 = x1 + h * np.cos(np.arctan(height / float(d) / frac) + np.arctan(slope)) * sign ## magic
@@ -678,6 +1224,8 @@ def position_Bezier_control(pointA, pointB, height, frac):
 
     return (n1, n2) ## return third point's coordinate
 ##########################
+
+
 def plot_root_to_tip(ax, tree,
                      colour = None, colourFxn = None,
                      pointSize = None, pointSizeFxn = None,
@@ -688,6 +1236,57 @@ def plot_root_to_tip(ax, tree,
                      plotRegression = True, plotTree = False,
                      highlightOutliers = False, outlierThres = None, outlierColour = None,
                      pointKwargs = {}, lineKwargs = {}, treeKwargs = {}):
+    """
+    Plot a root-to-tip regression for a divergence tree with dated tips.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw the regression.
+    tree : :class:`baltic.tree.Tree`
+        Divergence tree whose tips have ``absoluteTime`` values.
+    colour, colourFxn, pointSize, pointSizeFxn, outline, outlineColour, outlineColourFxn, outlineSize, outlineSizeFxn : optional
+        Point styling controls passed through to the scatter layers.
+    orientation : {"horizontal", "vertical"}, optional
+        Orientation of the plot.
+    targetFxn : callable, optional
+        Predicate selecting which tips to include in the regression.
+    plotRegression : bool, optional
+        If ``True``, draw the fitted regression line.
+    plotTree : bool, optional
+        If ``True``, overlay the tree projected into regression space.
+    highlightOutliers : bool, optional
+        If ``True``, draw outlines for outlier tips in ``outlierColour``.
+    outlierThres : float, optional
+        Residual threshold used to classify outliers. If omitted, a default based on
+        the residual standard deviation is used.
+    outlierColour : matplotlib color, optional
+        Outline colour for highlighted outliers.
+    pointKwargs, lineKwargs, treeKwargs : dict, optional
+        Additional keyword arguments forwarded to the point, regression-line, and
+        tree plotting calls respectively.
+
+    **Returns**
+
+    tuple
+        ``(outliers, slope, intercept, residuals)`` where ``outliers`` is the list
+        of selected outlier tips and ``residuals`` is keyed by tip name.
+
+    **Examples**
+
+    >>> import io
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> import contextlib
+    >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
+    >>> ll = bt.io.load_newick(handle, treeType="divergence", absoluteTime=True)
+    >>> fig, ax = plt.subplots()
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     result = curonia.plot_root_to_tip(ax, ll)
+    >>> len(result)
+    4
+    """
 
     import math
     from baltic.bt_utils import desaturate_cmap, calendar_to_decimal_date, decimal_to_calendar_date
@@ -839,13 +1438,51 @@ def plot_root_to_tip(ax, tree,
     return (outliers, slope, intercept, residuals)
 
 
-
 def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orientation='horizontal', logAxis=True, plotRootHPD=True, **kwargs):
+    """
+    Plot a BEAST skygrid trajectory from a tab-delimited log file.
+
+    HPD intervals are summarized with :func:`baltic.bt_utils.hpd`.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw the skygrid.
+    logFile : str or path-like
+        Path to the BEAST log file containing ``skygrid.logPopSize`` columns.
+    burnin : int or float, optional
+        Minimum MCMC state to retain.
+    mostRecent : float, optional
+        Most recent sampling date used to convert heights to calendar time.
+    hpdLvl : float, optional
+        Highest posterior density interval to plot.
+    orientation : {"horizontal", "vertical"}, optional
+        Orientation of the plotted summary.
+    logAxis : bool, optional
+        If ``True``, use a logarithmic axis for population size.
+    plotRootHPD : bool, optional
+        If ``True``, draw the HPD interval for the root date.
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments forwarded to the plotting primitives.
+
+    **Returns**
+
+    matplotlib.axes.Axes
+        The input axes.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import curonia
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_skygrid(ax, "skygrid.log", burnin=1000000, mostRecent=2024.0)  # doctest: +SKIP
+    <...Axes...>
+    """
     localKwargs = dict(kwargs)
 
     import csv
     from baltic.bt_utils import hpd
-    
+
     assert mostRecent is None or isinstance(mostRecent, float) or isinstance(mostRecent, int), f"mostRecent value '{mostRecent}' not recognised. Must be None, float or int"
     assert orientation in ['horizontal', 'vertical'], f"Orientation {orientation} not recognised. Must be 'horizontal' or 'vertical'"
 
@@ -878,24 +1515,24 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
         rootHeightCandidates = ['treeModel.rootHeight', 'rootHeight']
 
         rootDate, mostRecentDate = None, None
-        
+
         if mostRecent is None and 'age(root)' in lineDict: ## determining most recent date from rootDate
             rootDate = float(lineDict['age(root)'])
             mostRecentDate = rootDate + next((float(lineDict[candidate]) for candidate in rootHeightCandidates if candidate in lineDict), None)
             assert mostRecentDate is not None, f"Unable to identify most recent tip date from log file provided. None of the expected parameters required for calculation ({', '.join(rootHeightCandidates)}) found in log file."
-            
-        elif mostRecent is None or isinstance(mostRecent, float) or isinstance(mostRecent, int): ## 
+
+        elif mostRecent is None or isinstance(mostRecent, float) or isinstance(mostRecent, int): ##
             rootDate = next((float(lineDict[candidate]) for candidate in rootHeightCandidates if candidate in lineDict), None)
             assert rootDate is not None and rootDate != '', f"Unable to identify root / tree height from log file provided. None of the expected parameters {', '.join(rootHeightCandidates)} found in log file."
-            
+
             if mostRecent is None:
                 rootDate *= -1 ## not most recent date provided, root date will be in years before most recent tip
                 mostRecentDate = 0.0
             else:
                 mostRecentDate = mostRecent
-        
+
         return rootDate, mostRecentDate
-    
+
     skygridPopSizes = sorted([key for key in header if key.startswith('skygrid.logPopSize')], key = lambda f: int(f.replace('skygrid.logPopSize', '')))
 
     skygrid = {key: [] for key in skygridPopSizes}
@@ -903,7 +1540,7 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
     cutoff = None
 
     storeMostRecent = None
-    
+
     for l in reader:
         state = int(l['state'])
         if state >= burnin:
@@ -922,7 +1559,7 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
 
             storeMostRecent = mostRecentDate
     handle.close()
-    
+
     start = mostRecentDate - cutoff
     end = mostRecentDate
 
@@ -972,32 +1609,79 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
     """
     treeAx is the Axes object where the tree is plotted already.
     mapAx is the Axes object where the map is plotted already.
-    tree is a baltic Tree object.
+    tree is a :class:`baltic.tree.Tree` object.
     tipCoordinates is a dict of {tip_name: (x, y)} coordinates.
     destinationProjection is a cartopy ccrs projection object used in mapAx Axes.
     targetFxn is a filtering function for tree tips (default: always True).
     shoulderPositionFxn is a function that connects the x-axis coordinate provided by this function to the map (default: None, tips are directly connected to the map).
     colourFxn returns the colour of a tip.
     originProjection is a cartopy ccrs object used to transform the coordinate system of tipCoordinates (default: ccrs.PlateCarree()).
+
+    **Parameters**
+
+    treeAx : matplotlib.axes.Axes
+        Axes containing the tree plot.
+
+    mapAx : matplotlib.axes.Axes
+        Axes containing the map plot.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree whose tips will be connected to geographic coordinates.
+
+    tipCoordinates : dict
+        Mapping from tip name to ``(latitude, longitude)`` coordinates.
+
+    destinationProjection : object
+        Cartopy projection used by ``mapAx``.
+
+    targetFxn : callable, optional
+        Predicate selecting which tips to connect.
+
+    shoulderPositionFxn : callable, optional
+        Function returning an intermediate x-position on the tree panel before
+        routing to the map.
+
+    colourFxn : callable, optional
+        Function mapping tips to connector colours.
+
+    originProjection : object, optional
+        Projection in which ``tipCoordinates`` are defined.
+
+    \\*\\*lineKwargs : dict, optional
+        Additional keyword arguments forwarded to connector plotting.
+
+    **Examples**
+
+    >>> import cartopy.crs as ccrs  # doctest: +SKIP
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> fig = plt.figure()  # doctest: +SKIP
+    >>> tree_ax = fig.add_subplot(121)  # doctest: +SKIP
+    >>> map_ax = fig.add_subplot(122, projection=ccrs.PlateCarree())  # doctest: +SKIP
+    >>> ll.plot_tree(tree_ax)  # doctest: +SKIP
+    >>> tip_coords = {"A": (40.0, -74.0), "B": (51.5, -0.1), "C": (35.7, 139.7)}
+    >>> curonia.connect_tree_to_map(tree_ax, map_ax, ll, tip_coords, ccrs.PlateCarree())  # doctest: +SKIP
     """
     from matplotlib.patches import ConnectionPatch
     import cartopy.crs as ccrs
     from baltic.bt_utils import desaturate_cmap
-    
+
     if originProjection is None: originProjection = ccrs.PlateCarree()
     if targetFxn is None: targetFxn = lambda k: True
-    
+
     cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
     if colourFxn is None: colourFxn = lambda k: cmap(k.y / tree.ySpan)
 
     localLineKwargs = dict(lineKwargs)
 
-    
+
     for k in tree.get_external(targetFxn):
         assert k.name in tipCoordinates, f"Tip {k.name} coordinates not found in tipCoordinates dict"
 
         fc = colourFxn(k)
-        
+
         lat, lon = tipCoordinates[k.name]
         latT, lonT = destinationProjection.transform_point(lon, lat, src_crs=originProjection) ## convert to plotted map coordinates
 
@@ -1005,13 +1689,13 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
             x, y = k.x, k.y
         else:
             x, y = shoulderPositionFxn(k), k.y
-        
-        connection = ConnectionPatch(xyA=(x, y), 
-                                     coordsA=treeAx.transData, 
-                                     axesA=treeAx, 
-                                     xyB=(latT, lonT), 
-                                     coordsB=mapAx.transData, 
-                                     axesB=mapAx, 
+
+        connection = ConnectionPatch(xyA=(x, y),
+                                     coordsA=treeAx.transData,
+                                     axesA=treeAx,
+                                     xyB=(latT, lonT),
+                                     coordsB=mapAx.transData,
+                                     axesB=mapAx,
                                      color=fc, **localLineKwargs) ## colour, line style, linewidth, order, transparency
         #### check if connection will be present
         axA = connection.axesA
@@ -1020,15 +1704,59 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
         pB = axB.transData.transform(connection.xy2)
         bbA = axA.bbox
         bbB = axB.bbox
-    
+
         if (bbA.contains(*pA) or bbB.contains(*pB)) and shoulderPositionFxn is not None: ## checks if line will be visible
             treeAx.plot([k.x, x], [y, y], color=fc, **localLineKwargs) ## straight line from the tip to the x-axis coordinate provided by the shoulderPositionFxn
-        
+
         mapAx.add_patch(connection)
 
     return treeAx, mapAx
 
+
 def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn=None, treeSpace=None, normaliseY=True, treeKwargs={}, pointKwargs={}, **kwargs):
+    """
+    Plot a sequence of trees joined by tip-matching connector lines.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw the chain.
+    treeList : list[:class:`baltic.tree.Tree`]
+        Trees to plot from left to right.
+    colourDict : dict, optional
+        Mapping from tip name to connector colour.
+    padding : float, optional
+        Fraction of inter-tree spacing used for horizontal connector shoulders.
+    treeSpaceFxn, treeSpace : optional
+        Fixed or callable spacing between consecutive trees.
+    normaliseY : bool, optional
+        If ``True``, scale each tree's vertical extent to the unit interval.
+    treeKwargs, pointKwargs : dict, optional
+        Keyword arguments forwarded to :meth:`baltic.tree.Tree.plot_tree` and
+        :meth:`baltic.tree.Tree.plot_points`.
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments passed to the connector ``LineCollection``.
+
+    **Returns**
+
+    list[:class:`baltic.tree.Tree`]
+        The input tree list after coordinates have been assigned.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> trees = [
+    ...     bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence"),
+    ...     bt.make_tree("((A:1.0,C:1.0):1.0,B:1.5);", treeType="divergence"),
+    ... ]
+    >>> for tree in trees:
+    ...     tree.sort_branches()
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_tangled_chain(ax, trees)
+    [...]
+    """
     from matplotlib.collections import LineCollection
 
     localKwargs = dict(kwargs)
@@ -1060,14 +1788,14 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
             colourDict[k.name] = cmap(i / (len(firstTreeTips) - 1))
     else:
         assert isinstance(colourDict, dict), f"colourDict must be class dict, not {type(colourDict)}"
-    
+
     if 'coordinateFxn' in localTreeKwargs: logger.warning(f"Custom x coordinate function for tree was specified but will be overriden for tangled chain visualisation.")
     # if 'xCoordinateFxn' not in localTreeKwargs: localTreeKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
 
     if len(localPointKwargs) > 0: ## tip points are required - override xCoordinateFxn, assign default colours if nothing specified
         # if 'xCoordinateFxn' in localPointKwargs: logger.warning(f"Custom x coordinate function for points was specified but will be overriden for tangled chain visualisation.")
         # localPointKwargs['xCoordinateFxn'] = lambda k: k.x + cumulativeX
-        
+
         if 'colour' not in localPointKwargs and 'colourFxn' not in localPointKwargs:
             logger.warning(f"Point colours were not specified, defaulting to tangled chain colour defaults. This may cause issues if targetFxn is not set to identify tips.")
             localPointKwargs['colourFxn'] = lambda k: colourMap[k.name]
@@ -1091,7 +1819,7 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
     xCoordinateFxn = lambda k: k.x
     cumulativeX = 0
 
-    for curTree, nexTree in zip(treeList, treeList[1:]): ## iterate over pairs of consecutive trees    
+    for curTree, nexTree in zip(treeList, treeList[1:]): ## iterate over pairs of consecutive trees
 
         if normaliseY:
             yCoordinateFxn = lambda k: k.y / curTree.ySpan
@@ -1142,6 +1870,7 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
 
     return treeList
 
+
 def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=None,
     colour=None, colourFxn=None,
     controlPointFraction=0.1,
@@ -1158,6 +1887,65 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
 
     Inspired by JT McCrone's visualisation: https://www.nature.com/articles/s41586-022-05200-3
     Initially implemented by Karthik Gangavarapu.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw the gradient clades.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree providing the branch geometry.
+
+    designatedNodes : sequence, optional
+        Explicit nodes to render as gradient clades.
+
+    nodeDesignationFxn : callable, optional
+        Predicate selecting nodes to render as gradient clades.
+
+    colour, colourFxn : optional
+        Constant fill colour or colour function for gradient clades.
+
+    controlPointFraction : float, optional
+        Fraction of clade length used to place Bézier control points.
+
+    tipLen : float, optional
+        Fraction of descendant branch length shown with the fading overlay.
+
+    padY : float, optional
+        Vertical padding around each gradient clade envelope.
+
+    outlineColour, outlineColourFxn : optional
+        Constant outline colour or outline colour function.
+
+    minAlpha, maxAlpha : float, optional
+        Alpha range used for the gradient fill.
+
+    outline : bool, optional
+        If ``True``, draw clade outline curves.
+
+    precision : int, optional
+        Number of interpolation steps used for clade geometry.
+
+    outlineKwargs : dict, optional
+        Additional keyword arguments forwarded to clade outline plotting.
+
+    treeKwargs : dict, optional
+        Additional keyword arguments forwarded to the surrounding tree plot.
+
+    cladeBranchKwargs : dict, optional
+        Additional keyword arguments forwarded to descendant branch segments.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("(((A:1.0,B:1.0):1.0,C:1.0):1.0,D:1.0);", treeType="time")
+    >>> ll.sort_branches()
+    >>> ll.set_absolute_time(2024.0)
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_gradient_clade_tree(ax, ll, designatedNodes=[ll.find_MRCA("A", "B")])
+    <...Axes...>
     """
     from matplotlib.patches import Polygon
     from matplotlib.collections import LineCollection
@@ -1173,7 +1961,7 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
         )
     if nodeDesignationFxn is None:
         nodeDesignationFxn = lambda k: k in designatedNodes
-    
+
     if colour is not None and colourFxn is not None:
         raise ValueError(
             "Cannot specify both colour and colourFxn. Please use only one."
@@ -1191,66 +1979,66 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
         outlineColourFxn = lambda k: colourFxn(k)
     elif outlineColourFxn is None:
         outlineColourFxn = lambda k: outlineColour
-    
+
     assert 0.0 <= maxAlpha <= 1.0 and 0.0 <= minAlpha <= 1.0, f"minAlpha ({minAlpha}) and maxAlpha ({maxAlpha}) must be in range [0.0, 1.0]."
     assert maxAlpha >= minAlpha, f"maxAlpha must be greater than minAlpha. Currently minAlpha is {minAlpha} and maxAlpha is {maxAlpha}"
-    
+
     localOutlineKwargs = dict(outlineKwargs) if outlineKwargs else dict()
     localTreeKwargs = dict(treeKwargs) if treeKwargs else dict()
     localCladeBranchKwargs = dict(cladeBranchKwargs) if cladeBranchKwargs else dict()
     if 'linewidth' not in localCladeBranchKwargs and 'lw' not in localCladeBranchKwargs: localCladeBranchKwargs['lw'] = 2
     assert 'color' not in localCladeBranchKwargs, f"Not allowed to specify 'color' in cladeBranchKwargs, branch colour in gradient clades is handled by either colour or colourFxn parameters."
-    
+
     gradientClades = tree.get_internal(nodeDesignationFxn)
     assert len(gradientClades) > 0, f"No nodes specified."
-    
+
     gradientSubtrees = set()
     done = set()
-    
+
     for node in sorted(gradientClades, key=lambda k: len(k.leaves)): ## iterate over designated nodes starting from smallest clades
 
         startX = node.absoluteTime
         startY = node.y
-        
+
         subtree = tree.traverse_tree(node, includeCondition=lambda k: True)
         gradientSubtrees = gradientSubtrees.union(subtree)
         descendants = [leaf for leaf in subtree if leaf.is_leaflike()] ## only keep leaves
-        
+
         if len(descendants) == 0:
             return ax
-        
+
         yLo, yHi = node.yRange
         yLo -= padY
         yHi += padY
-    
+
         endX = max([k.absoluteTime for k in descendants]) ## endX
-        
+
         cladeLen = endX - startX
 
         startingPoint = (startX, startY) ## where clade begins
         earlyX = startX + cladeLen * controlPointFraction * 0.5
         midX = startX + cladeLen * controlPointFraction
-        
-        cpLo = [startingPoint, 
-                (earlyX, yLo), 
-                (earlyX, yLo), 
-                (midX, yLo), 
+
+        cpLo = [startingPoint,
+                (earlyX, yLo),
+                (earlyX, yLo),
+                (midX, yLo),
                 (endX, yLo)]
-        
-        cpHi = [startingPoint, 
-                (earlyX, yHi), 
-                (earlyX, yHi), 
-                (midX, yHi), 
+
+        cpHi = [startingPoint,
+                (earlyX, yHi),
+                (earlyX, yHi),
+                (midX, yHi),
                 (endX, yHi)]
-        
+
         loXY = list(zip(*five_point_bezier(cpLo, precision=precision)))
         hiXY = list(zip(*five_point_bezier(cpHi, precision=precision)))
-        
+
         xy = np.vstack([[startX, startY], loXY, hiXY[::-1]]) ## gradient clade coordinates: starting point -> lower fan -> upper fan (reversed coords)
 
-        draw_gradient_polygon(ax=ax, polygonXY=xy, extent=[startX, endX, yLo, yHi], axis='x', reverse=True, 
+        draw_gradient_polygon(ax=ax, polygonXY=xy, extent=[startX, endX, yLo, yHi], axis='x', reverse=True,
                               colour=colourFxn(node), minAlpha=minAlpha, maxAlpha=maxAlpha)
-    
+
         if outline: ## plotting outline
             assert 'color' not in localOutlineKwargs, f"Not allowed to specify 'color' in outlineKwargs, outline colour is handled by either outlineColour or outlineColourFxn parameters."
             ax.plot(*list(zip(*loXY)), color=outlineColourFxn(node), **localOutlineKwargs)
@@ -1261,33 +2049,71 @@ def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=
 
         assert 0.0 <= tipLen <= 1.0, f"Provided tipLen ({tipLen}) must be within interval [0.0, 1.0]."
         fs = np.linspace((1 - tipLen), 1, precision) ## line segments to be plotted with decreasing transparency
-        
+
         for b in descendants: ## iterate over node's descendants
             if b in done: ## only want branches not yet plotted
                 continue
-            
+
             x, y = b.absoluteTime, b.y
             parX = node.absoluteTime
             coords = [(x - (x - parX) * (f - (1 - tipLen)), y) for f in fs[::-1]]
-    
+
             z = np.empty((precision - 1, 4))
             rgb = mpl.colors.colorConverter.to_rgb(colourFxn(b))
             z[:,  :3] = rgb
             z[:,-1] = np.append((np.logspace(0, 1, precision - 2) - 1) / 10, 1)
-            
+
             branches.extend([(c1, c2) for c1, c2 in zip(coords, coords[1:])])
             colours.extend(z)
-            
+
             done.add(b) ## designate branch as done
         ax.add_collection(LineCollection(branches, color=colours, zorder=1, **localCladeBranchKwargs))
-    
+
     tree.plot_tree(ax=ax, targetFxn=lambda k: k not in gradientSubtrees or nodeDesignationFxn(k), colourFxn=colourFxn, connectionType='elbow', autoSort=False, zorder=1, **localTreeKwargs)
 
     return ax
 
+
 def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', width=0.5, lastTipDate=None, **kwargs):
     """
     Plot 95% height HPDs on branches with trait.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw HPD bars.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree containing branch HPD annotations.
+
+    targetFxn : callable, optional
+        Predicate selecting which branches to annotate.
+
+    traitName : str, optional
+        Trait key containing ``[low, high]`` HPD intervals.
+
+    width : float, optional
+        Vertical thickness of each HPD bar.
+
+    lastTipDate : float, optional
+        Most recent tip date used to convert heights into absolute dates.
+
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments forwarded to
+        :class:`matplotlib.patches.Rectangle`.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="time")
+    >>> ll.sort_branches()
+    >>> ll.set_absolute_time(2024.0)
+    >>> ll.root.traits["height_95%_HPD"] = [1.0, 1.5]
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_height_95hpds(ax, ll, lastTipDate=2024.0)
+    <...Axes...>
     """
     from matplotlib.patches import Rectangle
 
@@ -1297,10 +2123,10 @@ def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', wid
     if 'ec' not in localKwargs and 'edgecolor' not in localKwargs: localKwargs['edgecolor'] = 'dimgray'
     if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
     if 'alpha' not in localKwargs: localKwargs['alpha'] = 0.4
-    
+
     if targetFxn is None: targetFxn = lambda k: True
     if lastTipDate is None: lastTipDate = tree.mostRecent
-    
+
     for k in tree.Objects:
         if targetFxn(k) == False or traitName not in k.traits:
             continue
@@ -1309,19 +2135,62 @@ def plot_height_95hpds(ax, tree, targetFxn=None, traitName='height_95%_HPD', wid
         lo, hi = [lastTipDate - stat for stat in k.traits[traitName]] ## expect two entries
         barWidth = hi - lo
         barHeight = width ## more intuitive to think of bars as having width, but it'll correspond to height parameter of mpl Rectangle
-        
+
         ax.add_patch(Rectangle((lo, y - barHeight / 2), width=barWidth, height=barHeight, **localKwargs))
-    
+
     return ax
+
 
 def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, plotSegMatrix=False, segMatrixDist=1.1, segNames=None, segOrder=None, segWidth=1, segHeight=1, **kwargs):
     """
     Add a little matrix at the end of the reassortment network to indicate which segments are reassorting.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw reticulation edges.
+
+    tree : :class:`baltic.tree.Tree`
+        Reassortment network containing reticulation branches.
+
+    excludeFxn : callable, optional
+        Predicate selecting reticulations to skip.
+
+    colour, colourFxn : optional
+        Constant colour or colour function for reticulation edges.
+
+    plotSegMatrix : bool, optional
+        If ``True``, draw a segment matrix next to each reticulation.
+
+    segMatrixDist : float, optional
+        Distance multiplier used to place the segment matrix beyond the tree.
+
+    segNames : dict, optional
+        Mapping from segment indices to display names.
+
+    segOrder : sequence, optional
+        Display order for segment names in the matrix.
+
+    segWidth, segHeight : float, optional
+        Dimensions of each segment matrix cell.
+
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments reserved for future reticulation styling.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> fig, ax = plt.subplots()
+    >>> network = bt.make_tree("((A:1.0,#R1:0.5):0.5,(#R1:0.5,B:1.0):0.5);", treeType="time")
+    >>> curonia.plot_reticulations(ax, network)  # doctest: +SKIP
+    <...Axes...>
     """
     from matplotlib.collections import LineCollection
 
     if excludeFxn is None: excludeFxn = lambda k: False
-    
+
     if colour is not None and colourFxn is not None:
         raise ValueError(
             "Cannot specify both colour and colourFxn. Please use only one."
@@ -1330,14 +2199,14 @@ def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, p
         colourFxn = lambda k: "gray"
     elif colourFxn is None:
         colourFxn = lambda k: colour
-    
+
     if plotSegMatrix == False and segNames is not None: ## check for superfluous parameters
         logger.warning(f"Provided segment names {segNames} will be ignored because plotSegMatrix is set to False.")
-    
+
     if plotSegMatrix: ## identifies segment numbers in network, checks if names are available for renaming
         import re
         from matplotlib.patches import Rectangle
-        
+
         segFind = re.compile('^seg([0-9]+)$') ## typical CoalRe formatting of segment names
         segments = []
         for trait in tree.root.traits: ## iterate over root's traits
@@ -1359,11 +2228,11 @@ def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, p
 
     pointerLine = []
     pointerLineColours = []
-    
+
     treeEnd = tree.root.absoluteTime + tree.treeHeight * segMatrixDist ## get x coordinate at some position after the tree
 
     reassortmentCounter = 0 ## count reassortments
-    
+
     for k in sorted(tree.Objects, key=lambda q: -q.y): ## iterate over all branches from top to bottom along y-axis
         if isinstance(k, Reticulation) and excludeFxn(k) == False: ## is a reassortment edge or excluded
             x, y = k.absoluteTime, k.y ## get reassortment origin coordinate
@@ -1374,16 +2243,16 @@ def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, p
             marker = '^' if yd > y else 'v' ## marker up if reticulation target (destination) is above origin, downward otherwise
 
             fc = colourFxn(k)
-       
+
             ax.scatter(xd, yd, s=50, fc='w', ec='none', marker=marker, zorder=10) ## add arrow-like ending of reassortment edge
             ax.scatter(xd, yd, s=120, fc='k', ec='none', marker=marker, zorder=9)
 
             colours.append('k')
 
             reassortmentCounter += 1
-            
+
             if plotSegMatrix:
-                
+
                 pointerLine.append(((x, y), (treeEnd, y)))
                 pointerLineColours.append('gray')
 
@@ -1393,9 +2262,9 @@ def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, p
                     segMatch = [segIdx for segIdx in segments if segNames[segIdx] == seg][-1] ## identify segment in trait dict
                     segInvolved = k.traits[f"seg{segMatch}"] ## check if segment is marked as present
                     fc = 'k' if segInvolved else 'w' ## black if segment traveled along edge, white otherwise
-                    
+
                     ax.add_patch(Rectangle((sx, y - segHeight / 2), width=segWidth, height=segHeight, fc=fc, ec='k', clip_on=False))
-                    
+
                     if i == (len(segOrder) - 1): ## last (horizontally) rectangle, label with number
                         ax.text(sx + segWidth * 1.05, y, f"#{reassortmentCounter}", ha='left', va='center', size=12)
                     if reassortmentCounter == 1: ## first (top-most) reassortment, label segment
@@ -1403,14 +2272,54 @@ def plot_reticulations(ax, tree, excludeFxn=None, colour=None, colourFxn=None, p
 
     ax.add_collection(LineCollection(pointerLine, ls='--', lw=1, color=pointerLineColours, clip_on=False)) ## pointer line that connects end of reticulation to schematic of segment involvement matrix
     ax.add_collection(LineCollection(branches, ls='--', lw=2, color=colours)) ## plot reticulation (originates as normal branch, heads down to destination branch
-    
+
     return ax
 
+
 def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnOrder=None, width=1.0, **kwargs):
+    """
+    Plot a tree alongside a rectangular annotation matrix aligned to its tips.
+
+    **Parameters**
+
+    treeAx : matplotlib.axes.Axes
+        Axes used for the tree.
+    matrixAx : matplotlib.axes.Axes
+        Axes used for the matrix.
+    tree : :class:`baltic.tree.Tree`
+        Tree providing the tip order.
+    labelDict : dict
+        Mapping from column name to per-tip labels.
+    colourDict : dict, optional
+        Mapping from column name to label colours.
+    columnOrder : list, optional
+        Explicit left-to-right column order.
+    width : float, optional
+        Width of each matrix column.
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments forwarded to the matrix ``PatchCollection``.
+
+    **Returns**
+
+    tuple
+        ``(treeAx, matrixAx)``.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> labels = {"clade": {"A": "x", "B": "y", "C": "x"}}
+    >>> colours = {"clade": {"x": "tab:blue", "y": "tab:orange"}}
+    >>> fig, (tree_ax, matrix_ax) = plt.subplots(1, 2)
+    >>> curonia.plot_tree_matrix(tree_ax, matrix_ax, ll, labels, colours)
+    (<...Axes...>, <...Axes...>)
+    """
 
     from matplotlib.patches import Rectangle
     from matplotlib.collections import PatchCollection
-    
+
     tree.plot_tree(treeAx)
 
     if columnOrder is None:
@@ -1418,11 +2327,11 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
     else:
         assert len(labelDict) == len(columnOrder), f"labelDict has length {len(labelDict)} but columnOrder has length {len(columnOrder)}"
     localKwargs = dict(kwargs)
-    
+
     if colourDict is not None: ## colourDict was provided
         for col in columnOrder: ## check that column colours are provided
             assert col in colourDict, f"Column {col} not found in colourDict"
-    
+
     cells = []
     colours = []
     for i, col in enumerate(columnOrder): ## iterate over matrix columns
@@ -1442,11 +2351,11 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
             else:
                 fc = 'none'
                 logger.warning(f"Taxon {taxon.name} label '{label}' not assigned a colour, defaulting to invisible")
-            
+
             cell = Rectangle((x, y), width=width, height=1.0)
             cells.append(cell)
             colours.append(fc)
-    
+
     assert 'fc' not in localKwargs and 'facecolor' not in localKwargs, f"Not allowed to set facecolor of matrix cells since they're set via colourDict."
     matrixAx.add_collection(PatchCollection(cells, color=colours, **localKwargs))
 
@@ -1460,22 +2369,38 @@ def plot_tree_matrix(treeAx, matrixAx, tree, labelDict, colourDict=None, columnO
     matrixAx.set_xticklabels(columnOrder, rotation=90)
     matrixAx.set_yticks([])
     matrixAx.set_yticklabels([])
-    
+
     matrixAx.set_xlim(matrixStart, matrixEnd)
 
     return treeAx, matrixAx
 ##############
 
+
 def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fasta'):
     """
     Computes consensus from an alignment file provided.
     Optionally can compute SNP consensus
+
+    This helper is used by :func:`_get_refSeq` and :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    alnFile : str or file-like
+        Alignment source passed to :mod:`Bio.SeqIO`.
+    SNPs : list[int], optional
+        Alignment columns to summarize. If omitted, summarize the full
+        alignment.
+    validNucleotideFxn : callable, optional
+        Predicate used to filter valid nucleotide symbols before consensus
+        counting.
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
     """
     from collections import Counter
     from Bio import SeqIO
-    
+
     alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt))
-    
+
     if validNucleotideFxn is None: validNucleotideFxn = lambda nt: nt.upper() in ['A','C','T','U','G','-']
 
     if SNPs is None:
@@ -1490,18 +2415,36 @@ def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fast
         clean_column = [alnDict[seq][i] for seq in alnDict if validNucleotideFxn(alnDict[seq][i].upper())] ## filter to valid nucleotides
         assert len(clean_column) > 0, f"Position {i+1} (1-based indexing) contains no valid nucleotides"
         consensusNt = clean_column[0] if len(set(clean_column)) == 1 else Counter(clean_column).most_common(1)[0][0]
-        
+
         consensus.append(consensusNt)
-    
+
     return ''.join(consensus)
+
 
 def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refSeqFmt=None):
     """
     Retrieve reference sequence - compute consensus from alignment, fetch from alignment file or grab from path.
     Returns sequence as str
+
+    This helper supports :func:`get_variable_aln_sites` and
+    :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    refSeq : str
+        Reference selector, either ``"consensus"``, a sequence name present in
+        the alignment, or a path to an external reference file.
+    validNucleotideFxn : callable, optional
+        Predicate used when computing a consensus reference.
+    alnFile : str or file-like, optional
+        Alignment source used to resolve consensus or named references.
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
+    refSeqFmt : str, optional
+        Sequence format for an external reference file.
     """
     from Bio import SeqIO
-    
+
     summarySeq = None
     if refSeq == 'consensus': ## compute consensus
         assert alnFile is not None and validNucleotideFxn is not None and alnFmt is not None, f"Computing consensus requires alnFile, alnFmt, validNucleotidesFxn to be set."
@@ -1521,21 +2464,37 @@ def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refS
 
     if summarySeq is None:
         raise Exception(f"Could not retrieve reference sequence.")
-    
+
     return summarySeq
+
 
 def _default_variable_site_selection_fxn(columnDict, validNtFxn, refNt):
     """
     Takes a dict of {seq name: nucleotide}, validNtFxn to identify whether a nucleotide is valid, and nucleotide at reference sequence
     This function identifies whether the column dict contains variable sites (at least 2 unique values) and that the 2nd most common allele is found it at least 2 sequences.
+
+    This is the default selector for :func:`get_variable_aln_sites`.
+
+    **Parameters**
+
+    columnDict : dict[str, str]
+        Mapping from sequence name to the nucleotide observed at one alignment
+        column.
+    validNtFxn : callable
+        Predicate used to decide whether a nucleotide should be retained for
+        the variability check.
+    refNt : str
+        Reference nucleotide at the same column. This argument is accepted for
+        compatibility with custom selection call signatures.
     """
     variable = False
     clean_column = [columnDict[seq] for seq in columnDict if validNtFxn(columnDict[seq])] ## filter to valid nucleotides
-    
+
     if len(set(clean_column)) >= 2 and Counter(clean_column).most_common()[1][1] >= 2: ## column must be variable AND second most common element is found more than once
         variable = True
 
     return variable
+
 
 def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, validNucleotideFxn=None, alnFmt='fasta', refSeqFmt=None, trimStart=0, trimEnd=None):
     """
@@ -1547,22 +2506,56 @@ def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, valid
     refSeqFmt is sequence format of external reference file (default: 'fasta')
     trimStart, trimEnd is how many positions to ignore at either end of the alnFile
     returns indices of sites that pass selectionFxn
+
+    **Parameters**
+
+    alnFile : str
+        Alignment file to scan.
+
+    refSeq : str, optional
+        Reference sequence selector.
+
+    selectionFxn : callable, optional
+        Function deciding whether a column should be retained.
+
+    validNucleotideFxn : callable, optional
+        Function identifying valid nucleotide characters.
+
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
+
+    refSeqFmt : str, optional
+        Sequence format for an external reference file.
+
+    trimStart, trimEnd : int, optional
+        Number of positions to ignore at the start and end of the alignment.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> import tempfile
+    >>> fasta = '>A\\nACGT\\n>B\\nATGT\\n'
+    >>> with tempfile.NamedTemporaryFile('w+', suffix='.fasta') as handle:
+    ...     _ = handle.write(fasta)
+    ...     _ = handle.flush()
+    ...     curonia.get_variable_aln_sites(handle.name)
+    [1]
     """
     from collections import Counter
     from Bio import SeqIO
-    
+
     alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt)) ## load sequence
-    
+
     if validNucleotideFxn is None: validNucleotideFxn = lambda nt: nt.upper() in ['A','C','T','U','G','-']
-    
+
     if selectionFxn is None: selectionFxn = _default_variable_site_selection_fxn
-    
+
     if trimStart is None: trimStart = 0
 
     alnLs = [len(seq) for seq in alnDict.values()]
     assert len(set(alnLs)) == 1, f"Sequences in alignment have different lengths implying they're not aligned. Unique sequence lengths in alignment: {set(alnLs)}."
     alnL = alnLs[0] ## all seqs have same length, get first seq length
-    
+
     if trimEnd is None:
         trimEnd = alnL
     else:
@@ -1572,17 +2565,18 @@ def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, valid
     if os.path.exists(refSeq) and refSeqFmt is None: ## external reference without provided format, assume fasta
         refSeqFmt = 'fasta'
     summarySeq = _get_refSeq(refSeq=refSeq, alnFile=alnFile, alnFmt=alnFmt, refSeqFmt=refSeqFmt, validNucleotideFxn=validNucleotideFxn)
-    
+
     assert len(summarySeq) == alnL, f"External reference sequence length {len(summarySeq)} does not match alignment sequence length"
-    
+
     columns = [{s: str(alnDict[s].seq)[i] for s in alnDict} for i in range(alnL)] ## extract every column as a {seq: nt} dict
     SNPs = [i for i in range(alnL) if selectionFxn(columns[i], validNucleotideFxn, summarySeq[i]) and trimStart <= i <= trimEnd] ## identify indices that satisfy filterFxn and are within desired range
-    
+
     return SNPs
 
-def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours=None, textKwargs={}, 
-                       rectangleKwargs={}, treeAx=None, fmtSeqNamesFxn=None, treeKwargs={}, alnFmt='fasta', 
-                       validNucleotideFxn=None, coding=False, gffFile=None, featType=None, geneName=None, refSeqFmt=None, 
+
+def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours=None, textKwargs={},
+                       rectangleKwargs={}, treeAx=None, fmtSeqNamesFxn=None, treeKwargs={}, alnFmt='fasta',
+                       validNucleotideFxn=None, coding=False, gffFile=None, featType=None, geneName=None, refSeqFmt=None,
                        plotORFs=False, minFeatLen=1000, offsetORFs=0.1):
     """
     takes alnAx axes object where the alignment will be plotted
@@ -1600,7 +2594,7 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     fmtSeqNamesFxn is a function that takes sequence name from a tree and returns a modified version (e.g. you want to remove extraneous information)
     treeKwargs is a kwargs dict used when plotting a tree (e.g. you want to change branch colours)
     alnFmt is the format of the alignment file (default: 'fasta')
-    validNucleotideFxn is a function that filters alignment columns down to valid states; default {A, C, T, U, G, -} are considered as valid 
+    validNucleotideFxn is a function that filters alignment columns down to valid states; default {A, C, T, U, G, -} are considered as valid
     coding is a Boolean for whether the alignment is coding or not; if a GFF file is provided the features in the file will be used to infer aa changes, otherwise it's assumed the entire alignment is a single coding sequence
     gffFile is a path (or handle) to a GFF file that defines sequence features; ## NOTE - should assert that alignment length equals 'nuc' feature
     featType is a string used for fetching features from the GFF file; if not specified assumed to be 'gene'
@@ -1609,30 +2603,107 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     plotORFs is a Boolean for whether to plot a schematic diagram of the alignment with feature annotations; errors if set to True without a GFF file
     minFeatLen is minimum feature length for adding text to sequence schematic
     offsetORFs is a float that represents a fraction of the tree's y-axis height to be used for positioning GFF file features below the alignment
-    """ 
+
+    **Parameters**
+
+    alnAx : matplotlib.axes.Axes
+        Axes on which to draw the alignment.
+
+    SNPs : sequence[int]
+        Alignment columns to include.
+
+    alnFile : str
+        Alignment file path.
+
+    tree : :class:`baltic.tree.Tree`
+        Tree used to order sequences vertically.
+
+    refSeq : str, optional
+        Reference sequence selector.
+
+    ntColours : dict, optional
+        Mapping from nucleotide states to colours.
+
+    textKwargs : dict, optional
+        Keyword arguments for nucleotide text labels.
+
+    rectangleKwargs : dict, optional
+        Keyword arguments for alignment rectangles.
+
+    treeAx : matplotlib.axes.Axes, optional
+        Optional axes on which to draw the companion tree.
+
+    fmtSeqNamesFxn : callable, optional
+        Function used to format sequence names.
+
+    treeKwargs : dict, optional
+        Additional keyword arguments forwarded to :meth:`baltic.tree.Tree.plot_tree`.
+
+    alnFmt : str, optional
+        Alignment format understood by :mod:`Bio.SeqIO`.
+
+    validNucleotideFxn : callable, optional
+        Function identifying valid nucleotide characters.
+
+    coding : bool, optional
+        If ``True``, annotate columns in coding-sequence terms.
+
+    gffFile : str, optional
+        GFF file describing sequence features.
+
+    featType : str, optional
+        Feature type to extract from the GFF file.
+
+    geneName : str, optional
+        Feature qualifier used for gene labels.
+
+    refSeqFmt : str, optional
+        Format of an external reference file.
+
+    plotORFs : bool, optional
+        If ``True``, draw an ORF schematic below the alignment.
+
+    minFeatLen : int, optional
+        Minimum feature length required before text is added to the ORF
+        schematic.
+
+    offsetORFs : float, optional
+        Vertical offset of the ORF schematic as a fraction of tree height.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> SNPs = [10, 25, 40]
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_snp_alignment(ax, SNPs, "alignment.fasta", ll)  # doctest: +SKIP
+    <...Axes...>
+    """
     from matplotlib.patches import Rectangle
     from matplotlib.collections import PatchCollection, LineCollection
     from Bio import SeqIO
-    
+
     alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt))
-    
+
     height = 0.95
     width = 1.0
     localTextKwargs = dict(textKwargs)
     localRectangleKwargs = dict(rectangleKwargs)
     localTreeKwargs = dict(treeKwargs)
-    
+
     if 'color' not in localTextKwargs: localTextKwargs['color'] = 'k'
     if 'size' not in localTextKwargs: localTextKwargs['size'] = 10
     if 'zorder' not in localTextKwargs: localTextKwargs['zorder'] = 100
     if 'ha' not in localTextKwargs and 'horizontalalignment' not in localTextKwargs: localTextKwargs['ha'] = 'center'
     if 'va' not in localTextKwargs and 'verticalalignment' not in localTextKwargs: localTextKwargs['va'] = 'center'
-    
+
     if ntColours is None: ## default nt colours
-        ntColours={'A': '#D0694A', 'C': '#77BEDB', 'T': '#48A365', 'U': '#48A365', 'G': '#E1C72F', 
-                 '-': 'white', 'N':'dimgrey', 
+        ntColours={'A': '#D0694A', 'C': '#77BEDB', 'T': '#48A365', 'U': '#48A365', 'G': '#E1C72F',
+                 '-': 'white', 'N':'dimgrey',
                  'K': 'dimgrey', 'Y': 'dimgrey', 'M': 'dimgrey', 'W': 'dimgrey', 'R': 'dimgrey'}
-    
+
     ###### check refSeq is valid, grab reference sequence accordingly
     assert refSeq == 'consensus' or refSeq in alnDict or os.path.exists(refSeq), f"refSeq {refSeq} is not 'consensus', a sequence available in alnDict or a recognised path."
     if validNucleotideFxn is None: validNucleotideFxn = lambda nt: nt in ['A','C','T','U','G','-']
@@ -1663,20 +2734,20 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     patches = []
     patchFaceColours = []
     patchEdgeColours = []
-    
+
     for k in sorted(tree.get_external(), key = lambda leaf: leaf.y):
         assert k.name in alnDict, f"Tip name {k.name} not present in alnDict."
-        
+
         y = k.y - 0.5
 
         for i, pos in enumerate(SNPs):
             x = xticks[i]
-            
+
             curNt = str(alnDict[k.name][pos]).upper() ## grab current sequence's nt
             refNt = summarySeq[pos] ## grab consensus (at SNP index) or reference sequence nucleotide (at entire seq index)
-            
+
             nt_block = Rectangle((x, y), width = width, height = height)
-            
+
             if refNt != curNt: ## not matching with reference sequence - highlight, add text
                 fc = ntColours[curNt]
                 ec = 'w'
@@ -1689,23 +2760,23 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
                 ec = 'none'
                 if k.name == refSeq: ## add text for reference seq
                     alnAx.text(x + 0.5, y + 0.5, curNt, **localTextKwargs)
-            
+
             patches.append(nt_block)
             patchFaceColours.append(fc)
             patchEdgeColours.append(ec)
 
         if refSeq in alnDict and refSeq == k.name:
             alnAx.add_patch(Rectangle((0, k.y - height/2), width=max(xticks) + width, height=height, facecolor='none', edgecolor='k', lw=1, zorder=10000, clip_on=False)) ## outline reference
-    
+
     ###### plot consensus or external reference sequence if provided underneath alignment
     if refSeq == 'consensus' or os.path.exists(refSeq):
         y = -1
         for i, pos in enumerate(SNPs):
             x = i
             nt_block = Rectangle((xticks[i], y), width = width, height = height)
-            
+
             alnAx.text(xticks[i] + 0.5, y + 0.5, summarySeq[pos].upper(), color = 'k', size = 10, ha = 'center', va = 'center')
-            
+
             patches.append(nt_block)
             patchFaceColours.append('lightgray')
             patchEdgeColours.append(ec)
@@ -1727,7 +2798,7 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
             fmtPosition = pos + 1 ## convert to 1-indexed
 
         xTickLabels.append(fmtPosition)
-    
+
     if len(xTickLabels) == 0: print(f"xTickLabels not set")
     alnAx.set_xticklabels(xTickLabels, rotation = 90)
     alnAx.tick_params(size = 0)
@@ -1742,10 +2813,10 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
         for _ in range(12):  # 10 iterations of simple repulsion
             diffs = xs[:,None] - xs[None,:]
             xs += repulsionStrength * np.tanh(1 / (diffs + 1e-6)).sum(axis=1)
-        
+
         spread = dict(zip(SNPs, xs))
         ###
-        
+
         assert gffFile, f"Must provide gffFile for plotting ORFs."
         ORFwidth = min([tree.ySpan * 0.05, 1])
         ORFwidth = max([ORFwidth, tree.ySpan * 0.05])
@@ -1754,14 +2825,14 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
         maxORFheight = plot_seq_features(alnAx, gffFile=gffFile, xy=(0, -offsetOrfY), width=ORFwidth, rescale=rescaleORFs, geneName='gene_name', minFeatLen=minFeatLen)
         alnAx.eventplot([i / rescaleORFs for i in SNPs], lineoffsets=-offsetOrfY, linelengths=ORFwidth*0.4, color='k', clip_on=False)
         yBottom = alnBottom - offsetOrfY - maxORFheight - ORFwidth * 0.5 ## adjust bottom to show ORFs starting for bottom of alignment
-        
+
         connections = []
         for i, pos in enumerate(SNPs):
             shoulder_x = spread[pos] #/ rescaleORFs
             connections.append(((xticks[i] + width / 2, alnBottom), ## bottom middle of alignment column
                                 (shoulder_x + width / 2, alnBottom - offsetOrfY * 0.3 + ORFwidth * 0.2), ## retain x position, move halfway down y-axis
                                 (pos / rescaleORFs, -offsetOrfY + ORFwidth * 0.2))) ## connect to sequence position
-        
+
         alnAx.add_collection(LineCollection(connections, color='gray', lw=0.5, clip_on=False))
         if coding == False:
             logger.warning(f"plotORFs == True, but coding == False; Alignment columns will not be formatted with amino acid changes to ORFs.")
@@ -1770,7 +2841,7 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     ###### tree part
     if treeAx:
         tree.plot_tree(treeAx, autoSort=False, **localTreeKwargs)
-        
+
         for k in tree.get_external():
             treeAx.plot([k.x, tree.treeHeight * 1.01], [k.y, k.y], color = 'gray', ls = '--', lw = 0.5)
 
@@ -1792,25 +2863,39 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     elif os.path.exists(refSeq):
         yticks.insert(0, -height/2)
         yTickLabels.insert(0, 'reference sequence')
-    
+
     alnAx.yaxis.tick_right()
     alnAx.set_yticks(yticks)
     alnAx.set_yticklabels(yTickLabels)
     #######
-    
+
     alnAx.set_ylim(yBottom - 0.05, tree.ySpan + 0.05)
     alnAx.set_xlim(-0.1, max(xticks) + width + 0.05)
     [alnAx.spines[loc].set_visible(False) for loc in alnAx.spines]
-    
+
     return alnAx
+
 
 def _identify_gene(site, seqFeatures, featType, geneName):
     """
     Identifies which feature (if any) a given sequence position is in and the index of where the feature begins.
-    If sequence position is within a feature, returns feature name and its starting position; otherwise returns None, None 
+    If sequence position is within a feature, returns feature name and its starting position; otherwise returns None, None
     Site is 0-indexed position in alignment.
     seqFeatures is a list of Biopython seq features (assumed loaded from a GFF file earlier)
     featType and geneName are the feature type and feature key for extraction from GFF file
+
+    This helper supports :func:`_format_coding_aln_column`.
+
+    **Parameters**
+
+    site : int
+        Zero-indexed alignment column to annotate.
+    seqFeatures : sequence
+        Sequence features loaded from a GFF annotation.
+    featType : str
+        Feature type to match when scanning the annotation.
+    geneName : str
+        Qualifier key used to recover a human-readable gene label.
     """
     hits = []
 
@@ -1837,6 +2922,23 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
     - "1410 nt" if site was outside of a coding feature
     - "23012 nt S: E484K (A) / E484A (C)" for a site that changes the amino acid sequence (lists all aa variants and nucleotide change associated with each outcome)
     - "24853 nt S: 1097 aa" for a site that's within a coding feature but the mutation is synonymous
+
+    This helper is used by :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    site : int
+        Zero-indexed alignment column to describe.
+    alnDict : dict[str, Bio.SeqRecord.SeqRecord]
+        Alignment records keyed by sequence name.
+    referenceSeq : str
+        Reference sequence string with the same length as the alignment.
+    seqFeatures : sequence, optional
+        Sequence features loaded from a GFF annotation.
+    featType : str, optional
+        Feature type to match when resolving coding annotations.
+    geneName : str, optional
+        Qualifier key used to recover feature names from the annotation.
     """
     from Bio.Seq import Seq
 
@@ -1915,6 +3017,13 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
 def _load_gff(gffFile):
     """
     Loads and returns features from a GFF file.
+
+    The returned features are consumed by :func:`plot_seq_features`.
+
+    **Parameters**
+
+    gffFile : str or file-like
+        GFF source containing sequence feature annotations.
     """
     try:
         from BCBio import GFF
@@ -1929,13 +3038,16 @@ def _load_gff(gffFile):
 
     return features
 
+
 def _assign_tracks(features):
     """
-    Assign minimal y-level tracks to features such that overlapping CDSs 
+    Assign minimal y-level tracks to features such that overlapping CDSs
     do not share a track.
 
     features: list of (feat_obj, start, end)
     Returns: dict {feature_index: track_index}
+
+    This helper supports :func:`plot_seq_features`.
     """
     # Give each feature a stable index
     indexed = [(i, feat, start, end) for i, (feat, start, end) in enumerate(features)]
@@ -1962,6 +3074,7 @@ def _assign_tracks(features):
 
     return assignment
 
+
 def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='gene_name', arrowKwargsFxn=None, textArgsFxn=None, textKwargsFxn=None, minFeatLen=1000):
     """
     Takes axes and GFF file and plots arrows
@@ -1972,40 +3085,82 @@ def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='
     textKwargsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns a kwargs dict to be used to modify text that's plotted
     textArgsFxn is a function that accepts the name of a feature (e.g. "ORF1a", "S", etc.) and returns an args dict to be used for adding text
     minFeatLen is a threshold for adding text to features - no text is plotted for features less than this length
+
+    This helper is commonly paired with :func:`plot_snp_alignment`.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw sequence features.
+
+    gffFile : str
+        GFF file containing the feature annotations.
+
+    xy : tuple[float, float], optional
+        Origin of the feature schematic.
+
+    rescale : float, optional
+        Scaling factor applied to feature coordinates.
+
+    width : float, optional
+        Arrow width used for feature glyphs.
+
+    geneName : str, optional
+        Feature qualifier used for gene labels.
+
+    arrowKwargsFxn : callable, optional
+        Function returning keyword arguments for each arrow.
+
+    textArgsFxn : callable, optional
+        Function returning positional text arguments for each label.
+
+    textKwargsFxn : callable, optional
+        Function returning keyword arguments for each label.
+
+    minFeatLen : int, optional
+        Minimum feature length required before a label is drawn.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> from baltic import curonia
+    >>> fig, ax = plt.subplots()
+    >>> curonia.plot_seq_features(ax, "reference.gff", xy=(0, 0), rescale=1000.0)  # doctest: +SKIP
+    <...Axes...>
     """
     from matplotlib.patches import FancyArrow
-    
+
     if xy is None: xy = (0, 0)
     if rescale is None: rescale = 1.0
     if width is None: width = 1.0
-    
+
     start_x, start_y = xy
-    
+
     features = _load_gff(gffFile) ## load GFF annotations
-    
+
     cds_intervals = []
     for feat in features:
         start = int(feat.location.start)
         end = int(feat.location.end)
         cds_intervals.append((feat, start, end))
-    
+
     track_assignment = _assign_tracks(cds_intervals) ## position ORFs so they don't overlap
-    
+
     ys = []
     for i, (feat, start, end) in enumerate(cds_intervals):
 
         rescaled_start = start / rescale
         rescaled_end = end / rescale
-        
+
         name = feat.qualifiers.get(geneName, ['?'])[0]
         track = -track_assignment[i]
 
         length = end - start
         rescaled_length = length / rescale
-        
+
         head_length = 300 if length > 300 else max(20, int(length * 0.3))
         rescaled_head_length = head_length / rescale
-        
+
         y = start_y - width * 0.1 + (track * width)
         ys.append(y)
         if name == 'nuc':
@@ -2013,29 +3168,29 @@ def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='
             ax.plot([start_x + rescaled_start, start_x + rescaled_end], [start_y, start_y], color='k', lw=3, zorder=0, clip_on=False)
             ax.text(start_x + rescaled_end * 1.01, start_y, f"{end}", ha='left', va='center', color='k', clip_on=False)
             continue
-    
+
         ##############
-        defaultArrowKwargs = {'width': width, 'head_width': width, 'head_length': rescaled_head_length, 
-                              'length_includes_head': True, 'facecolor': 'lightgray', 'edgecolor': 'k', 
+        defaultArrowKwargs = {'width': width, 'head_width': width, 'head_length': rescaled_head_length,
+                              'length_includes_head': True, 'facecolor': 'lightgray', 'edgecolor': 'k',
                               'zorder': 10}
-        
+
         localArrowKwargs = dict(defaultArrowKwargs) ## copy defaults
-        
+
         if arrowKwargsFxn is not None:
             arrowFxnDict = arrowKwargsFxn(name) ## grab dict returned by function
             if 'fc' in arrowFxnDict: arrowFxnDict['facecolor'] = arrowFxnDict['fc']; arrowFxnDict.pop('fc')
             if 'ec' in arrowFxnDict: arrowFxnDict['edgecolor'] = arrowFxnDict['ec']; arrowFxnDict.pop('ec')
-            
+
             for key in arrowFxnDict: ## overwrite values
                 localArrowKwargs[key] = arrowFxnDict[key]
-        
-        arrow = FancyArrow(x = start_x + rescaled_start, y = y, 
+
+        arrow = FancyArrow(x = start_x + rescaled_start, y = y,
                            dx = rescaled_length, dy = 0, **localArrowKwargs)
         ax.add_patch(arrow)
         ###############
         defaultTextArgs = {'x': start_x + rescaled_start + rescaled_length/2, 'y': y , 's': name}
         localTextArgs = dict(defaultTextArgs)
-        
+
         if textArgsFxn is not None:
             textFxnDict = textArgsFxn(name) ## grab dict returned by function
             if 'fc' in textFxnDict: textFxnDict['facecolor'] = textFxnDict['fc']; textFxnDict.pop('fc')
@@ -2046,7 +3201,7 @@ def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='
         #############
         defaultTextKwargs = {'ha': 'center', 'va': 'center', 'zorder': 100, 'rotation': 0, 'rotation_mode': 'anchor'}
         localTextKwargs = dict(defaultTextKwargs)
-        
+
         if textKwargsFxn is not None:
             textFxnDict = textKwargsFxn(name) ## grab dict returned by function
             if 'fc' in textFxnDict: textFxnDict['facecolor'] = textFxnDict['fc']; textFxnDict.pop('fc')
@@ -2059,5 +3214,5 @@ def plot_seq_features(ax, gffFile, xy=None, rescale=None, width=None, geneName='
             ax.text(**localTextArgs, **localTextKwargs)
 
     maxHeight = abs(min(ys) - start_y)
-    
+
     return maxHeight

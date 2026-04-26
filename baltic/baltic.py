@@ -1,3 +1,16 @@
+"""This module provides the core ``baltic`` functions :func:`make_tree` and :func:`make_tree_JSON`.
+
+=====
+Notes
+=====
+This version of ``baltic`` (v0.1) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
+Attributes
+^^^^^^^^^^
+logger : ``logging.Logger``
+    Default logger which will be passed to other ``baltic`` functions.
+"""
 __all__ = ['make_tree', 'make_tree_JSON']
 import re
 import sys
@@ -11,6 +24,37 @@ logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
 def make_tree(data, treeType, tre=None):
+    """
+    Parse a Newick-like tree string into a :class:`baltic.tree.Tree`.
+
+    **Parameters**
+
+    data : str
+        Tree string to parse.
+
+    treeType : {'divergence', 'time'}
+        Interpretation of branch lengths in the resulting tree.
+
+    tre : :class:`baltic.tree.Tree`, optional
+        Existing tree object to populate. If omitted, a new tree is created.
+
+    **Returns**
+
+    :class:`baltic.tree.Tree`
+        Parsed tree object.
+
+    **Raises**
+
+    AssertionError
+        If the input string is malformed or cannot be fully parsed.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> ll = bt.make_tree("((A:1.0,B:1.5):0.5,C:2.0);", treeType="divergence")
+    >>> [tip.name for tip in ll.get_external()]
+    ['A', 'B', 'C']
+    """
     patterns = {
         'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
         'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#,]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
@@ -202,6 +246,45 @@ def make_tree(data, treeType, tre=None):
             return tre
 
 def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
+    """
+    Build a :class:`baltic.tree.Tree` from an Auspice-style JSON node hierarchy.
+
+    **Parameters**
+
+    jsonNode : dict
+        Root JSON node to parse.
+
+    jsonTranslationDict : dict
+        Mapping from ``baltic`` attribute names to JSON keys.
+
+    treeType : {'divergence', 'time'}
+        Interpretation of branch lengths in the resulting tree.
+
+    tre : :class:`baltic.tree.Tree`, optional
+        Existing tree object to populate recursively. If omitted, a new tree
+        is created.
+
+    **Returns**
+
+    :class:`baltic.tree.Tree`
+        Parsed tree object.
+
+    **Examples**
+
+    >>> import baltic as bt
+    >>> json_tree = {
+    ...     "name": "root",
+    ...     "node_attrs": {"div": 0.0},
+    ...     "children": [
+    ...         {"name": "A", "node_attrs": {"div": 1.0}},
+    ...         {"name": "B", "node_attrs": {"div": 1.2}},
+    ...     ],
+    ... }
+    >>> translation = {"name": "name", "height": "div"}
+    >>> ll = bt.make_tree_JSON(json_tree, translation, treeType="divergence")
+    >>> sorted(tip.name for tip in ll.get_external())
+    ['A', 'B']
+    """
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
     else:
@@ -210,7 +293,7 @@ def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
     if tre is None:
         tre = Tree(treeType)
         tre.root = newNode
-    
+
     if 'attr' in jsonNode:
         attr = jsonNode.pop('attr')
         jsonNode.update(attr)

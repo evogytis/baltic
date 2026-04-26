@@ -1,0 +1,11 @@
+name: baltic
+channels:
+  - conda-forge
+  - anaconda
+  - defaults
+dependencies:
+  - python>=3.10
+  - numpy>=1.16
+  - matplotlib>=2.0.0
+  - scipy
+  - requests
