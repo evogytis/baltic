@@ -17,6 +17,14 @@ pip install baltic
 
 `baltic` depends on `numpy` and `matplotlib`. If you plan to load JSON trees from URLs, install `requests` as well.
 
+For local development and documentation builds, create the single conda environment declared in [`baltic.yaml`](/Users/bip7/Tools/baltic/baltic.yaml), then install the package into it:
+
+```bash
+conda env create -f baltic.yaml
+conda activate baltic
+pip install -e . --no-build-isolation
+```
+
 ## Quick start
 
 ### Parse a tree string
@@ -105,14 +113,7 @@ plt.show()
 
 The Sphinx sources live in [`docs/source`](/Users/bip7/Tools/baltic/docs/source).
 
-The docs build is intended to use the repo-managed environment declared in [`docs/anaconda-project.yml`](/Users/bip7/Tools/baltic/docs/anaconda-project.yml). If you have `anaconda-project` installed, prepare that environment first:
-
-```bash
-cd docs
-anaconda-project prepare
-```
-
-After the environment has been prepared, `make html` will automatically use `docs/envs/default/bin/sphinx-build` when it exists:
+Build the docs from the same `baltic` conda environment:
 
 ```bash
 cd docs
