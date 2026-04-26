@@ -4,13 +4,16 @@ Getting Started
 Installation
 ------------
 
-Install ``baltic`` from PyPI:
+To install ``baltic`` locally and prepare the documentation environment:
 
 .. code-block:: bash
 
-   pip install baltic
-
-The package depends on ``numpy`` and ``matplotlib``. If you plan to load JSON trees from remote URLs, install ``requests`` as well.
+   git clone https://github.com/evogytis/baltic.git
+   cd baltic
+   git checkout main
+   conda env create -f baltic.yaml
+   conda activate baltic
+   pip install -e . --no-build-isolation
 
 Create a tree from a Newick string
 ----------------------------------
@@ -152,3 +155,29 @@ After this guide, continue with the module reference:
 - :doc:`io`
 - :doc:`tree`
 - :doc:`bt_utils`
+
+Build and serve the documentation locally
+-----------------------------------------
+
+To build the documentation from source, run the following commands from the root of the repository (with the ``baltic`` conda environment activated):
+
+.. code-block:: bash
+
+   cd docs
+   make html
+
+The built site will be written to ``docs/build/html``. To open the homepage
+directly on macOS:
+
+.. code-block:: bash
+
+   open build/html/index.html
+
+To serve the docs locally in a browser:
+
+.. code-block:: bash
+
+   cd build/html
+   python -m http.server 8000
+
+Then visit ``http://localhost:8000``.
