@@ -1,17 +1,10 @@
 # Minimal makefile for Sphinx documentation
 #
 
-# Prefer the repo-managed docs environment when it exists so local builds use
-# the same theme and dependency set declared in anaconda-project.yml.
-LOCALSPHINX   := $(CURDIR)/envs/default/bin/sphinx-build
 CACHEDIR      := $(CURDIR)/.cache
 MPLCONFIGDIR  := $(CACHEDIR)/matplotlib
 SPHINXOPTS    ?=
-ifeq ($(wildcard $(LOCALSPHINX)),)
 SPHINXBUILD   ?= sphinx-build
-else
-SPHINXBUILD   ?= $(LOCALSPHINX)
-endif
 export XDG_CACHE_HOME := $(CACHEDIR)
 export MPLCONFIGDIR := $(MPLCONFIGDIR)
 SOURCEDIR     = source
