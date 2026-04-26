@@ -9,7 +9,7 @@
 project = 'baltic'
 copyright = '2026, Gytis Dudas & Barney Potter'
 author = 'Gytis Dudas & Barney Potter'
-release = 'v0.1'
+release = 'v0.9 (Birch)'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -27,5 +27,7 @@ exclude_patterns = []
 # html_theme = 'sphinx_rtd_theme'
 html_theme = 'furo'
 html_static_path = ['_static']
+html_css_files = ['copybutton.css']
+html_js_files = ['copybutton.js']
 
 # Let ``furo`` use its built-in sidebar configuration.

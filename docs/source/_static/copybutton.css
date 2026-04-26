@@ -1,0 +1,29 @@
+div.highlight.has-copy-button {
+  position: relative;
+}
+
+.copy-code-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  border: 1px solid var(--color-code-foreground);
+  border-radius: 0.375rem;
+  background: var(--color-code-background);
+  color: var(--color-code-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
+  opacity: 0.9;
+}
+
+.copy-code-button:hover,
+.copy-code-button:focus {
+  opacity: 1;
+}
+
+div.highlight.has-copy-button pre {
+  padding-top: 2.5rem;
+}
