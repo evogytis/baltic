@@ -222,6 +222,64 @@ def convert_date_format(dateString,startFormat,endFormat):
     except ValueError as e:
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
+def to_scientific_notation_str(value, decimalPlaces=2, latex=True, omitPowerWhenZero=True):
+    """
+    Format number in scientific notation as str.
+
+    **Parameters**
+    value : float
+        Very large or very small number to be formatted.
+
+    decimalPlaces : int
+        How many significant digits to report. Defaults to 2.
+
+    latex : bool
+        Whether to format output str to LaTeX "$1.23\\times10^{3}$" or plain text "1.23 x 10^3". Defaults to True.
+
+    omitPowerWhenZero : bool
+        Whether to add the exponent when exponent is 0. Defaults to True.
+    
+    **Returns**
+
+    str
+        Scientifically formatted string
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> bt_utils.to_scientific_notation_str(3000000, latex=False)
+    '3.00 x 10^6'
+    >>> bt_utils.to_scientific_notation_str(0.0012)
+    '$1.20\times10^{-3}$'
+    >>> bt_utils.to_scientific_notation_str(2, latex=False, omitPowerWhenZero=True)
+    '2.00'
+    """
+    # handle special cases
+    if value == 0 or (isinstance(value, float) and math.isnan(value)):
+        return '0.0' if not latex else r"$0.0$"
+
+    sign = '-' if value < 0 else ''
+    x = abs(float(value))
+
+    # compute exponent and coefficient
+    exponent = int(math.floor(math.log10(x)))
+    coefficient = x / (10 ** exponent)
+
+    # format coefficient with dynamic precision
+    coeffFmt = f"{coefficient:.{int(decimalPlaces)}f}"
+
+    if omitPowerWhenZero and exponent == 0:
+        if latex:
+            return rf"${sign}{coeffFmt}$"
+        else:
+            return f"{sign}{coeffFmt}"
+
+    if latex:
+        return rf"${sign}{coeffFmt}\times10^{{{exponent}}}$"
+    else:
+        return f"{sign}{coeffFmt} x 10^{exponent}"
+
+
 def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False):
     """
     Return a deepcopied and reduced version of the tree provided where subtrees are labelled identically when branches evaluate switchFxn to False.
