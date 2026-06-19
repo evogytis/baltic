@@ -988,10 +988,170 @@ class Tree: ## tree class
         baseRefineIters: int = 20,
         refineItersPerTip: int = 10,
         maxRefineIters: int = 400,
+        returnRefinedDates: bool = True,
+    ):
+        """Reroot the tree by continuous root-to-tip regression.
+
+        For each represented branch, the optimal root position is solved
+        analytically rather than sampled on a grid. Tips with date ranges are
+        alternately projected into their ranges and refitted until convergence.
+
+        **Parameters**
+
+        stat : {"r^2", "correlation", "sum of squares"}, optional
+            Regression statistic to optimize. ``"sum of squares"`` is
+            minimized; the other statistics are maximized.
+        forcePositive : bool, optional
+            If true, exclude root positions with a negative regression slope.
+        nJobs : int or None, optional
+            Number of worker threads used to evaluate branches. ``None`` or a
+            non-positive value uses the available CPU count.
+        baseRefineIters : int, optional
+            Base number of ranged-date refinement iterations.
+        refineItersPerTip : int, optional
+            Additional ranged-date iterations allowed per uncertain tip.
+        maxRefineIters : int, optional
+            Upper limit on ranged-date refinement iterations.
+        returnRefinedDates : bool, optional
+            If true, return ``(tree, refined_dates)``. Otherwise return the tree.
+
+        **Returns**
+
+        :class:`.Tree` or tuple
+            Rerooted tree and, when requested, inferred uncertain tip dates.
+
+        **Notes**
+
+        Exact dates require one closed-form solve per branch. Date ranges use
+        iterative projection; a warning is emitted if refinement reaches its
+        iteration limit. The previous implementation remains available as
+        :meth:`root_by_regression_legacy`.
+
+        **Examples**
+
+        >>> rooted, inferred = tree.root_by_regression(  # doctest: +SKIP
+        ...     stat="sum of squares", nJobs=4
+        ... )
+        """
+        import sys
+        from os import cpu_count
+        from baltic.bt_utils import (
+            decimal_to_calendar_date,
+            _root_by_regression_closed_form,
+        )
+
+        valid_stats = ("r^2", "correlation", "sum of squares")
+        if stat not in valid_stats:
+            raise ValueError(
+                f"Invalid root-to-tip metric: {stat} (choose from {list(valid_stats)})"
+            )
+        if self.treeType != "divergence":
+            raise ValueError(
+                "Root-to-tip regression requires a divergence tree with dated tips."
+            )
+        if baseRefineIters < 1 or refineItersPerTip < 0 or maxRefineIters < 1:
+            raise ValueError("Regression refinement iteration limits must be positive.")
+
+        func_logger = logging.getLogger("baltic.tree.root_by_regression")
+        func_logger.setLevel(logging.INFO)
+        func_logger.propagate = False
+        if not func_logger.handlers:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(logging.Formatter("[root_by_regression] %(message)s"))
+            handler.setLevel(logging.INFO)
+            func_logger.addHandler(handler)
+
+        tips = self.get_external()
+        if len(tips) < 3:
+            func_logger.warning("Tree has fewer than three tips; returning unchanged.")
+            return (self, {}) if returnRefinedDates else self
+
+        uncertain = [
+            tip for tip in tips
+            if tip.absoluteTimeRange is not None and
+            abs(float(tip.absoluteTimeRange[1]) - float(tip.absoluteTimeRange[0])) > 1e-12
+        ]
+        if uncertain:
+            refine_iterations = min(
+                baseRefineIters + refineItersPerTip * len(uncertain),
+                maxRefineIters,
+            )
+        else:
+            refine_iterations = 1
+
+        workers = (cpu_count() or 1) if nJobs is None or nJobs <= 0 else nJobs
+        func_logger.info(
+            "Starting continuous root-to-tip regression: metric=%s, branches=%d, "
+            "uncertain_dates=%d, workers=%d",
+            stat,
+            max(0, len(self.Objects) - 1),
+            len(uncertain),
+            workers,
+        )
+        if uncertain and stat != "sum of squares":
+            func_logger.info(
+                "Ranged dates are updated by residual projection while optimizing %s.",
+                stat,
+            )
+
+        rooted, result = _root_by_regression_closed_form(
+            self,
+            criterion=stat,
+            force_positive=forcePositive,
+            n_jobs=nJobs,
+            max_date_iterations=refine_iterations,
+            return_result=True,
+        )
+        refined_dates = result["assigned_uncertain_dates"]
+
+        if uncertain and not result["date_converged"]:
+            message = (
+                "Root-to-tip uncertain-date refinement reached "
+                f"{result['date_iterations']} iterations without convergence."
+            )
+            func_logger.warning(message)
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
+
+        func_logger.info(
+            "Best root: branch=%s, lambda=%.6g from parent, %s=%.6g",
+            result["root_index"], result["lambda"], stat, result[stat],
+        )
+        func_logger.info(
+            "Regression: correlation=%.6g, r^2=%.6g, RSS=%.6g, slope=%.6g",
+            result["correlation"], result["r^2"],
+            result["sum of squares"], result["slope"],
+        )
+        if result["slope"] != 0.0:
+            tmrca = -result["intercept"] / result["slope"]
+            try:
+                calendar_tmrca = decimal_to_calendar_date(tmrca, fmt="%Y-%b-%d")
+            except (OverflowError, ValueError):
+                calendar_tmrca = None
+            if calendar_tmrca is None:
+                func_logger.info(
+                    "Intercept=%.6g, TMRCA=%.6f", result["intercept"], tmrca
+                )
+            else:
+                func_logger.info(
+                    "Intercept=%.6g, TMRCA=%.6f (%s)",
+                    result["intercept"], tmrca, calendar_tmrca,
+                )
+
+        return (rooted, refined_dates) if returnRefinedDates else rooted
+
+
+    def root_by_regression_legacy(
+        self,
+        stat: str = "r^2",
+        forcePositive: bool = True,
+        nJobs: int | None = None,
+        baseRefineIters: int = 20,
+        refineItersPerTip: int = 10,
+        maxRefineIters: int = 400,
         returnRefinedDates: bool = True
     ):
         """
-        Reroot self according to a root-to-tip regression analysis.
+        Reroot using the preserved legacy root-to-tip regression search.
 
         **Parameters**
 
@@ -1028,8 +1188,8 @@ class Tree: ## tree class
         >>> import io
         >>> import baltic as bt
         >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
-        >>> ll = bt.io.load_newick(handle, treeType="time", absoluteTime=True, variableDate=True)
-        >>> rooted, inferred_dates = ll.root_by_regression(nJobs=1)  # doctest: +SKIP
+        >>> ll = bt.io.load_newick(handle, treeType="divergence", absoluteTime=True, variableDate=True)
+        >>> rooted, inferred_dates = ll.root_by_regression_legacy(nJobs=1)  # doctest: +SKIP
         >>> isinstance(inferred_dates, dict)  # doctest: +SKIP
         True
         """
@@ -1042,13 +1202,13 @@ class Tree: ## tree class
         )
 
         # Logging setup
-        func_logger = logging.getLogger("baltic.tree.root_by_regression")
+        func_logger = logging.getLogger("baltic.tree.root_by_regression_legacy")
         func_logger.setLevel(logging.INFO)
         func_logger.propagate = False
         if not func_logger.handlers:
             import sys
             handler = logging.StreamHandler(sys.stdout)
-            handler.setFormatter(logging.Formatter("[root_by_regression] %(message)s"))
+            handler.setFormatter(logging.Formatter("[root_by_regression_legacy] %(message)s"))
             handler.setLevel(logging.INFO)
             func_logger.addHandler(handler)
 

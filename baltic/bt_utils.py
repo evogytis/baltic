@@ -1773,7 +1773,7 @@ def _rtt_worker(args):
     """
     Evaluate one candidate root in a Monte Carlo root-to-tip analysis.
 
-    This helper is used internally by :meth:`baltic.tree.Tree.root_by_regression`.
+    This helper is used internally by :meth:`baltic.tree.Tree.root_by_regression_legacy`.
 
     **Parameters**
 
@@ -1889,7 +1889,7 @@ def _rtt_worker(args):
         best_score = None
         best_dates = None
 
-    # attach metadata expected by root_by_regression
+    # attach metadata expected by root_by_regression_legacy
     best_res["root_index"] = root_index
     best_res["score"] = best_score
     best_res["assigned_uncertain_dates"] = best_dates
@@ -1906,7 +1906,7 @@ def _adjust_tip_dates_by_regression(
     """
     Receives a list of tips with uncertain dates and regression parameters, adjusts .absoluteTime (within uncertainty range .absoluteTimeRange) to be as close to regression line as possible.
 
-    This helper supports :meth:`baltic.tree.Tree.root_by_regression` after
+    This helper supports :meth:`baltic.tree.Tree.root_by_regression_legacy` after
     :func:`_root_to_tip` has estimated a line.
 
     **Parameters**
@@ -2482,3 +2482,339 @@ def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineW
                path_effects.Stroke(linewidth=mainWeight, foreground=mainColour)]
 
     return effects
+# -----------------------------------------------------------------------------
+# CLOSED-FORM ROOT-TO-TIP REGRESSION
+# -----------------------------------------------------------------------------
+
+from concurrent.futures import ThreadPoolExecutor
+from os import cpu_count
+
+import numpy as np
+
+
+_RTT_VALID_CRITERIA = ("r^2", "correlation", "sum of squares")
+
+
+def _rtt_regression_summary(dates, distances):
+    """Return ordinary least-squares statistics for one rooting position."""
+    dates = np.asarray(dates, dtype=float)
+    distances = np.asarray(distances, dtype=float)
+    tc = dates - dates.mean()
+    dc = distances - distances.mean()
+    date_ss = float(np.dot(tc, tc))
+    if date_ss <= 0.0:
+        raise ValueError("Root-to-tip regression requires distinct tip dates.")
+
+    slope = float(np.dot(tc, dc) / date_ss)
+    intercept = float(distances.mean() - slope * dates.mean())
+    residuals = distances - (intercept + slope * dates)
+    rss = float(np.dot(residuals, residuals))
+    distance_ss = float(np.dot(dc, dc))
+    if distance_ss <= 0.0:
+        correlation = r_squared = np.nan
+    else:
+        correlation = float(np.dot(tc, dc) / np.sqrt(date_ss * distance_ss))
+        r_squared = correlation ** 2
+
+    return {
+        "slope": slope,
+        "intercept": intercept,
+        "correlation": correlation,
+        "r^2": r_squared,
+        "sum of squares": rss,
+    }
+
+
+def _rtt_closed_form_score(summary, criterion):
+    value = summary[criterion]
+    if np.isnan(value):
+        return np.inf if criterion == "sum of squares" else -np.inf
+    return value
+
+
+def _rtt_best_edge_position(dates, distances_at_parent, child_mask, edge_length,
+                        criterion="r^2", force_positive=True):
+    """Solve the continuous root position on one parent-to-child edge."""
+    if criterion not in _RTT_VALID_CRITERIA:
+        raise ValueError(f"criterion must be one of {_RTT_VALID_CRITERIA}")
+
+    dates = np.asarray(dates, dtype=float)
+    x = np.asarray(distances_at_parent, dtype=float)
+    mask = np.asarray(child_mask, dtype=bool)
+    length = float(edge_length)
+    if length < 0.0:
+        raise ValueError("Negative branch lengths are not supported.")
+
+    # As the root moves parent -> child, child-side tips get closer.
+    polarity = np.where(mask, -1.0, 1.0)
+    t = dates - dates.mean()
+    xc = x - x.mean()
+    s = polarity - polarity.mean()
+    T = float(np.dot(t, t))
+    if T <= 0.0:
+        raise ValueError("Root-to-tip regression requires distinct tip dates.")
+    S = float(np.dot(s, s))
+    C = float(np.dot(t, s))
+    B = float(np.dot(t, xc))
+    A = float(np.dot(s, xc))
+    V = float(np.dot(xc, xc))
+
+    lower, upper = 0.0, length
+    if force_positive:
+        # beta(mu) = (B + mu*C) / T.
+        if abs(C) < 1e-15:
+            if B < 0.0:
+                return None
+        else:
+            zero = -B / C
+            if C > 0.0:
+                lower = max(lower, zero)
+            else:
+                upper = min(upper, zero)
+            if lower > upper + 1e-12:
+                return None
+            lower = float(np.clip(lower, 0.0, length))
+            upper = float(np.clip(upper, 0.0, length))
+
+    candidates = [lower, upper]
+    if criterion == "sum of squares":
+        denominator = S * T - C * C
+        if abs(denominator) > 1e-15:
+            # For d(mu) = x + mu*s. The opposite convention flips this sign.
+            stationary = (B * C - A * T) / denominator
+            if lower <= stationary <= upper:
+                candidates.append(float(stationary))
+    else:
+        denominator = B * S - C * A
+        if abs(denominator) > 1e-15:
+            stationary = (C * V - B * A) / denominator
+            if lower <= stationary <= upper:
+                candidates.append(float(stationary))
+
+    best = None
+    for mu in candidates:
+        summary = _rtt_regression_summary(dates, x + mu * polarity)
+        if force_positive and summary["slope"] < -1e-12:
+            continue
+        value = _rtt_closed_form_score(summary, criterion)
+        better = best is None
+        if best is not None and criterion == "sum of squares":
+            better = value < best[0]
+        elif best is not None:
+            better = value > best[0]
+        if better:
+            best = (value, mu, summary)
+
+    if best is None:
+        return None
+    _, mu, summary = best
+    lam = 0.0 if length == 0.0 else mu / length
+    return {
+        **summary,
+        "criterion": criterion,
+        "criterion_value": summary[criterion],
+        "lambda": float(lam),
+        # Tree.reroot uses the complementary root-to-child fraction.
+        "branch_fraction": float(1.0 - lam),
+        "distance_from_parent": float(mu),
+        "edge_length": length,
+    }
+
+
+def _rtt_date_bounds(tips, tip_dates=None):
+    if tip_dates is None:
+        midpoint = [tip.absoluteTime for tip in tips]
+        bounds = [
+            tip.absoluteTimeRange if tip.absoluteTimeRange is not None
+            else (tip.absoluteTime, tip.absoluteTime)
+            for tip in tips
+        ]
+    elif callable(tip_dates):
+        values = [tip_dates(tip) for tip in tips]
+        midpoint = []
+        bounds = []
+        for value in values:
+            if np.isscalar(value):
+                midpoint.append(value)
+                bounds.append((value, value))
+            else:
+                lo, hi = value
+                midpoint.append(0.5 * (lo + hi))
+                bounds.append((lo, hi))
+    else:
+        values = [tip_dates[tip.name] for tip in tips]
+        midpoint = []
+        bounds = []
+        for value in values:
+            if np.isscalar(value):
+                midpoint.append(value)
+                bounds.append((value, value))
+            else:
+                lo, hi = value
+                midpoint.append(0.5 * (lo + hi))
+                bounds.append((lo, hi))
+
+    if any(value is None for value in midpoint):
+        raise ValueError("Every tip must have an absoluteTime or supplied tip date.")
+    lo = np.asarray([bound[0] for bound in bounds], dtype=float)
+    hi = np.asarray([bound[1] for bound in bounds], dtype=float)
+    if np.any(lo > hi) or not np.all(np.isfinite(lo)) or not np.all(np.isfinite(hi)):
+        raise ValueError("Tip date bounds must be finite and ordered lower <= upper.")
+    midpoint = np.asarray(midpoint, dtype=float)
+    midpoint = np.clip(midpoint, lo, hi)
+    return midpoint, lo, hi
+
+
+def _rtt_edge_records(tree, tips):
+    """Build all edge polarities and endpoint-to-tip distances in one traversal."""
+    tip_index = {tip: index for index, tip in enumerate(tips)}
+    masks = {}
+
+    def collect_mask(branch):
+        mask = np.zeros(len(tips), dtype=bool)
+        if branch in tip_index:
+            mask[tip_index[branch]] = True
+        if branch.is_node():
+            for child in branch.children:
+                mask |= collect_mask(child)
+        masks[branch] = mask
+        return mask
+
+    collect_mask(tree.root)
+    records = []
+    root_distances = np.asarray([tip.height for tip in tips], dtype=float)
+
+    def visit(parent, distances):
+        if not parent.is_node():
+            return
+        for child in parent.children:
+            mask = masks[child]
+            length = float(child.length)
+            records.append((child, distances, mask, length))
+            polarity = np.where(mask, -1.0, 1.0)
+            visit(child, distances + length * polarity)
+
+    visit(tree.root, root_distances)
+    return records
+
+
+def _rtt_fit_edge_with_date_ranges(record, initial_dates, lo, hi, criterion,
+                               force_positive, max_iterations, tolerance):
+    branch, distances, mask, length = record
+    dates = initial_dates.copy()
+    uncertain = (hi - lo) > 1e-12
+    result = None
+    converged = not np.any(uncertain)
+
+    for iteration in range(max(1, int(max_iterations))):
+        result = _rtt_best_edge_position(
+            dates, distances, mask, length,
+            criterion=criterion, force_positive=force_positive,
+        )
+        if result is None:
+            return None
+        if not np.any(uncertain):
+            converged = True
+            break
+
+        slope = result["slope"]
+        if abs(slope) < 1e-15:
+            break
+        polarity = np.where(mask, -1.0, 1.0)
+        rooted_distances = distances + result["distance_from_parent"] * polarity
+        updated = dates.copy()
+        implied = (rooted_distances[uncertain] - result["intercept"]) / slope
+        updated[uncertain] = np.clip(implied, lo[uncertain], hi[uncertain])
+        delta = float(np.max(np.abs(updated - dates)))
+        dates = updated
+        if delta < tolerance:
+            converged = True
+            # Refit once so reported statistics correspond to final dates.
+            result = _rtt_best_edge_position(
+                dates, distances, mask, length,
+                criterion=criterion, force_positive=force_positive,
+            )
+            break
+
+    # At the iteration limit, dates may be one projection ahead of the last
+    # fit. Always synchronize the reported regression with returned dates.
+    result = _rtt_best_edge_position(
+        dates, distances, mask, length,
+        criterion=criterion, force_positive=force_positive,
+    )
+    if result is None:
+        return None
+    result.update({
+        "root": branch,
+        "root_index": branch.index,
+        "tip_dates": dates,
+        "assigned_uncertain_dates": {
+            tip_index: float(date)
+            for tip_index, date in enumerate(dates) if uncertain[tip_index]
+        },
+        "date_iterations": iteration + 1,
+        "date_converged": converged,
+    })
+    return result
+
+
+def _find_root_by_regression_closed_form(tree, criterion="r^2", force_positive=True,
+                                        tip_dates=None, n_jobs=1,
+                                        max_date_iterations=100, tolerance=1e-10):
+    """Find the best continuous branch position without modifying ``tree``."""
+    if tree.treeType != "divergence":
+        raise ValueError("Closed-form rooting requires a divergence tree.")
+    if criterion not in _RTT_VALID_CRITERIA:
+        raise ValueError(f"criterion must be one of {_RTT_VALID_CRITERIA}")
+
+    tree.traverse_tree()
+    tips = tree.get_external()
+    if len(tips) < 3:
+        raise ValueError("Root-to-tip rooting requires at least three tips.")
+    initial_dates, lo, hi = _rtt_date_bounds(tips, tip_dates)
+    records = _rtt_edge_records(tree, tips)
+
+    def solve(record):
+        return _rtt_fit_edge_with_date_ranges(
+            record, initial_dates, lo, hi, criterion, force_positive,
+            max_date_iterations, tolerance,
+        )
+
+    if n_jobs is None or n_jobs <= 0:
+        n_jobs = cpu_count() or 1
+    if n_jobs == 1 or len(records) == 1:
+        results = [solve(record) for record in records]
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+            results = list(pool.map(solve, records))
+    results = [result for result in results if result is not None]
+    if not results:
+        raise ValueError("No candidate edge produced a valid regression.")
+
+    if criterion == "sum of squares":
+        best = min(results, key=lambda result: result[criterion])
+    else:
+        best = max(results, key=lambda result: result[criterion])
+    best["assigned_uncertain_dates"] = {
+        tips[index].name: value
+        for index, value in best["assigned_uncertain_dates"].items()
+    }
+    return best
+
+
+def _root_by_regression_closed_form(tree, criterion="r^2", force_positive=True,
+                                   tip_dates=None, n_jobs=1,
+                                   max_date_iterations=100, tolerance=1e-10,
+                                   return_result=False):
+    """Find the continuous optimum, assign inferred dates, and reroot ``tree``."""
+    result = _find_root_by_regression_closed_form(
+        tree, criterion, force_positive, tip_dates, n_jobs,
+        max_date_iterations, tolerance,
+    )
+    for tip in tree.get_external():
+        if tip.name in result["assigned_uncertain_dates"]:
+            tip.absoluteTime = result["assigned_uncertain_dates"][tip.name]
+    branch = result["root"]
+    if not (branch.parent is tree.root and result["lambda"] <= 1e-12):
+        tree.reroot(branch=branch, branchFrac=result["branch_fraction"])
+    return (tree, result) if return_result else tree
