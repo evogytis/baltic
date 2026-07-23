@@ -1605,7 +1605,19 @@ def plot_skygrid(ax, logFile, burnin=None, mostRecent=None, hpdLvl=0.95, orienta
     return ax
 
 
-def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjection, targetFxn=None, shoulderPositionFxn=None, colourFxn=None, originProjection=None, **lineKwargs):
+def connect_tree_to_map(
+    treeAx,
+    mapAx,
+    tree,
+    tipCoordinates,
+    destinationProjection,
+    targetFxn=None,
+    shoulderPositionFxn=None,
+    colourFxn=None,
+    originProjection=None,
+    treePositionFxn=None,
+    **lineKwargs,
+):
     """
     treeAx is the Axes object where the tree is plotted already.
     mapAx is the Axes object where the map is plotted already.
@@ -1613,7 +1625,9 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
     tipCoordinates is a dict of {tip_name: (x, y)} coordinates.
     destinationProjection is a cartopy ccrs projection object used in mapAx Axes.
     targetFxn is a filtering function for tree tips (default: always True).
-    shoulderPositionFxn is a function that connects the x-axis coordinate provided by this function to the map (default: None, tips are directly connected to the map).
+    shoulderPositionFxn optionally routes connections through an intermediate
+    tree-axis position.
+    treePositionFxn optionally returns the plotted position of each tree tip.
     colourFxn returns the colour of a tip.
     originProjection is a cartopy ccrs object used to transform the coordinate system of tipCoordinates (default: ccrs.PlateCarree()).
 
@@ -1638,8 +1652,13 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
         Predicate selecting which tips to connect.
 
     shoulderPositionFxn : callable, optional
-        Function returning an intermediate x-position on the tree panel before
-        routing to the map.
+        Function returning either an intermediate x-position or an already
+        projected ``(x, y)`` position on the tree panel before routing to the
+        map.
+
+    treePositionFxn : callable, optional
+        Function mapping each tip to its plotted ``(x, y)`` position. This can
+        use :meth:`baltic.tree.Tree.project_circular_point` for circular trees.
 
     colourFxn : callable, optional
         Function mapping tips to connector colours.
@@ -1683,17 +1702,26 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
         fc = colourFxn(k)
 
         lat, lon = tipCoordinates[k.name]
-        latT, lonT = destinationProjection.transform_point(lon, lat, src_crs=originProjection) ## convert to plotted map coordinates
+        mapX, mapY = destinationProjection.transform_point(lon, lat, src_crs=originProjection) ## convert to plotted map coordinates
+
+        if treePositionFxn is None:
+            tipX, tipY = k.x, k.y
+        else:
+            tipX, tipY = treePositionFxn(k)
 
         if shoulderPositionFxn is None:
-            x, y = k.x, k.y
+            x, y = tipX, tipY
         else:
-            x, y = shoulderPositionFxn(k), k.y
+            shoulderPosition = shoulderPositionFxn(k)
+            if np.isscalar(shoulderPosition):
+                x, y = shoulderPosition, k.y
+            else:
+                x, y = shoulderPosition
 
         connection = ConnectionPatch(xyA=(x, y),
                                      coordsA=treeAx.transData,
                                      axesA=treeAx,
-                                     xyB=(latT, lonT),
+                                     xyB=(mapX, mapY),
                                      coordsB=mapAx.transData,
                                      axesB=mapAx,
                                      color=fc, **localLineKwargs) ## colour, line style, linewidth, order, transparency
@@ -1706,7 +1734,7 @@ def connect_tree_to_map(treeAx, mapAx, tree, tipCoordinates, destinationProjecti
         bbB = axB.bbox
 
         if (bbA.contains(*pA) or bbB.contains(*pB)) and shoulderPositionFxn is not None: ## checks if line will be visible
-            treeAx.plot([k.x, x], [y, y], color=fc, **localLineKwargs) ## straight line from the tip to the x-axis coordinate provided by the shoulderPositionFxn
+            treeAx.plot([tipX, x], [tipY, y], color=fc, **localLineKwargs) ## line from the tip to the shoulder position
 
         mapAx.add_patch(connection)
 
