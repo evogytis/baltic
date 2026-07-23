@@ -2659,6 +2659,96 @@ class Tree: ## tree class
         return ax
 
 
+    def project_circular_point(
+        self,
+        x,
+        y,
+        circStart=0.0,
+        circFrac=1.0,
+        inwardSpace=0.0,
+        normaliseHeight=None,
+    ):
+        """Project a tree-space coordinate onto a circular tree layout.
+
+        This method applies the same radial normalization and angular
+        projection used by :meth:`plot_tree`, making it suitable for placing
+        annotations and other artists on circular tree axes.
+
+        **Parameters**
+
+        x : float
+            Coordinate along the informative tree axis, usually ``height``
+            for divergence trees or ``absoluteTime`` for time trees.
+        y : float
+            Coordinate along the non-informative tree axis.
+        circStart : float, optional
+            Fraction of the circle at which plotting begins.
+        circFrac : float, optional
+            Fraction of the full circle used by the layout.
+        inwardSpace : float, optional
+            Radial spacing applied before normalization. Negative values use
+            the outward-facing convention of circular tree plots.
+        normaliseHeight : callable, optional
+            Function mapping the informative coordinate to radial distance.
+            By default, coordinates are normalized over the tree's height or
+            absolute-time range.
+
+        **Returns**
+
+        tuple[float, float]
+            Cartesian coordinates in the circular tree's data space.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> ll._assign_tree_coordinates()
+        >>> tip = ll.get_leaf("A")
+        >>> tuple(round(value, 6) for value in ll.project_circular_point(tip.height, tip.y))
+        (-0.866025, 0.5)
+        """
+        if circFrac <= 0.0:
+            raise ValueError(
+                f"Circular tree layout not given any space (circFrac == {circFrac})"
+            )
+        if self.ySpan <= 0.0:
+            raise ValueError(
+                "Circular coordinates have not been assigned; call a tree "
+                "coordinate or plotting method first."
+            )
+
+        if inwardSpace < 0.0:
+            inwardSpace -= self.treeHeight
+
+        if normaliseHeight is None:
+            coordinateAttribute = (
+                "height" if self.treeType == "divergence" else "absoluteTime"
+            )
+            allXs = [
+                getattr(k, coordinateAttribute)
+                for k in self.Objects
+                if getattr(k, coordinateAttribute, None) is not None
+            ]
+            if not allXs:
+                raise ValueError(
+                    f"Tree objects do not have {coordinateAttribute} coordinates."
+                )
+
+            minX, maxX = min(allXs), max(allXs)
+            if minX == maxX:
+                raise ValueError("Circular tree coordinates have zero radial span.")
+            normaliseHeight = lambda value: (value - minX) / (maxX - minX)
+
+        radius = normaliseHeight(x + inwardSpace)
+        return project_to_polar(
+            x=radius,
+            y=y,
+            yRange=self.ySpan,
+            circleStart=circStart,
+            circleFraction=circFrac,
+        )
+
+
     def plot_text(
         self,
         ax,
@@ -2760,8 +2850,6 @@ class Tree: ## tree class
             ax = self._plot_rectangular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,orientation=orientation,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
 
         elif treeType == 'circular':
-            if inwardSpace<0: inwardSpace-=self.treeHeight
-
             allXs = list(map(xCoordinateFxn, self.Objects))
             if normaliseHeight is None:
                 normaliseHeight = lambda value: (value - min(allXs)) / (
@@ -2999,9 +3087,7 @@ class Tree: ## tree class
             localKwargs['zorder'] = 4
 
         for k in filter(targetFxn, self.Objects):  ## iterate over branches
-            x = normaliseHeight(
-                xCoordinateFxn(k) + inwardSpace
-            )  ## get branch x position
+            x = xCoordinateFxn(k)
             y = yCoordinateFxn(k)  ## get y position
 
             rotationRadians = (circStart + (circFrac * y/total_y)) * 2*math.pi
@@ -3015,7 +3101,14 @@ class Tree: ## tree class
 
             colour = colourFxn(k)
 
-            x,y = project_to_polar(x=x,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac)
+            x, y = self.project_circular_point(
+                x=x,
+                y=y,
+                circStart=circStart,
+                circFrac=circFrac,
+                inwardSpace=inwardSpace,
+                normaliseHeight=normaliseHeight,
+            )
 
             ax.text(
                 x,
@@ -3094,7 +3187,6 @@ class Tree: ## tree class
                 circStart = localKwargs['circStart'] if 'circStart' in localKwargs else 0.0
                 circFrac = localKwargs['circFrac'] if 'circFrac' in localKwargs else 1.0
                 inwardSpace = localKwargs['inwardSpace'] if 'inwardSpace' in localKwargs else 0.0
-                if inwardSpace < 0: inwardSpace-=self.treeHeight
             elif 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': ## ignore when dealing with unrooted trees, but warn
                 warnings.warn("Unrooted tree layout cannot accommodate aligned text labels, ignoring and not plotting connecting lines.")
 
@@ -3103,8 +3195,13 @@ class Tree: ## tree class
                 x = k.height if self.treeType == 'divergence' else k.absoluteTime
 
                 if 'treeType' in localKwargs and localKwargs['treeType'] == 'circular': ## circular layout
-                    x1, y1 = project_to_polar(normaliseHeight(x+inwardSpace), k.y, self.ySpan, circleStart=circStart, circleFraction=circFrac)
-                    x2, y2 = project_to_polar(normaliseHeight(xCoordinateFxn(k)+inwardSpace), k.y, self.ySpan, circleStart=circStart, circleFraction=circFrac)
+                    x1, y1 = self.project_circular_point(
+                        x, k.y, circStart, circFrac, inwardSpace, normaliseHeight
+                    )
+                    x2, y2 = self.project_circular_point(
+                        xCoordinateFxn(k), k.y, circStart, circFrac,
+                        inwardSpace, normaliseHeight
+                    )
                 elif 'treeType' in localKwargs and localKwargs['treeType'] == 'unrooted': ## ignore when dealing with unrooted trees
                     pass
                 else: ## rectangular layout
@@ -3271,7 +3368,6 @@ class Tree: ## tree class
 
         elif treeType=='circular':
             if inwardSpace is None: inwardSpace = 0.0
-            if inwardSpace<0: inwardSpace-=self.treeHeight
 
             if circStart is None: circStart = 0.0
             if circFrac is None: circFrac = 1.0
@@ -3294,10 +3390,14 @@ class Tree: ## tree class
 
             elif treeType=='circular':
 
-                x=normaliseHeight(xCoordinateFxn(k)+inwardSpace) ## find normalised x position along circle's radius
-                y=yCoordinateFxn(k) ## get y position along circle's perimeter
-
-                px,py=project_to_polar(x=x,y=y,yRange=self.ySpan,circleStart=circStart,circleFraction=circFrac) ## polar x and polar y coordinates for current branch
+                px, py = self.project_circular_point(
+                    x=xCoordinateFxn(k),
+                    y=yCoordinateFxn(k),
+                    circStart=circStart,
+                    circFrac=circFrac,
+                    inwardSpace=inwardSpace,
+                    normaliseHeight=normaliseHeight,
+                )
 
                 xs.append(px)
                 ys.append(py)
@@ -3472,11 +3572,10 @@ class Tree: ## tree class
 
         mainTargetFxn = lambda k: isinstance(k,Clade) and targetFxn(k)
 
-        total_y = self.ySpan
-
         localKwargs=dict(kwargs)
 
         linspace=lambda start,stop,n: list(start+((stop-start)/(n-1))*i for i in range(n)) if n>1 else stop
+        project=lambda x,y: self.project_circular_point(x,y,circStart,circFrac,inwardSpace,normaliseHeight)
 
         ##############
         w=self.ySpan*cladeBaseWidth
@@ -3484,7 +3583,7 @@ class Tree: ## tree class
         for k in filter(mainTargetFxn,self.Objects):
 
             ###############
-            x = normaliseHeight(xCoordinateFxn(k)+inwardSpace) ## x coordinate where clade begins
+            x = xCoordinateFxn(k) ## x coordinate where clade begins
             y = yCoordinateFxn(k)
 
             ylo_right = y-k.width/2 ## lower y coordinate for clade end
@@ -3493,12 +3592,12 @@ class Tree: ## tree class
             ylo_left = y-w/2 ## trapezoid_base width / 2
             yhi_left = y+w/2
 
-            clade_base = [project_to_polar(x=x,y=ylo_left,yRange=total_y,circleStart=circStart,circleFraction=circFrac),project_to_polar(x=x,y=yhi_left,yRange=total_y,circleStart=circStart,circleFraction=circFrac)] ## line defining the beginning of the clade
+            clade_base = [project(x,ylo_left),project(x,yhi_left)] ## line defining the beginning of the clade
 
-            end_x=normaliseHeight(endAttrFxn(k)+inwardSpace) ## x coordinate end where clade finishes
+            end_x=endAttrFxn(k) ## x coordinate end where clade finishes
 
-            hi_arc = [project_to_polar(x=end_x,y=arc_y,yRange=total_y,circleStart=circStart,circleFraction=circFrac) for arc_y in linspace(ylo_right,yhi_right,precision)] ## arc at the end of the clade
-            lo_arc = [project_to_polar(x=x,y=arc_y,yRange=total_y,circleStart=circStart,circleFraction=circFrac) for arc_y in linspace(ylo_right,yhi_right,precision)] ## arc at the beginning of the clade
+            hi_arc = [project(end_x,arc_y) for arc_y in linspace(ylo_right,yhi_right,precision)] ## arc at the end of the clade
+            lo_arc = [project(x,arc_y) for arc_y in linspace(ylo_right,yhi_right,precision)] ## arc at the beginning of the clade
 
             #####################################
             if shape=='triangle': ## triangles start at a sharp-ish point
@@ -3512,10 +3611,14 @@ class Tree: ## tree class
 
             elif style=='skewed': ## if clade style is skewed need to interpolate smooth curve
                 early_end=min([xCoordinateFxn(q) for q in k.subtree if q.is_leaf()])
-                early_x=normaliseHeight(early_end+inwardSpace)
+                adjustedInwardSpace = inwardSpace-self.treeHeight if inwardSpace<0 else inwardSpace
+                end_radius=normaliseHeight(end_x+adjustedInwardSpace)
+                early_radius=normaliseHeight(early_end+adjustedInwardSpace)
+                identity=lambda value: value
+                project_radius=lambda radius,y: self.project_circular_point(radius,y,circStart,circFrac,normaliseHeight=identity)
 
                 ############
-                blended_arc = [project_to_polar(x=arc_x,y=arc_y,yRange=total_y,circleStart=circStart,circleFraction=circFrac) for arc_x,arc_y in zip(linspace(end_x,early_x,precision),linspace(ylo_right,yhi_right,precision))] ## arc at the end of the clade
+                blended_arc = [project_radius(radius,arc_y) for radius,arc_y in zip(linspace(end_radius,early_radius,precision),linspace(ylo_right,yhi_right,precision))] ## arc at the end of the clade
 
                 coords += blended_arc[::-1]
             ######################################
@@ -3714,16 +3817,13 @@ class Tree: ## tree class
         ], f'Unrecognised clade shape "{cladeShape}"'
 
         assert circFrac>0.0,'Circular tree layout not given any space (circFrac == %s)'%(circFrac)
-        # if inwardSpace<0: inwardSpace-=self.treeHeight
 
         localKwargs=dict(kwargs)
-
-        # self._drawTree(pad_nodes=pad_nodes) ## computes y coordinates with padding
-        total_y = self.ySpan
 
         allXs=list(map(xCoordinateFxn,self.Objects)) + sum([list(map(xCoordinateFxn,w.subtree)) for w in self.Objects if isinstance(w,Clade)],[]) ## look at both branch heights and last heights of clades
         if normaliseHeight is None: normaliseHeight=lambda value: (value-min(allXs))/(max(allXs)-min(allXs))
         linspace=lambda start,stop,n: list(start+((stop-start)/(n-1))*i for i in range(n)) if n>1 else stop
+        project=lambda x,y: self.project_circular_point(x,y,circStart,circFrac,inwardSpace,normaliseHeight)
 
         branches=[]
         colours=[]
@@ -3731,8 +3831,8 @@ class Tree: ## tree class
 
         for k in filter(targetFxn,self.Objects): ## iterate over branches
 
-            x = normaliseHeight(xCoordinateFxn(k)+inwardSpace) ## get branch x position
-            xp = normaliseHeight(xCoordinateFxn(k.parent)+inwardSpace) if k.parent.parent else x ## get parent x position
+            x = xCoordinateFxn(k) ## get branch x position
+            xp = xCoordinateFxn(k.parent) if k.parent.parent else x ## get parent x position
             y = yCoordinateFxn(k) ## get y position
             yp = yCoordinateFxn(k.parent) if k.parent.parent else y ## get parent y position
 
@@ -3743,17 +3843,17 @@ class Tree: ## tree class
                 colours.append((0.7,0.7,0.7))
             linewidths.append(widthFxn(k)) if callable (widthFxn) else linewidths.append(widthFxn)
 
-            px,py = project_to_polar(x=x,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac) ## polar x and polar y coordinates for current branch
-            pxp,pyp = project_to_polar(x=xp,y=yp,yRange=total_y,circleStart=circStart,circleFraction=circFrac) ## polar x and polar y coordinates for branch parent
+            px,py = project(x,y) ## polar x and polar y coordinates for current branch
+            pxp,pyp = project(xp,yp) ## polar x and polar y coordinates for branch parent
 
             if connectionType=='baltic':
 
-                branches.append((project_to_polar(x=xp,y=y,yRange=total_y,circleStart=circStart,circleFraction=circFrac),(px,py))) ## horizontal line from parent to current branch
+                branches.append((project(xp,y),(px,py))) ## horizontal line from parent to current branch
 
                 if k.is_node():
                     yl,yr=yCoordinateFxn(k.children[0]),yCoordinateFxn(k.children[-1]) ## get leftmost and rightmost children's y coordinates
 
-                    coordinates = tuple([project_to_polar(x=x,y=arc_y,yRange=total_y,circleStart=circStart,circleFraction=circFrac) for arc_y in linspace(yl,yr,precision)]) ## compute polar coordinates for arc of node
+                    coordinates = tuple([project(x,arc_y) for arc_y in linspace(yl,yr,precision)]) ## compute polar coordinates for arc of node
 
                     branches.append(coordinates) ## add curved segment at node
 
@@ -3768,7 +3868,7 @@ class Tree: ## tree class
 
             elif connectionType=='elbow':
 
-                coordinates = tuple([(px,py)]+[project_to_polar(x=xp,y=arc_y,yRange=total_y,circleStart=circStart,circleFraction=circFrac) for arc_y in linspace(y,yp,precision)]) ## compute polar coordinates for arc at parent + horizontal line to current branch
+                coordinates = tuple([(px,py)]+[project(xp,arc_y) for arc_y in linspace(y,yp,precision)]) ## compute polar coordinates for arc at parent + horizontal line to current branch
 
                 branches.append(coordinates) ## straight line from parent to current branch
                 linewidths+=[linewidths[-1] for q in coordinates] ## repeat linewidths
@@ -3929,7 +4029,6 @@ class Tree: ## tree class
             if circFrac is None: circFrac = 1.0
 
             if inwardSpace is None: inwardSpace = 0.0
-            if inwardSpace<0: inwardSpace-=self.treeHeight
 
             if precision is None: precision = 15
             if orientation is not None: warnings.warn('Circular trees do not have an orientation parameter, ignoring')
