@@ -3343,6 +3343,7 @@ class Tree: ## tree class
 
         localKwargs=dict(kwargs)
 
+        nodes=[]
         xs=[]
         ys=[]
         colours=[]
@@ -3383,6 +3384,7 @@ class Tree: ## tree class
 
         ########
         for k in filter(targetFxn, self.Objects):
+            nodes.append(k)
             if treeType=='rectangular':
 
                 xs.append(xCoordinateFxn(k))
@@ -3443,7 +3445,7 @@ class Tree: ## tree class
                 **localKwargs,
             )  ## put a circle at each tip
 
-        return ax
+        return ax, {node: (x, y) for node, x, y in zip(nodes, xs, ys)} ## return axes and dictionary mapping nodes to their plotted coordinates
 
 
     def _plot_rectangular_clades(self,ax,xCoordinateFxn,yCoordinateFxn,endAttrFxn,targetFxn,colour,orientation,style,cladeBaseWidth,**kwargs):

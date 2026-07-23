@@ -5,3 +5,5 @@ baltic/__pycache__/
 docs/build/
 docs/envs/
 docs/.cache/
+.conda-env-test/
+.mplconfig/
