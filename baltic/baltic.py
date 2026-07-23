@@ -284,11 +284,25 @@ def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
     >>> ll = bt.make_tree_JSON(json_tree, translation, treeType="divergence")
     >>> sorted(tip.name for tip in ll.get_external())
     ['A', 'B']
+    >>> unnamed_json_tree = {
+    ...     "node_attrs": {"div": 0.0},
+    ...     "children": [
+    ...         {"name": "A", "node_attrs": {"div": 1.0}},
+    ...         {"name": "B", "node_attrs": {"div": 1.2}},
+    ...     ],
+    ... }
+    >>> ll = bt.make_tree_JSON(unnamed_json_tree, translation, treeType="divergence")
+    >>> ll.root.index
+    'NODE_0000001'
     """
+    node_name_key = jsonTranslationDict['name']
+
     if 'children' in jsonNode: ## only nodes have children
         newNode=Node()
     else:
-        newNode=Leaf(name = jsonNode[jsonTranslationDict['name']])
+        if node_name_key not in jsonNode:
+            raise KeyError(f"JSON leaf is missing required name field '{node_name_key}'.")
+        newNode=Leaf(name = jsonNode[node_name_key])
 
     if tre is None:
         tre = Tree(treeType)
@@ -298,9 +312,15 @@ def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
         attr = jsonNode.pop('attr')
         jsonNode.update(attr)
 
+    if node_name_key in jsonNode:
+        node_name = jsonNode[node_name_key]
+    elif 'children' in jsonNode:
+        node_name = f"NODE_{len(tre.Objects) + 1:07d}"
+        jsonNode[node_name_key] = node_name
+
     newNode.parent = tre.curNode ## set parent-child relationships
     tre.curNode.children.append(newNode)
-    newNode.index = jsonNode[jsonTranslationDict['name']] ## indexing is based on name
+    newNode.index = node_name ## indexing is based on name
     newNode.traits = {n: jsonNode[n] for n in list(jsonNode.keys()) if n != 'children'} ## set traits to non-children attributes
     tre.Objects.append(newNode)
     tre.curNode = newNode

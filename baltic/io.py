@@ -269,16 +269,6 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
 
     assert treeType in ['divergence', 'time'], f"Unrecognised treeType {treeType}. Must be 'divergence' or 'time'."
 
-    if jsonTranslation is None:
-        jsonTranslation = {'name': 'name', 'absoluteTime': 'num_date', 'height': 'div'}
-
-    assert 'name' in jsonTranslation, f"jsonTranslation dict missing translation for baltic leaf attribute 'name' (default expectation: 'name': 'name')."
-
-    if treeType == 'divergence':
-        assert 'div' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'height' (default expectation: 'height': 'div')."
-    elif treeType == 'time':
-        assert 'num_date' in jsonTranslation.values(), f"jsonTranslation dict missing translation for baltic branch attribute 'absoluteTime' (default expectation: 'absoluteTime': 'num_date')."
-
     logger.debug('Reading JSON')
 
     if isinstance(jsonObject, str): ## string provided - either nextstrain URL or local path
@@ -299,6 +289,38 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
         json_meta['root_sequence'] = auspice_json['root_sequence'] ## transfer root sequence attribute to meta (by default it's a top level key in auspice json: {version, meta, tree, root_sequence})
 
     json_tree = auspice_json['tree']
+
+    def _json_attr_value(branch, key):
+        value = None
+        if key in branch.traits:
+            value = branch.traits[key]
+        elif 'node_attrs' in branch.traits and key in branch.traits['node_attrs']:
+            value = branch.traits['node_attrs'][key]
+        elif 'branch_attrs' in branch.traits and key in branch.traits['branch_attrs']:
+            value = branch.traits['branch_attrs'][key]
+
+        if isinstance(value, dict) and 'value' in value:
+            return value['value']
+        return value
+
+    if jsonTranslation is None:
+        jsonTranslation = {'name': 'name', 'absoluteTime': 'num_date', 'height': 'div'}
+        root_attrs = json_tree.get('node_attrs', {})
+        if treeType == 'divergence':
+            if 'div' in root_attrs:
+                jsonTranslation['height'] = 'div'
+            elif 'length' in root_attrs:
+                jsonTranslation['height'] = lambda k: (k.parent.height if k.parent and k.parent.height is not None else 0.0) + (_json_attr_value(k, 'length') or 0.0)
+            elif 'height' in root_attrs:
+                jsonTranslation['height'] = 'height'
+
+    assert 'name' in jsonTranslation, f"jsonTranslation dict missing translation for baltic leaf attribute 'name' (default expectation: 'name': 'name')."
+
+    if treeType == 'divergence':
+        assert 'height' in jsonTranslation, f"jsonTranslation dict missing translation for baltic branch attribute 'height' (default expectation: 'height': 'div')."
+    elif treeType == 'time':
+        assert 'absoluteTime' in jsonTranslation, f"jsonTranslation dict missing translation for baltic branch attribute 'absoluteTime' (default expectation: 'absoluteTime': 'num_date')."
+
     ll = make_tree_JSON(json_tree, jsonTranslation, treeType=treeType)
 
     logger.debug('Setting baltic traits from JSON')
@@ -337,7 +359,7 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     for k in ll.Objects: ## iterate over all branches
         curBranch = getattr(k, branchUnit) ## get parameter for this branch
         parBranch = getattr(k.parent, branchUnit) ## get parameter for parental branch
-        k.length = curBranch - parBranch if curBranch and parBranch else 0.0 ## difference between current and parent is branch length (or, if parent unavailabel it's 0)
+        k.length = curBranch - parBranch if curBranch is not None and parBranch is not None else 0.0 ## difference between current and parent is branch length (or, if parent unavailabel it's 0)
 
     logger.debug('Traversing and drawing tree')
 
