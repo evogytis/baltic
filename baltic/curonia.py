@@ -1630,6 +1630,7 @@ def connect_tree_to_map(
     treePositionFxn optionally returns the plotted position of each tree tip.
     colourFxn returns the colour of a tip.
     originProjection is a cartopy ccrs object used to transform the coordinate system of tipCoordinates (default: ccrs.PlateCarree()).
+    Destinations outside the projection domain or current map extent are skipped, so set the final map extent before calling this function.
 
     **Parameters**
 
@@ -1704,6 +1705,14 @@ def connect_tree_to_map(
         lat, lon = tipCoordinates[k.name]
         mapX, mapY = destinationProjection.transform_point(lon, lat, src_crs=originProjection) ## convert to plotted map coordinates
 
+        if not np.all(np.isfinite((mapX, mapY))):
+            continue
+
+        xMin, xMax = sorted(mapAx.get_xlim())
+        yMin, yMax = sorted(mapAx.get_ylim())
+        if not (xMin <= mapX <= xMax and yMin <= mapY <= yMax):
+            continue
+
         if treePositionFxn is None:
             tipX, tipY = k.x, k.y
         else:
@@ -1725,18 +1734,10 @@ def connect_tree_to_map(
                                      coordsB=mapAx.transData,
                                      axesB=mapAx,
                                      color=fc, **localLineKwargs) ## colour, line style, linewidth, order, transparency
-        #### check if connection will be present
-        axA = connection.axesA
-        axB = connection.axesB
-        pA = axA.transData.transform(connection.xy1)
-        pB = axB.transData.transform(connection.xy2)
-        bbA = axA.bbox
-        bbB = axB.bbox
-
-        if (bbA.contains(*pA) or bbB.contains(*pB)) and shoulderPositionFxn is not None: ## checks if line will be visible
+        if shoulderPositionFxn is not None:
             treeAx.plot([tipX, x], [tipY, y], color=fc, **localLineKwargs) ## line from the tip to the shoulder position
 
-        mapAx.add_patch(connection)
+        mapAx.add_artist(connection)
 
     return treeAx, mapAx
 
