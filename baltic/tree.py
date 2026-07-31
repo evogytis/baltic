@@ -1603,6 +1603,7 @@ class Tree: ## tree class
             Mapping of branches to extra spacing values.
         """
 
+        if circStart is None: circStart = 0.0
         if padNodes is None: padNodes = {}
 
         if node is None:
@@ -2853,9 +2854,9 @@ class Tree: ## tree class
             colourFxn = lambda k: colour
         if targetFxn is None:
             targetFxn = lambda k: k.is_leaf()
-        if xCoordinateFxn is None:
+        if xCoordinateFxn is None and treeType != 'unrooted':
             xCoordinateFxn = lambda k: k.height + xSpace*self.treeHeight if self.treeType=='divergence' else k.absoluteTime + xSpace*self.treeHeight
-        if yCoordinateFxn is None:
+        if yCoordinateFxn is None and treeType != 'unrooted':
             yCoordinateFxn = lambda k: k.y + ySpace*self.treeHeight
         if textContentFxn is None:
             textContentFxn = lambda k: k.name
@@ -2881,7 +2882,10 @@ class Tree: ## tree class
 
         elif treeType == 'unrooted':
             self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes) ## compute unrooted coordinates
-            xCoordinateFxn = lambda k: k.x ## use projected x coordinate now
+            if xCoordinateFxn is None:
+                xCoordinateFxn = lambda k: k.x
+            if yCoordinateFxn is None:
+                yCoordinateFxn = lambda k: k.y
 
             ax = self._plot_unrooted_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
 
@@ -3308,9 +3312,9 @@ class Tree: ## tree class
         ### Set default values ###
         if targetFxn is None:
             targetFxn = lambda k: k.is_leaf()
-        if xCoordinateFxn is None:
+        if xCoordinateFxn is None and treeType != 'unrooted':
             xCoordinateFxn = lambda k: k.height if self.treeType == 'divergence' else k.absoluteTime
-        if yCoordinateFxn is None:
+        if yCoordinateFxn is None and treeType != 'unrooted':
             yCoordinateFxn = lambda k: k.y
         # Point size logic
         if pointSize is not None and pointSizeFxn is not None:
@@ -3375,6 +3379,9 @@ class Tree: ## tree class
         outline_colours=[]
         outline_sizes=[]
 
+        if treeType == 'unrooted' and circStart is None:
+            circStart = 0.0
+
         if recomputeCoordinates:  ## compute branch coordinates
             if treeType == 'unrooted':
                 self._assign_unrooted_tree_coordinates(circStart=circStart, padNodes=padNodes)
@@ -3399,6 +3406,8 @@ class Tree: ## tree class
 
         elif treeType=='unrooted':
             if circStart is None: circStart = 0.0
+            if xCoordinateFxn is None: xCoordinateFxn = lambda k: k.x
+            if yCoordinateFxn is None: yCoordinateFxn = lambda k: k.y
             if circFrac is not None: warnings.warn('Unrooted trees do not have a circFrac parameter, ignoring')
             if inwardSpace is not None: warnings.warn('Unrooted trees do not have an inwardSpace parameter, ignoring')
             if normaliseHeight is not None: warnings.warn('Unrooted trees do not have a normaliseHeight parameter, ignoring')
@@ -3426,8 +3435,8 @@ class Tree: ## tree class
                 ys.append(py)
 
             elif treeType=='unrooted':
-                xs.append(k.x) ## unrooted trees should already have x and y coordinates computed
-                ys.append(k.y)
+                xs.append(xCoordinateFxn(k))
+                ys.append(yCoordinateFxn(k))
             colours.append(colourFxn(k))
             sizes.append(pointSizeFxn(k))
 
@@ -3969,9 +3978,9 @@ class Tree: ## tree class
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
-        if xCoordinateFxn is None:
+        if xCoordinateFxn is None and treeType != 'unrooted':
             xCoordinateFxn = lambda k: k.height if self.treeType == 'divergence' else k.absoluteTime
-        if yCoordinateFxn is None:
+        if yCoordinateFxn is None and treeType != 'unrooted':
             yCoordinateFxn = lambda k: k.y
 
         if padNodes is None:
@@ -4080,7 +4089,10 @@ class Tree: ## tree class
             if recomputeCoordinates:
                 self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
 
-            xCoordinateFxn = lambda k: k.x ## using projected x coordinate now
+            if xCoordinateFxn is None:
+                xCoordinateFxn = lambda k: k.x
+            if yCoordinateFxn is None:
+                yCoordinateFxn = lambda k: k.y
 
             ax = self._plot_rectangular_tree(ax=ax,connectionType='direct',xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,targetFxn=targetFxn,orientation=None, ## only allow .x and .y here?
                                                 widthFxn=widthFxn, colourFxn=colourFxn,
