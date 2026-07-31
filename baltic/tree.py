@@ -303,7 +303,9 @@ class Tree: ## tree class
         localTree = Tree(self.treeType)
         localTree.Objects = subtreeBranches
         localTree.root = subtreeBranches[0]
-
+        if stem == False:
+            localTree.root.length = 0.0
+        
         superRoot = Node()
         superRoot.index = 'Root'
         superRoot.length = 0.0
