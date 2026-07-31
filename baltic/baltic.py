@@ -145,7 +145,7 @@ def make_tree(data, treeType, tre=None):
             comment=match.group(2)
             numerics=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
             strings=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
-            treelist=re.findall(r'[,&][A-Za-z\_\.\-0-9]+={[A-Za-z\_,{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
+            treelist=re.findall(r'[,&][A-Za-z\_\.\-0-9]+={[A-Za-z\_\-,+{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
             sets=re.findall(r'[,&][A-Za-z\_\.\-0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
             figtree=re.findall(r'\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
 
@@ -168,15 +168,13 @@ def make_tree(data, treeType, tre=None):
             for val in treelist:
                 tr,val=val.split('=')
                 tr=tr[1:]
-                micromatch = []
-                if val.count(",") == 2:
-                    micromatch=re.findall(r'{([0-9\.\-e]+,[a-z_A-Z]+,[a-z_A-Z]+)}',val)
-                elif val.count(",") == 3:
-                    micromatch=re.findall(r'{([0-9]+,[0-9\.\-e]+,[A-Z]+,[A-Z]+)}',val)
                 tre.curNode.traits[tr]=[]
-                for val in micromatch:
-                    val_split = val.split(',') #NOTE this variable is never used. remove?
-                    tre.curNode.traits[tr].append(val.split(","))
+                for entry in re.findall(r'{([^{}]+)}',val):
+                    fields=[field.strip() for field in entry.split(',')]
+                    if len(fields) in [3,4]:
+                        if tr in ['all_S','all_N'] or tr.endswith(('.all_S','.all_N')):
+                            fields=[int(fields[0]),float(fields[1])]+fields[2:]
+                        tre.curNode.traits[tr].append(fields)
 
             for vals in sets:
                 tr,val=vals.split('=')

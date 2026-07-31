@@ -2033,7 +2033,7 @@ class Tree: ## tree class
                             elif isinstance(
                                 val, list
                             ):  ## list of lists, example complete history annotated on tree
-                                rangeComment.append("{{{}}}".format(",".join(val)))
+                                rangeComment.append("{{{}}}".format(",".join(map(str,val))))
                         comment.append(f"{tr}={{{','.join(rangeComment)}}}")
                         logger.debug(f"adding range comment {comment[-1]}")
                 else:
