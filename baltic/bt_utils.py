@@ -165,7 +165,7 @@ def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
         Decimal year to convert.
 
     fmt : str, optional
-        Output date format passed to :func:`datetime.datetime.strftime`.
+        Output date format passed to :meth:`datetime.datetime.strftime`.
 
     **Returns**
 
@@ -223,10 +223,11 @@ def convert_date_format(dateString,startFormat,endFormat):
         raise ValueError('Error converting date "%s" from format "%s" to "%s": "%s"'%(dateString, startFormat, endFormat, e))
 
 def to_scientific_notation_str(value, decimalPlaces=2, latex=True, omitPowerWhenZero=True):
-    """
+    r"""
     Format number in scientific notation as str.
 
     **Parameters**
+
     value : float
         Very large or very small number to be formatted.
 
