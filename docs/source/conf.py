@@ -14,7 +14,16 @@ release = 'v0.9 (Birch)'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc']
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
+]
+
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3/', None),
+    'matplotlib': ('https://matplotlib.org/stable/', None),
+    'biopython': ('https://biopython.org/docs/latest/', None),
+}
 
 templates_path = ['_templates']
 exclude_patterns = []
