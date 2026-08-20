@@ -1453,11 +1453,14 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     ax : :obj:`matplotlib.axes.Axes`
         Axes on which the spans should be drawn.
 
-    timeline : list[str] or range
-        Time boundaries as calendar strings or numeric values.
+    timeline : list[str], list[float], or range
+        Time boundaries as calendar strings, or as plain decimal years (e.g.
+        from a deep-time :func:`generate_calendar_timeline` call spanning
+        decades, millennia, or millions of years).
 
     dateFmt : str, optional
-        Date format used when *timeline* contains strings.
+        Date format used when *timeline* contains calendar strings. Ignored
+        when *timeline* already holds plain decimal years.
 
     colourFxn, edgeColourFxn : callable, optional
         Functions that map interval indices to face and edge colours.
@@ -1486,6 +1489,13 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     >>> timeline = ["2020-01-01", "2020-04-01", "2020-07-01", "2020-10-01"]
     >>> bt_utils.plot_time_grid(ax, timeline, colour="lightgray")
     <...Axes...>
+
+    Deep-time timelines (e.g. from ``generate_calendar_timeline(..., spacing="millennial")``)
+    are plain decimal years and are shaded the same way, without any ``dateFmt``:
+
+    >>> deepTimeline = bt_utils.generate_calendar_timeline(-44000, -41000, spacing="millennial")
+    >>> bt_utils.plot_time_grid(ax, deepTimeline, colour="lightgray")
+    <...Axes...>
     """
 
     if colour is not None and colourFxn is not None:
@@ -1510,10 +1520,12 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
     if 'alpha' not in localKwargs: localKwargs['alpha'] = 0.08
 
     if isinstance(timeline,list):
-        try:
-            timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline] ## convert timeline to
-        except:
-            warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+        if not _is_numeric_timeline(timeline): ## calendar strings (e.g. '2020-01-01') -- convert via datetime
+            try:
+                timeline = [calendar_to_decimal_date(t,fmt=dateFmt) for t in timeline]
+            except (ValueError, TypeError):
+                warnings.warn(f"List of timeline dates are not recognised. Expected date format: {dateFmt}, first entry in list: {timeline[0]}.")
+        ## else: already plain decimal years (e.g. from a deep-time timeline), nothing to convert
     else:
         assert isinstance(timeline,range), f"timeline is neither a list nor a range."
 
@@ -1534,14 +1546,22 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     ax : :obj:`matplotlib.axes.Axes`
         Axes whose ticks should be updated.
 
-    timeline : list[str]
-        Ordered list of calendar dates defining grid boundaries.
+    timeline : list[str] or list[float]
+        Ordered list of calendar dates, or plain decimal years for a
+        deep-time timeline (decades, millennia, or millions of years; see
+        :func:`generate_calendar_timeline`), defining grid boundaries.
 
     inputDateFmt : str, optional
-        Date format used to parse entries in *timeline*.
+        Date format used to parse entries in *timeline*. Ignored when
+        *timeline* already holds plain decimal years.
 
     outputFmtFxn : callable, optional
         Function used to convert each timeline entry into a label string.
+        Defaults to a month/year formatter for calendar-string timelines,
+        or (for deep-time timelines) a formatter that picks a single unit
+        -- years, kya, or Ma -- for the whole axis based on the largest
+        boundary magnitude, e.g. ``-3 Ma`` for 3 million years before year
+        0.
 
     labelPosition : {'left', 'mid'}, optional
         Whether labels should be placed on boundaries or interval midpoints.
@@ -1565,28 +1585,44 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
     >>> timeline = ["2020-01-01", "2020-04-01", "2020-07-01", "2020-10-01"]
     >>> bt_utils.format_time_grid(ax, timeline)
     <...Axes...>
+
+    Deep-time timelines (plain decimal years, e.g. spanning millennia or
+    millions of years) are labelled with an automatically-chosen unit
+    instead of a calendar format:
+
+    >>> deepTimeline = bt_utils.generate_calendar_timeline(-3_200_000, -2_800_000, spacing=(200, 'kyr'))
+    >>> bt_utils.format_time_grid(ax, deepTimeline)
+    <...Axes...>
     """
     assert labelPosition in ['left', 'mid'], f"labelPosition {labelPosition} invalid. Must be 'left' or 'mid'"
     assert axis in ['x', 'y'], f"axis {axis} invalid. Must be 'x' or 'y'"
 
+    numericTimeline = _is_numeric_timeline(timeline)
+
     if outputFmtFxn is None:
-        outputFmtFxn = lambda date: convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if convert_date_format(date, '%Y-%m-%d', '%m') == '01' else convert_date_format(date, '%Y-%m-%d', '%b')
+        if numericTimeline: ## deep-time timeline (plain decimal years) -- never touch datetime
+            outputFmtFxn = _default_deep_time_formatter(timeline)
+        else:
+            outputFmtFxn = lambda date: convert_date_format(date, '%Y-%m-%d', '%b\n%Y') if convert_date_format(date, '%Y-%m-%d', '%m') == '01' else convert_date_format(date, '%Y-%m-%d', '%b')
+
+    ## deep-time boundaries are already decimal years; calendar strings still need parsing via datetime
+    toDecimal = (lambda date: date) if numericTimeline else (lambda date: calendar_to_decimal_date(date, inputDateFmt))
 
     localKwargs = dict(kwargs)
 
     if axis == 'x':
         if labelPosition == 'left':
-            ax.set_xticks([calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_xticks([toDecimal(date) for date in timeline])
             ax.set_xticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
         elif labelPosition == 'mid':
-            ax.set_xticks([np.mean([calendar_to_decimal_date(timeline[t], inputDateFmt), calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_xticks([np.mean([toDecimal(timeline[t]), toDecimal(timeline[t+1])]) for t in range(len(timeline)-1)])
             ax.set_xticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
     elif axis == 'y':
         if labelPosition == 'left':
-            ax.set_yticks([calendar_to_decimal_date(date, inputDateFmt) for date in timeline])
+            ax.set_yticks([toDecimal(date) for date in timeline])
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline],**localKwargs)
         elif labelPosition == 'mid':
-            ax.set_yticks([np.mean([calendar_to_decimal_date(timeline[t], inputDateFmt), calendar_to_decimal_date(timeline[t+1], inputDateFmt)]) for t in range(len(timeline)-1)])
+            ax.set_yticks([np.mean([toDecimal(timeline[t]), toDecimal(timeline[t+1])]) for t in range(len(timeline)-1)])
             ax.set_yticklabels([outputFmtFxn(date) for date in timeline[:-1]],**localKwargs)
 
     ax.tick_params(axis=axis, size=0)
