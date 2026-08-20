@@ -303,7 +303,9 @@ class Tree: ## tree class
         localTree = Tree(self.treeType)
         localTree.Objects = subtreeBranches
         localTree.root = subtreeBranches[0]
-
+        if stem == False:
+            localTree.root.length = 0.0
+        
         superRoot = Node()
         superRoot.index = 'Root'
         superRoot.length = 0.0
@@ -1601,6 +1603,7 @@ class Tree: ## tree class
             Mapping of branches to extra spacing values.
         """
 
+        if circStart is None: circStart = 0.0
         if padNodes is None: padNodes = {}
 
         if node is None:
@@ -2033,7 +2036,7 @@ class Tree: ## tree class
                             elif isinstance(
                                 val, list
                             ):  ## list of lists, example complete history annotated on tree
-                                rangeComment.append("{{{}}}".format(",".join(val)))
+                                rangeComment.append("{{{}}}".format(",".join(map(str,val))))
                         comment.append(f"{tr}={{{','.join(rangeComment)}}}")
                         logger.debug(f"adding range comment {comment[-1]}")
                 else:
@@ -2146,7 +2149,14 @@ class Tree: ## tree class
         **Parameters**
 
         tipsToKeep : list[:class:`.BranchLike`]
-            Leaf-like branches that should remain in the reduced tree.
+            Leaf-like branches from this tree that should remain in the reduced
+            tree.
+
+        **Raises**
+
+        ValueError
+            If no tips are supplied, an input is not leaf-like, or an input does
+            not belong to this tree.
 
         **Returns**
 
@@ -2162,28 +2172,40 @@ class Tree: ## tree class
         >>> sorted(tip.name for tip in reduced.get_external())
         ['A', 'D']
         """
-        assert len(tipsToKeep) > 0, "No tips given to reduce the tree to."
-        assert (
-            len([k for k in tipsToKeep if not k.is_leaflike()]) == 0
-        ), "Embedding contains %d branches that are not leaf-like." % (
-            len([k for k in tipsToKeep if not k.is_leaflike()])
-        )
-        logger.debug("Preparing branch hash for keeping %d branches" % (len(tipsToKeep)))
-        branchHash = {k.index: k for k in tipsToKeep}
-        embedding = []
+        tipsToKeep = list(dict.fromkeys(tipsToKeep))
+        if not tipsToKeep:
+            raise ValueError("No tips given to reduce the tree to.")
+
+        nonLeafBranches = [k for k in tipsToKeep if not k.is_leaflike()]
+        if nonLeafBranches:
+            raise ValueError(
+                "Embedding contains %d branches that are not leaf-like."
+                % len(nonLeafBranches)
+            )
+
+        externalBranches = set(self.get_external(onlyLeaves=False))
+        foreignBranches = [k for k in tipsToKeep if k not in externalBranches]
+        if foreignBranches:
+            raise ValueError(
+                "%d retained branches do not belong to this tree."
+                % len(foreignBranches)
+            )
+
+        embedding = set()
         logger.debug("Deep copying tree")
         reducedTree = copy.deepcopy(self)  ## new tree object
-        for k in reducedTree.Objects:  ## deep copy branches from current tree
-            if k.index in branchHash:  ## if branch is designated as one to keep
-                currentBranch = k
-                logger.debug(f"Traversing to root from {currentBranch.index}")
-                while currentBranch != reducedTree.root:  ## descend to root
-                    logger.debug(f"at {currentBranch.index} root: {currentBranch == reducedTree.root}")
-                    embedding.append(currentBranch)  ## keep track of the path to root
-                    currentBranch = currentBranch.parent
-        embedding.append(reducedTree.root)  ## add root to embedding
+        copiedBranches = dict(zip(self.Objects, reducedTree.Objects))
+
+        for tip in tipsToKeep:
+            currentBranch = copiedBranches[tip]
+            logger.debug(f"Traversing to root from {currentBranch.index}")
+            while currentBranch != reducedTree.root:  ## descend to root
+                logger.debug(f"at {currentBranch.index} root: {currentBranch == reducedTree.root}")
+                embedding.add(currentBranch)  ## keep track of the path to root
+                currentBranch = currentBranch.parent
+
+        embedding.add(reducedTree.root)  ## add root to embedding
         logger.debug(f"Finished extracting embedding with {len(embedding)} branches ({len([w for w in embedding if w.is_leaf()])} tips, {len([w for w in embedding if w.is_node()])} nodes)")
-        embedding = set(embedding)  ## prune down to only unique branches
 
         reducedTree.Objects = sorted(
             list(embedding), key=lambda x: x.height
@@ -2832,9 +2854,9 @@ class Tree: ## tree class
             colourFxn = lambda k: colour
         if targetFxn is None:
             targetFxn = lambda k: k.is_leaf()
-        if xCoordinateFxn is None:
+        if xCoordinateFxn is None and treeType != 'unrooted':
             xCoordinateFxn = lambda k: k.height + xSpace*self.treeHeight if self.treeType=='divergence' else k.absoluteTime + xSpace*self.treeHeight
-        if yCoordinateFxn is None:
+        if yCoordinateFxn is None and treeType != 'unrooted':
             yCoordinateFxn = lambda k: k.y + ySpace*self.treeHeight
         if textContentFxn is None:
             textContentFxn = lambda k: k.name
@@ -2860,7 +2882,10 @@ class Tree: ## tree class
 
         elif treeType == 'unrooted':
             self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes) ## compute unrooted coordinates
-            xCoordinateFxn = lambda k: k.x ## use projected x coordinate now
+            if xCoordinateFxn is None:
+                xCoordinateFxn = lambda k: k.x
+            if yCoordinateFxn is None:
+                yCoordinateFxn = lambda k: k.y
 
             ax = self._plot_unrooted_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
 
@@ -3287,9 +3312,9 @@ class Tree: ## tree class
         ### Set default values ###
         if targetFxn is None:
             targetFxn = lambda k: k.is_leaf()
-        if xCoordinateFxn is None:
+        if xCoordinateFxn is None and treeType != 'unrooted':
             xCoordinateFxn = lambda k: k.height if self.treeType == 'divergence' else k.absoluteTime
-        if yCoordinateFxn is None:
+        if yCoordinateFxn is None and treeType != 'unrooted':
             yCoordinateFxn = lambda k: k.y
         # Point size logic
         if pointSize is not None and pointSizeFxn is not None:
@@ -3354,6 +3379,9 @@ class Tree: ## tree class
         outline_colours=[]
         outline_sizes=[]
 
+        if treeType == 'unrooted' and circStart is None:
+            circStart = 0.0
+
         if recomputeCoordinates:  ## compute branch coordinates
             if treeType == 'unrooted':
                 self._assign_unrooted_tree_coordinates(circStart=circStart, padNodes=padNodes)
@@ -3378,6 +3406,8 @@ class Tree: ## tree class
 
         elif treeType=='unrooted':
             if circStart is None: circStart = 0.0
+            if xCoordinateFxn is None: xCoordinateFxn = lambda k: k.x
+            if yCoordinateFxn is None: yCoordinateFxn = lambda k: k.y
             if circFrac is not None: warnings.warn('Unrooted trees do not have a circFrac parameter, ignoring')
             if inwardSpace is not None: warnings.warn('Unrooted trees do not have an inwardSpace parameter, ignoring')
             if normaliseHeight is not None: warnings.warn('Unrooted trees do not have a normaliseHeight parameter, ignoring')
@@ -3405,8 +3435,8 @@ class Tree: ## tree class
                 ys.append(py)
 
             elif treeType=='unrooted':
-                xs.append(k.x) ## unrooted trees should already have x and y coordinates computed
-                ys.append(k.y)
+                xs.append(xCoordinateFxn(k))
+                ys.append(yCoordinateFxn(k))
             colours.append(colourFxn(k))
             sizes.append(pointSizeFxn(k))
 
@@ -3948,9 +3978,9 @@ class Tree: ## tree class
         ### Set default values ###
         if targetFxn is None:
             targetFxn=lambda k: True
-        if xCoordinateFxn is None:
+        if xCoordinateFxn is None and treeType != 'unrooted':
             xCoordinateFxn = lambda k: k.height if self.treeType == 'divergence' else k.absoluteTime
-        if yCoordinateFxn is None:
+        if yCoordinateFxn is None and treeType != 'unrooted':
             yCoordinateFxn = lambda k: k.y
 
         if padNodes is None:
@@ -4059,7 +4089,10 @@ class Tree: ## tree class
             if recomputeCoordinates:
                 self._assign_unrooted_tree_coordinates(circStart=circStart,padNodes=padNodes)
 
-            xCoordinateFxn = lambda k: k.x ## using projected x coordinate now
+            if xCoordinateFxn is None:
+                xCoordinateFxn = lambda k: k.x
+            if yCoordinateFxn is None:
+                yCoordinateFxn = lambda k: k.y
 
             ax = self._plot_rectangular_tree(ax=ax,connectionType='direct',xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,targetFxn=targetFxn,orientation=None, ## only allow .x and .y here?
                                                 widthFxn=widthFxn, colourFxn=colourFxn,
