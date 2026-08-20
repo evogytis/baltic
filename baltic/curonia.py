@@ -1899,6 +1899,142 @@ def plot_tangled_chain(ax, treeList, colourDict=None, padding=None, treeSpaceFxn
     return treeList
 
 
+def plot_tanglegram(ax, tree1, tree2, colourDict=None, treeSpace=None, padding=None, normaliseY=True, treeKwargs={}, pointKwargs={}, **kwargs):
+    """
+    Plot two trees facing each other, joined by tip-matching connector lines.
+
+    Unlike :func:`plot_tangled_chain`, which lays an arbitrary number of trees
+    end to end all growing in the same direction, this plots exactly two
+    trees as a classic face-to-face tanglegram: ``tree1`` grows left-to-right
+    as usual and ``tree2`` is mirrored to grow right-to-left, so that
+    matching tips meet in the middle.
+
+    **Parameters**
+
+    ax : matplotlib.axes.Axes
+        Axes on which to draw the tanglegram.
+    tree1, tree2 : :class:`baltic.tree.Tree`
+        Trees to plot. ``tree1`` is drawn on the left, ``tree2`` on the right (mirrored).
+    colourDict : dict, optional
+        Mapping from tip name to connector colour. Tips shared by both trees
+        but missing from ``colourDict`` default to ``'lightgray'``. Tips
+        present in only one tree are not connected.
+    treeSpace : float, optional
+        Horizontal space left between the two trees. Defaults to 30% of the taller tree's height.
+    padding : float, optional
+        Fraction of ``treeSpace`` used for horizontal connector shoulders
+        (0 == line finishes at the tip and bends abruptly at the matching
+        tip, 0.5 == line bends midway between the two trees).
+    normaliseY : bool, optional
+        If ``True`` (default), scale each tree's vertical extent to the unit
+        interval, so trees with different tip counts still line up.
+    treeKwargs, pointKwargs : dict, optional
+        Keyword arguments forwarded to :meth:`baltic.tree.Tree.plot_tree` and
+        :meth:`baltic.tree.Tree.plot_points` for both trees.
+    \\*\\*kwargs : dict, optional
+        Additional keyword arguments passed to the connector ``LineCollection``.
+
+    **Returns**
+
+    tuple[:class:`baltic.tree.Tree`, :class:`baltic.tree.Tree`]
+        ``(tree1, tree2)`` after coordinates have been assigned.
+
+    **Examples**
+
+    >>> import matplotlib.pyplot as plt
+    >>> import baltic as bt
+    >>> from baltic import curonia
+    >>> tree1 = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> tree2 = bt.make_tree("((A:1.0,C:1.0):1.0,B:1.5);", treeType="divergence")
+    >>> for tree in (tree1, tree2):
+    ...     tree.sort_branches()
+    >>> fig, ax = plt.subplots()
+    >>> tree1, tree2 = curonia.plot_tanglegram(ax, tree1, tree2)
+    """
+    from matplotlib.collections import LineCollection
+
+    localKwargs = dict(kwargs)
+    localTreeKwargs = dict(treeKwargs)
+    localPointKwargs = dict(pointKwargs)
+
+    if padding is None: ## padding is proportion of treeSpace that the connector shoulders occupy (0 == line finishes at last tip and starts abruptly at matching tip, 0.5 == line bends midway between trees)
+        padding = 0.1
+    else:
+        assert 0.0 <= padding <= 0.5, f"Padding (given as {padding}) should be a float between 0 and 0.5."
+
+    tree1._assign_tree_coordinates() ## computes tree1.x, tree1.y, tree1.ySpan
+    tree2._assign_tree_coordinates()
+
+    if treeSpace is None:
+        treeSpace = max(tree1.treeHeight, tree2.treeHeight) * 0.3
+
+    if colourDict is None: ## colourDict is dict that assigns colours to tips according to their y-axis order in tree1
+        colourDict = {}
+
+        cmap = desaturate_cmap(mpl.cm.Spectral, 0.6)
+        tree1Tips = tree1.get_external()
+
+        for i, k in enumerate(sorted(tree1Tips, key=lambda q: q.y)):
+            colourDict[k.name] = cmap(i / (len(tree1Tips) - 1)) if len(tree1Tips) > 1 else cmap(0.5)
+    else:
+        assert isinstance(colourDict, dict), f"colourDict must be class dict, not {type(colourDict)}"
+
+    if 'xCoordinateFxn' in localTreeKwargs or 'xCoordinateFxn' in localPointKwargs:
+        logger.warning("Custom x coordinate function was specified but will be overriden for tanglegram visualisation.")
+        localTreeKwargs.pop('xCoordinateFxn', None)
+        localPointKwargs.pop('xCoordinateFxn', None)
+
+    if len(localPointKwargs) > 0: ## tip points are required - assign default colours if nothing specified
+        if 'colour' not in localPointKwargs and 'colourFxn' not in localPointKwargs:
+            logger.warning("Point colours were not specified, defaulting to tanglegram colour defaults. This may cause issues if targetFxn is not set to identify tips.")
+            localPointKwargs['colourFxn'] = lambda k: colourDict.get(k.name, 'lightgray')
+
+    tree1XFxn = lambda k: k.x ## tree1 grows left-to-right as normal
+    tree2XFxn = lambda k: tree1.treeHeight + treeSpace + (tree2.treeHeight - k.x) ## tree2 is mirrored to grow right-to-left, starting after tree1 + the gap between trees
+
+    tree1YFxn = (lambda k: k.y / tree1.ySpan) if normaliseY else (lambda k: k.y)
+    tree2YFxn = (lambda k: k.y / tree2.ySpan) if normaliseY else (lambda k: k.y)
+
+    tree1.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=tree1XFxn, yCoordinateFxn=tree1YFxn, **localTreeKwargs)
+    tree2.plot_tree(ax, recomputeCoordinates=False, autoSort=False, xCoordinateFxn=tree2XFxn, yCoordinateFxn=tree2YFxn, **localTreeKwargs)
+
+    if len(localPointKwargs) > 0:
+        tree1.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=tree1XFxn, yCoordinateFxn=tree1YFxn, **localPointKwargs)
+        tree2.plot_points(ax, recomputeCoordinates=False, xCoordinateFxn=tree2XFxn, yCoordinateFxn=tree2YFxn, **localPointKwargs)
+
+    tree1Tips = {k.name: k for k in tree1.get_external()}
+    tree2Tips = {k.name: k for k in tree2.get_external()}
+    sharedNames = set(tree1Tips) & set(tree2Tips)
+
+    onlyTree1 = set(tree1Tips) - sharedNames
+    onlyTree2 = set(tree2Tips) - sharedNames
+    if onlyTree1: logger.warning(f"{len(onlyTree1)} tip(s) present in tree1 but not tree2, will not be connected: {sorted(onlyTree1)}")
+    if onlyTree2: logger.warning(f"{len(onlyTree2)} tip(s) present in tree2 but not tree1, will not be connected: {sorted(onlyTree2)}")
+
+    lineAfterX = tree1.treeHeight + treeSpace * padding ## connector x position just past tree1's tips
+    lineBeforeX = tree1.treeHeight + treeSpace * (1 - padding) ## connector x position just before tree2's tips
+
+    connectionCoordinates = []
+    connectionColours = []
+    for name in sorted(sharedNames, key=lambda q: tree1Tips[q].y): ## iterate over shared tips in tree1's y order
+        tip1 = tree1Tips[name]
+        tip2 = tree2Tips[name]
+
+        y1 = tree1YFxn(tip1)
+        y2 = tree2YFxn(tip2)
+
+        connectionCoordinates.append([(tree1XFxn(tip1), y1),
+                                       (lineAfterX, y1),
+                                       (lineBeforeX, y2),
+                                       (tree2XFxn(tip2), y2)]) ## coordinates of tangle line
+        connectionColours.append(colourDict.get(name, 'lightgray')) ## colour of tangle line
+
+    if 'zorder' not in localKwargs: localKwargs['zorder'] = 0
+    ax.add_collection(LineCollection(connectionCoordinates, color=connectionColours, **localKwargs)) ## add tangle lines
+
+    return tree1, tree2
+
+
 def plot_gradient_clade_tree(ax, tree, designatedNodes=None, nodeDesignationFxn=None,
     colour=None, colourFxn=None,
     controlPointFraction=0.1,
