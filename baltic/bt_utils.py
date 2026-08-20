@@ -359,6 +359,126 @@ def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False
 
     return localTree
 
+## Deep-time (decade/century/millennium/Ma) spacing is expressed purely in
+## years and resolved to a plain integer step. Unlike the calendar-based
+## spacing above these never touch `datetime`, which cannot represent years
+## <=0 (BCE/before-present) or >9999 -- exactly the range BALTIC needs for
+## deeply-rooted (e.g. ancient DNA or macroevolutionary) BEAST trees.
+_DEEP_TIME_SPACING_KEYWORDS = {
+    'decadal': 10,
+    'centennial': 100,
+    'millennial': 1000,
+}
+
+_DEEP_TIME_UNITS_IN_YEARS = {
+    'year': 1, 'years': 1,
+    'decade': 10, 'decades': 10,
+    'century': 100, 'centuries': 100,
+    'millennium': 1000, 'millennia': 1000,
+    'kyr': 1000, 'kya': 1000,
+    'myr': 1_000_000, 'mya': 1_000_000, 'ma': 1_000_000,
+    'gyr': 1_000_000_000, 'gya': 1_000_000_000,
+}
+
+def _resolve_deep_time_step(spacing):
+    """
+    Return the timeline step in years for a deep-time ``spacing`` value
+    (one of ``'decadal'``/``'centennial'``/``'millennial'``, or a
+    ``(n, unit)`` tuple such as ``(500, 'kyr')`` or ``(2, 'Myr')``), or
+    ``None`` when ``spacing`` refers to one of the existing sub-annual
+    calendar options (``'yearly'``, ``'monthly'``, ``'weekly'`` or an int
+    number of days), which should continue to be handled via ``datetime``.
+    """
+    if isinstance(spacing, str) and spacing in _DEEP_TIME_SPACING_KEYWORDS:
+        return _DEEP_TIME_SPACING_KEYWORDS[spacing]
+
+    if isinstance(spacing, tuple):
+        assert len(spacing) == 2, f"Deep-time spacing tuple must be (n, unit), got {spacing!r}"
+        n, unit = spacing
+        unitKey = str(unit).lower()
+        assert unitKey in _DEEP_TIME_UNITS_IN_YEARS, f"Unrecognised deep-time spacing unit {unit!r}. Expected one of {sorted(set(_DEEP_TIME_UNITS_IN_YEARS))}"
+        return n * _DEEP_TIME_UNITS_IN_YEARS[unitKey]
+
+    return None
+
+def _coerce_decimal_year(value):
+    """
+    Interpret ``value`` as a plain decimal year for a deep-time timeline.
+
+    Deep-time boundaries are plain signed numbers rather than
+    calendar-formatted strings, since ``datetime.strptime`` can neither
+    parse a negative year nor represent one outside 1-9999.
+    """
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Deep-time timeline boundaries must be plain decimal years (e.g. -44000 for 44,000 BCE), got {value!r}. "
+            "Calendar-formatted date strings cannot represent years <=0 or >9999, which datetime.strptime requires."
+        )
+
+def _generate_deep_time_timeline(startYear, endYear, stepYears, roundDates=True):
+    """
+    Generate breakpoints for a calendar-free (decade/century/millennium/Ma)
+    timeline as plain decimal years.
+
+    Because the step is a fixed number of years there is no month-length or
+    leap-year irregularity to account for (unlike the monthly/weekly
+    calendar spacing), so the whole timeline can be built with simple
+    numeric arithmetic instead of ``datetime``.
+    """
+    start = _coerce_decimal_year(startYear)
+    end = _coerce_decimal_year(endYear)
+    assert start <= end, f"startDateStr ({start}) must not be later than endDateStr ({end})."
+
+    currentTime = math.floor(start / stepYears) * stepYears if roundDates else start
+
+    timeline = []
+    while currentTime < end:
+        if start <= currentTime and currentTime not in timeline:
+            timeline.append(currentTime)
+        currentTime += stepYears
+
+    if currentTime not in timeline:
+        timeline.append(currentTime)
+
+    return timeline
+
+def _is_numeric_timeline(timeline):
+    """
+    ``True`` when every entry of ``timeline`` is already a plain decimal
+    year (e.g. produced by a deep-time :func:`generate_calendar_timeline`
+    call), as opposed to a calendar-formatted date string. Used by
+    :func:`plot_time_grid` and :func:`format_time_grid` to decide whether a
+    timeline needs to go through ``datetime`` at all.
+    """
+    return len(timeline) > 0 and all(isinstance(t, (int, float)) for t in timeline)
+
+def _default_deep_time_formatter(timeline):
+    """
+    Build a default tick-label formatter for a numeric (deep-time)
+    timeline, picking a single readable unit (years, kya or Ma) for the
+    whole axis based on the largest boundary magnitude. Negative values
+    (BALTIC/BEAST's convention for years before year 0) simply keep their
+    sign, e.g. ``-3 Ma`` for 3 million years before year 0.
+    """
+    span = max(abs(t) for t in timeline)
+    if span >= 1_000_000:
+        unit, suffix = 1_000_000, ' Ma'
+    elif span >= 1_000:
+        unit, suffix = 1_000, ' kya'
+    else:
+        unit, suffix = 1, ''
+
+    def formatter(year):
+        if unit == 1:
+            return f"{year:,.0f}"
+        return f"{year/unit:,.3g}{suffix}"
+
+    return formatter
+
 def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt='%Y-%m-%d',roundDates=True):
     """
     Generate a list of calendar breakpoints between two dates.
@@ -368,38 +488,75 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
 
     **Parameters**
 
-    startDateStr : str
-        Start date of the interval.
+    startDateStr : str or float
+        Start date of the interval. For deep-time ``spacing`` (see below)
+        this is a plain decimal year (e.g. ``-44000``) rather than a
+        calendar-formatted string, since years <=0 or >9999 cannot be
+        parsed by ``datetime.strptime``.
 
-    endDateStr : str
-        End date of the interval.
+    endDateStr : str or float
+        End date of the interval. Same convention as ``startDateStr``.
 
-    spacing : {'yearly', 'monthly', 'weekly'} or int, optional
-        Calendar spacing to use. Integer values are interpreted as numbers of
-        days.
+    spacing : {'yearly', 'monthly', 'weekly', 'decadal', 'centennial', 'millennial'}, int, or (n, unit) tuple, optional
+        Calendar spacing to use.
+
+        - ``'yearly'``, ``'monthly'`` or ``'weekly'``, or an int number of
+          days: sub-annual/annual spacing, resolved via ``datetime`` as
+          before. Requires dates within ``datetime``'s year 1-9999 range.
+        - ``'decadal'``, ``'centennial'`` or ``'millennial'``: fixed
+          10/100/1000-year spacing.
+        - ``(n, unit)``, e.g. ``(500, 'kyr')`` or ``(2, 'Myr')``: arbitrary
+          deep-time spacing, with ``unit`` one of ``'years'``,
+          ``'decades'``, ``'centuries'``, ``'millennia'``, ``'kyr'``,
+          ``'Myr'`` or ``'Gyr'``.
+
+        The three deep-time forms never touch ``datetime`` and therefore
+        support timelines spanning years <=0 (BCE/before-present) or
+        >9999, which BALTIC represents as negative or very large decimal
+        dates (as parsed from BEAST trees).
 
     dateFmt : str, optional
-        Date format used to parse inputs and format outputs.
+        Date format used to parse inputs and format outputs. Ignored for
+        deep-time ``spacing``, where boundaries are plain decimal years.
 
     roundDates : bool, optional
         Whether to align the timeline to calendar boundaries when possible.
+        For deep-time spacing this rounds down to the nearest multiple of
+        the step (e.g. the nearest earlier millennium boundary).
 
     **Returns**
 
-    list[str]
-        Sequence of formatted date strings.
+    list[str] or list[float]
+        Sequence of formatted date strings, or (for deep-time spacing) a
+        sequence of plain decimal years.
 
     **Examples**
 
     >>> from baltic import bt_utils
     >>> bt_utils.generate_calendar_timeline("2020-01-01", "2020-04-01", spacing="monthly")
     ['2020-01-01', '2020-02-01', '2020-03-01', '2020-04-01']
+    >>> bt_utils.generate_calendar_timeline(-44000, -41000, spacing="millennial")
+    [-44000, -43000, -42000, -41000]
+    >>> bt_utils.generate_calendar_timeline(-3_200_000, -2_800_000, spacing=(200, 'kyr'))
+    [-3200000, -3000000, -2800000]
     """
-    assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days) or str ('yearly', 'monthly' or 'weekly')"
+    deepStepYears = _resolve_deep_time_step(spacing)
+    if deepStepYears is not None:
+        return _generate_deep_time_timeline(startDateStr, endDateStr, deepStepYears, roundDates=roundDates)
+
+    assert spacing in ['yearly', 'monthly', 'weekly'] or isinstance(spacing, int), f"Invalid spacing {spacing}, must be int (for days), str ('yearly', 'monthly' or 'weekly'), or a deep-time spacing ('decadal', 'centennial', 'millennial', or an (n, unit) tuple)"
 
     timeline = []
-    startTime = dt.datetime.strptime(startDateStr, dateFmt)
-    endTime = dt.datetime.strptime(endDateStr, dateFmt)
+    try:
+        startTime = dt.datetime.strptime(startDateStr, dateFmt)
+        endTime = dt.datetime.strptime(endDateStr, dateFmt)
+    except ValueError as e:
+        raise ValueError(
+            f"Could not parse startDateStr={startDateStr!r}/endDateStr={endDateStr!r} as format {dateFmt!r} ({e}). "
+            "datetime cannot represent years <=0 (BCE/before-present) or >9999 -- for such ranges, or for spacing "
+            "coarser than a year, pass plain decimal years with spacing='decadal'/'centennial'/'millennial' or an "
+            "(n, unit) tuple such as (500, 'kyr') instead."
+        )
 
     if roundDates: ## rounding dates - additional breaks will be generated in the timeline to correspond with beginnings of months or years
         currentTime = dt.datetime(startTime.year, 1, 1) ## start from beginning of the year
