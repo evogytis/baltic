@@ -7,3 +7,6 @@ docs/envs/
 docs/.cache/
 .conda-env-test/
 .mplconfig/
+build/
+*.egg-info/
+dist/
