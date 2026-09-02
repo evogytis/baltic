@@ -189,7 +189,8 @@ def load_nexus(treePath,
                 tips[match.group(1)] = match.group(2).strip('"').strip("'")
                 logger.debug(f'Identified tip translation {match.group(1)}: {tips[match.group(1)]}')
             elif ';' not in l:
-                print('tip not captured by regex:', l.replace('\t',''))
+                stripped = l.replace('\t', '')
+                logger.warning(f'Tip not captured by regex: {stripped}')
 
         if 'Translate' in l:
             tip_flag = True
