@@ -10,3 +10,4 @@ docs/.cache/
 build/
 *.egg-info/
 dist/
+CLAUDE.md
