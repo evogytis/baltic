@@ -378,7 +378,6 @@ class frequency_estimator(object):
         self.pc = pc
         self.ws = ws
         self.log_thres = log_thres
-        self.verbose = 0
         self.method = method
 
         self.pivots = make_pivots(pivots, self.tps)
@@ -516,7 +515,7 @@ class frequency_estimator(object):
             self.pivot_freq = logit_inv(self.sol['x'], self.pc)
         else:
             if self.method != "powell":
-                print("Optimization failed, trying with powell")
+                logger.warning(f"Optimization with method {self.method!r} failed; retrying with 'powell'.")
                 self.sol = minimize(logLH, logit_transform(self.pivot_freq, self.pc),
                                     method='powell')
             self.pivot_freq = logit_inv(self.sol['x'], self.pc)
@@ -526,8 +525,7 @@ class frequency_estimator(object):
                                            kind=self.interpolation_type,
                                            bounds_error=False)
 
-        if self.verbose:
-            print("neg logLH using", len(self.pivots), "pivots:", self.sol['fun'])
+        logger.debug(f"neg logLH using {len(self.pivots)} pivots: {self.sol['fun']}")
 
 
 class freq_est_clipped(object):
@@ -585,7 +583,7 @@ class freq_est_clipped(object):
         # CHANGED: simple, robust window based on first/last positive obs
         pos_idx = np.where(self.obs)[0]
         if pos_idx.size == 0:
-            print(f"[{self.name}] no positive observations")
+            logger.warning(f"[{self.name}] no positive observations; estimator marked invalid.")
             self.valid = False
             return
 
@@ -598,7 +596,7 @@ class freq_est_clipped(object):
         self.good_tps = (self.tps >= tps_lower_cutoff) & (self.tps <= tps_upper_cutoff)
         self.valid = True
         if self.good_tps.sum() < 3:
-            print(f"[{self.name}] too few valid time points:", self.good_tps.sum())
+            logger.warning(f"[{self.name}] too few valid time points ({self.good_tps.sum()}); estimator marked invalid.")
             self.valid = False
             return
 
@@ -746,7 +744,7 @@ class tree_frequencies(object):
     - The tree itself is small (lineage-level), but N can be large.
     """
 
-    def __init__(self, tree, timepoints, verbose=0, pc=1e-4, **kwargs):
+    def __init__(self, tree, timepoints, pc=1e-4, **kwargs):
         """
         Initialize a tree-wide clade frequency estimator.
 
@@ -758,9 +756,6 @@ class tree_frequencies(object):
         timepoints : int or array-like
             Number of pivots or explicit pivot locations used for frequency
             estimation.
-
-        verbose : int, optional
-            Verbosity flag for diagnostic output.
 
         pc : float, optional
             Pseudocount used to clip frequencies away from 0 and 1.
@@ -784,7 +779,6 @@ class tree_frequencies(object):
 
         self.tree = tree
         self.timepoints = timepoints
-        self.verbose = verbose
         self.kwargs = kwargs
         self.pc = pc
 
@@ -893,9 +887,8 @@ class tree_frequencies(object):
             if not obs_to_estimate:
                 continue
 
-            if self.verbose:
-                print(f"Estimating nested frequencies for node {node.index} "
-                      f"with {len(obs_to_estimate)} children.")
+            logger.debug(f"Estimating nested frequencies for node {node.index} "
+                         f"with {len(obs_to_estimate)} children.")
 
             ne = nested_frequencies(node_tps, obs_to_estimate, self.pivots,
                                     pc=self.pc, **self.kwargs)
@@ -2964,7 +2957,8 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
 
         xTickLabels.append(fmtPosition)
 
-    if len(xTickLabels) == 0: print(f"xTickLabels not set")
+    if len(xTickLabels) == 0:
+        logger.warning("No x-axis tick labels were generated for the SNP alignment.")
     alnAx.set_xticklabels(xTickLabels, rotation = 90)
     alnAx.tick_params(size = 0)
 
