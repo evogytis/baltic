@@ -221,7 +221,7 @@ def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, o
 
             if i == 0: ## at first tree
                 _, _, header_val = processFxn(-1, state, treeString, tipRenameDict, maxDate, **kwargs, headerMode = True) ## call worker in header mode
-            out.write("state\t" + "\t".join(header_val) + "\n") ## write header to output file
+                out.write("state\t" + "\t".join(header_val) + "\n") ## write header to output file
 
             fut = ex.submit(processFxn, i, state, treeString, tipRenameDict, maxDate, **kwargs, headerMode = False) ## process tree as usual - calling worker in headerMode = False
             futures.append(fut)

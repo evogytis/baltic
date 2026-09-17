@@ -2342,47 +2342,48 @@ def make_cmap(colours, position=None, name="custom_cmap"):
 
     from matplotlib.colors import LinearSegmentedColormap, to_rgb
 
+    colours = list(colours)
+    if len(colours) < 2:
+        raise ValueError("At least two colours are required to create a colormap.")
+
     normalized = []
-    for c in colours:
-
-        # tuple/list: could be float or int RGB
-        if isinstance(c, (tuple, list)) and len(c) == 3:
-            if all(isinstance(v, float) for v in c) and all(0 <= v <= 1 for v in c):
-                normalized.append(tuple(c))
-            elif all(isinstance(v, int) for v in c) and all(0 <= v <= 255 for v in c):
-                normalized.append(tuple(v / 255.0 for v in c))
-            else:
-                raise ValueError(f"Invalid RGB tuple: {c}")
-
-        # string: hex, HTML name, or mpl shorthand
-        elif isinstance(c, str):
-            # allow "ffaa00" without "#"
-            if len(c) == 6 and all(ch in "0123456789abcdefABCDEF" for ch in c):
-                c = "#" + c
-            try:
-                normalized.append(to_rgb(c))
-            except ValueError:
-                raise ValueError(f"Unrecognized color string: {c}")
-
+    for colour in colours:
+        if isinstance(colour, (tuple, list)) and len(colour) == 3:
+            if all(isinstance(channel, int) for channel in colour):
+                if not all(0 <= channel <= 255 for channel in colour):
+                    raise ValueError(f"Invalid RGB tuple: {colour}")
+                colour = tuple(channel / 255.0 for channel in colour)
+            elif not (
+                all(isinstance(channel, float) for channel in colour)
+                and all(0.0 <= channel <= 1.0 for channel in colour)
+            ):
+                raise ValueError(f"Invalid RGB tuple: {colour}")
+        elif isinstance(colour, str):
+            if len(colour) == 6 and all(
+                character in "0123456789abcdefABCDEF" for character in colour
+            ):
+                colour = f"#{colour}"
         else:
-            raise TypeError(f"Unsupported color format: {c}")
+            raise TypeError(f"Unsupported color format: {colour}")
+
+        try:
+            normalized.append(to_rgb(colour))
+        except ValueError as error:
+            raise ValueError(f"Unrecognized color: {colour}") from error
 
     if position is None:
-        position = np.linspace(0, 1, len(colours))
+        colour_specification = normalized
     else:
-        position = np.asarray(position, float)
-        if len(position) != len(colours):
-            raise ValueError("position must be same length as colors")
-        if position[0] != 0 or position[-1] != 1:
+        positions = np.asarray(position, dtype=float)
+        if positions.ndim != 1 or len(positions) != len(normalized):
+            raise ValueError("position must be a one-dimensional sequence with one value per colour")
+        if positions[0] != 0.0 or positions[-1] != 1.0:
             raise ValueError("position must start at 0 and end at 1")
+        if np.any(np.diff(positions) <= 0.0):
+            raise ValueError("position values must be strictly increasing")
+        colour_specification = list(zip(positions, normalized))
 
-    cdict = {"red": [], "green": [], "blue": []}
-    for p, (r, g, b) in zip(position, normalized):
-        cdict["red"].append((p, r, r))
-        cdict["green"].append((p, g, g))
-        cdict["blue"].append((p, b, b))
-
-    return LinearSegmentedColormap(name, cdict)
+    return LinearSegmentedColormap.from_list(name, colour_specification)
 
 def desaturate_cmap(cmap, desat=0.65):
     """
