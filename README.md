@@ -1,11 +1,10 @@
-[![Build Status](https://travis-ci.com/evogytis/baltic.svg?branch=master)](https://travis-ci.com/evogytis/baltic)
 [![downloads](https://anaconda.org/bioconda/baltic/badges/downloads.svg)](https://anaconda.org/bioconda/baltic)
 
 # baltic
 
 `baltic` is a lightweight Python library for parsing, manipulating, and visualizing phylogenetic trees. It supports Newick, Nexus, and Nextstrain/Auspice JSON inputs and provides plotting helpers built on top of `matplotlib`.
 
-The name expands to Backronymed Adaptable Lightweight Tree Import Code.
+The name expands to **B**ackronymed **A**daptable **L**ightweight **T**ree v**I**sualisation **C**ode.
 
 ## Installation
 
@@ -128,8 +127,15 @@ Run the test suite with:
 python tests/testsuite.py
 ```
 
+## 🤖 AI Disclosure
+
+This project is now **AI-assisted**. 
+- **Code & Architecture:** Original code was written and refactored by humans. From [2025](https://github.com/evogytis/baltic/commit/cb296d0ba02dbde730367974508ae60278521764), Claude and ChatGPT were used to fix bugs, implement some functions, _etc_. All AI-implemented code was reviewed and tested for correctness.
+- **Documentation & Comments:** Documentation was predominantly done by AI and checked by humans for accuracy.
+- **Accountability:** The human author maintains full responsibility for the security, stability, and licensing of the code.
+
 ## License
 
-Copyright 2016 [Gytis Dudas](https://twitter.com/evogytis).
+Copyright 2016 [Gytis Dudas](https://bsky.app/profile/evogytis.bsky.social).
 
 Licensed under the [GNU GPL v3.0](https://github.com/evogytis/baltic/blob/master/LICENSE).
