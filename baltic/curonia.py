@@ -122,6 +122,19 @@ def make_pivots(pivots, tps):
     (3,)
     >>> curonia.make_pivots([0.0, 0.5, 1.0], [0.2, 0.8]).tolist()
     [0.0, 0.5, 1.0]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     """
     if np.isscalar(pivots):
         tps = np.asarray(tps)
@@ -154,6 +167,19 @@ def count_observations(pivots, tps):
     >>> counts = curonia.count_observations(np.array([0.0, 1.0, 2.0]), [0.1, 0.9, 1.2])
     >>> counts.tolist()
     [2, 1, 0]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     """
     pivots = make_pivots(pivots, tps)
     dt = pivots[1] - pivots[0]
@@ -185,6 +211,19 @@ def running_average(obs, ws):
     >>> from baltic import curonia
     >>> curonia.running_average([0, 1, 1, 0], 2).round(2).tolist()
     [0.0, 0.5, 1.0, 0.5]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     """
     ws = int(ws)
     try:
@@ -222,6 +261,19 @@ def fix_freq(freq, pc):
     >>> from baltic import curonia
     >>> curonia.fix_freq([0.0, 0.5, 1.0], 0.1).tolist()
     [0.1, 0.5, 0.9]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     '''
     freq = np.asarray(freq)
     freq = freq.copy()
@@ -253,6 +305,19 @@ def logit_transform(freq, pc):
     >>> from baltic import curonia
     >>> curonia.logit_transform([0.25, 0.75], 1e-4).round(3).tolist()
     [-1.099, 1.099]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     """
     freq = np.asarray(freq)
     f = fix_freq(freq, pc)
@@ -283,6 +348,19 @@ def logit_inv(logit_freq, pc):
     >>> from baltic import curonia
     >>> curonia.logit_inv([-1.09861229, 1.09861229], 1e-4).round(2).tolist()
     [0.25, 0.75]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     """
     logit_freq = np.asarray(logit_freq)
     tmp = np.exp(logit_freq)
@@ -311,6 +389,19 @@ def pq(p):
     >>> from baltic import curonia
     >>> curonia.pq([0.25, 0.5, 0.75]).tolist()
     [0.1875, 0.25, 0.1875]
+
+    **Attribution**
+
+    Adapted from the corresponding function or method in Nextstrain Augur's
+    ``augur.frequency_estimators`` module, originally implemented by Richard
+    Neher. Modified for use in ``baltic``.
+
+    The upstream module is distributed under the GNU Affero General Public
+    License, version 3 (AGPL-3.0). Augur's project copyright notice names
+    Trevor Bedford and Richard Neher.
+
+    Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+    License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
     """
     p = np.asarray(p)
     return p * (1 - p)
@@ -365,6 +456,19 @@ class frequency_estimator(object):
         >>> fe = frequency_estimator([0.0, 1.0, 2.0], [0, 1, 1], 3)
         >>> fe.pivots.shape
         (3,)
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
         self.tps = tmp_obs[:, 0]
@@ -409,6 +513,19 @@ class frequency_estimator(object):
         >>> guess = fe.initial_guess()
         >>> guess.shape
         (3,)
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         # generate a useful initial guess from a running average of the counts
         if self.tps.size == 0:
@@ -447,6 +564,19 @@ class frequency_estimator(object):
         >>> fe.pivot_freq = fe.initial_guess()
         >>> isinstance(fe.stiffLH(), float)
         True
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         freq = self.pivot_freq
         dfreq = np.diff(freq)
@@ -478,6 +608,22 @@ class frequency_estimator(object):
         >>> fe.learn()
         >>> fe.pivot_freq.shape
         (4,)
+
+        **Attribution**
+
+        Adapted from Nextstrain Augur's
+        ``augur.frequency_estimators.frequency_estimator.learn``, originally
+        implemented by Richard Neher. This includes the nested ``logLH``
+        function, an interpolation compatibility fallback contributed by Sidney
+        Bell, and an optimizer retry guard contributed by John Huddleston.
+        Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         self.dt = np.diff(self.pivots)
 
@@ -565,6 +711,19 @@ class freq_est_clipped(object):
         >>> fe = freq_est_clipped([0.0, 1.0, 2.0], [0, 1, 1], np.array([0.0, 1.0, 2.0]), name="demo")
         >>> fe.valid
         True
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         super(freq_est_clipped, self).__init__()
         tmp_obs = np.array(sorted(zip(tps, obs), key=lambda x: x[0]))
@@ -629,6 +788,19 @@ class freq_est_clipped(object):
         >>> fe.learn()
         >>> fe.pivot_freq.shape
         (4,)
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         if not self.valid:
             self.pivot_freq = np.zeros_like(self.pivots)
@@ -675,6 +847,19 @@ class nested_frequencies(object):
         ... )
         >>> sorted(nf.obs)
         ['A', 'B']
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         super(nested_frequencies, self).__init__()
         self.tps = np.asarray(tps)
@@ -704,6 +889,19 @@ class nested_frequencies(object):
         >>> freqs = nf.calc_freqs()
         >>> sorted(freqs)
         ['A', 'B']
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         # sort by total number of positives per clade (largest first)
         sorted_obs = sorted(self.obs.items(), key=lambda x: x[1].sum(), reverse=True)
@@ -775,6 +973,19 @@ class tree_frequencies(object):
         >>> tf = tree_frequencies(ll, 4)
         >>> tf.pivots.shape
         (4,)
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
 
         self.tree = tree
@@ -805,6 +1016,19 @@ class tree_frequencies(object):
         >>> tf = tree_frequencies(ll, 4)
         >>> tf.counts.shape
         (4,)
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         # CHANGED: operate on abstract lineage tree with global tps
         indexObs(self.tree.root) ## assign indices to observations
@@ -854,6 +1078,19 @@ class tree_frequencies(object):
         >>> freqs = tf.estimate_clade_frequencies()
         >>> ll.root.index in freqs
         True
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
 
         # internal nodes in pre-order (root first)
@@ -930,6 +1167,19 @@ class tree_frequencies(object):
         >>> confidence = tf.calc_confidence()
         >>> ll.root.index in confidence
         True
+
+        **Attribution**
+
+        Adapted from the corresponding function or method in Nextstrain Augur's
+        ``augur.frequency_estimators`` module, originally implemented by Richard
+        Neher. Modified for use in ``baltic``.
+
+        The upstream module is distributed under the GNU Affero General Public
+        License, version 3 (AGPL-3.0). Augur's project copyright notice names
+        Trevor Bedford and Richard Neher.
+
+        Source: https://github.com/nextstrain/augur/blob/master/augur/frequency_estimators.py
+        License: https://github.com/nextstrain/augur/blob/master/LICENSE.txt
         """
         self.confidence = {}
         for key, freq in self.frequencies.items():

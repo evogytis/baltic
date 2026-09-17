@@ -779,6 +779,21 @@ class Tree: ## tree class
         >>> _ = ll.midpoint_root()
         >>> isinstance(ll.root, bt.node.Node)
         True
+
+        **Attribution**
+
+        Adapted from ``Bio.Phylo.BaseTree.Tree.root_at_midpoint`` in
+        Biopython. The original method was implemented by Eric Talevich and
+        its traversal was subsequently optimized by Brandon Invergo.
+        Modified for ``baltic`` tree and branch objects.
+
+        Copyright (C) 2009 Eric Talevich and the Biopython contributors.
+
+        The upstream file is distributed, at the recipient's choice, under
+        the Biopython License Agreement or the BSD 3-Clause License.
+
+        Source: https://github.com/biopython/biopython/blob/master/Bio/Phylo/BaseTree.py
+        License: https://github.com/biopython/biopython/blob/master/LICENSE.rst
         """
         logger.debug("No branch provided, rooting at midpoint")
         # Identify the largest pairwise distance
@@ -853,6 +868,21 @@ class Tree: ## tree class
         >>> _ = ll.reroot(branch=branch, branchFrac=0.5)
         >>> ll.root is not None
         True
+
+        **Attribution**
+
+        Adapted from ``Bio.Phylo.BaseTree.Tree.root_with_outgroup`` in
+        Biopython, originally implemented by Eric Talevich. Modified for
+        ``baltic`` branch objects, parent references, singleton removal, and
+        branch-fraction placement.
+
+        Copyright (C) 2009 Eric Talevich and the Biopython contributors.
+
+        The upstream file is distributed, at the recipient's choice, under
+        the Biopython License Agreement or the BSD 3-Clause License.
+
+        Source: https://github.com/biopython/biopython/blob/master/Bio/Phylo/BaseTree.py
+        License: https://github.com/biopython/biopython/blob/master/LICENSE.rst
         """
         if self.treeType == "time":
             logger.error("Cannot reroot a time-calibrated tree.")

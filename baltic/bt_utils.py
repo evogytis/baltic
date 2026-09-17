@@ -48,6 +48,19 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     2020.205
     >>> len(bounds)
     2
+
+    **Attribution**
+
+    The exact-date conversion is adapted from the ``dt2t`` implementation
+    in the Stack Overflow answer "Convert fractional years to a real date
+    in Python" by user ``unutbu``, posted 10 October 2013. Handling of
+    partial and uncertain dates was subsequently added for ``baltic``.
+
+    The original Stack Overflow contribution is distributed under the
+    Creative Commons Attribution-ShareAlike 3.0 license (CC BY-SA 3.0).
+
+    Source: https://stackoverflow.com/a/19306024
+    License: https://creativecommons.org/licenses/by-sa/3.0/
     """
 
     if not fmt:
@@ -177,6 +190,18 @@ def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
     >>> from baltic import bt_utils
     >>> bt_utils.decimal_to_calendar_date(2020.5)
     '2020-07-02'
+
+    **Attribution**
+
+    Adapted from the Stack Overflow answer "decimal years to datetime in
+    Python" by Jon Clements, posted 3 January 2014. Modified for use in
+    ``baltic`` and for configurable output formatting.
+
+    The original Stack Overflow contribution is distributed under the
+    Creative Commons Attribution-ShareAlike 3.0 license (CC BY-SA 3.0).
+
+    Source: https://stackoverflow.com/a/20911144
+    License: https://creativecommons.org/licenses/by-sa/3.0/
     """
     year = int(timepoint)
     rem = timepoint - year
@@ -2415,15 +2440,30 @@ def hpd(data, level=0.95):
         Lower and upper bounds of the highest posterior density interval, or
         ``None`` if there are too few samples to estimate the interval.
 
-    **Notes**
-
-    Original implementation copyright (C) 2010 Joseph Heled.
-
     **Examples**
 
     >>> from baltic import bt_utils
     >>> bt_utils.hpd([1, 2, 2, 3, 4], level=0.8)
     (1, 3)
+
+    **Attribution**
+
+    Adapted from ``biopy.bayesianStats.hpd``.
+
+    Copyright (C) 2010 Joseph Heled.
+    Original author: Joseph Heled <jheled@gmail.com>.
+
+    The upstream source directs users to its GPL v3 and LGPL v3 copying
+    terms. The package metadata identifies the package license as
+    "LGPL (V3)", although its license classifier inconsistently names
+    AGPL v3. The precise upstream licensing designation should therefore
+    be confirmed with the copyright holder before relying on a single
+    SPDX identifier.
+
+    Source: https://github.com/jheled/biopy/blob/master/biopy/bayesianStats.py
+    GPL terms: https://github.com/jheled/biopy/blob/master/gpl.txt
+    LGPL terms: https://github.com/jheled/biopy/blob/master/lgpl.txt
+    Package metadata: https://github.com/jheled/biopy/blob/master/setup.py
     """
     d = list(data)
     d.sort()
