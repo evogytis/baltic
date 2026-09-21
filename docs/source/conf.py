@@ -23,10 +23,16 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'matplotlib': ('https://matplotlib.org/stable/', None),
     'biopython': ('https://biopython.org/docs/latest/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/', None),
 }
 
 templates_path = ['_templates']
 exclude_patterns = []
+
+# Render each class's ``__init__`` docstring (constructor **Parameters** and
+# **Examples**) directly below the class docstring. The default ("class") drops
+# ``__init__`` docstrings entirely.
+autoclass_content = 'both'
 
 
 

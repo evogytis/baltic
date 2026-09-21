@@ -276,7 +276,7 @@ def to_scientific_notation_str(value, decimalPlaces=2, latex=True, omitPowerWhen
     >>> bt_utils.to_scientific_notation_str(3000000, latex=False)
     '3.00 x 10^6'
     >>> bt_utils.to_scientific_notation_str(0.0012)
-    '$1.20\times10^{-3}$'
+    '$1.20\\times10^{-3}$'
     >>> bt_utils.to_scientific_notation_str(2, latex=False, omitPowerWhenZero=True)
     '2.00'
     """
@@ -886,6 +886,15 @@ def _process_trait_prob_set(node, traitName):
 
     dict
         Mapping from state label to posterior probability.
+
+    **Examples**
+
+    >>> from baltic.node import Node
+    >>> from baltic import bt_utils
+    >>> node = Node()
+    >>> node.traits = {"region.set": ["Asia", "Europe"], "region.set.prob": [0.75, 0.25]}
+    >>> bt_utils._process_trait_prob_set(node, "region")
+    {'Asia': 0.75, 'Europe': 0.25}
     """
     assert f"{traitName}.set" and f"{traitName}.set.prob" in node.traits, f"{traitName}.set or {traitName}.set.prob not found in node traits dict."
 
@@ -1822,13 +1831,11 @@ def untangle_trees(
     trees : list[Tree]
         Trees ordered as they will appear in the tanglegram.
         Trees are modified in place.
-    iterations : int
+    iterations : int, default=10
         Number of global passes along the chain.
-    costFxn : callable
-        Function mapping (y_ref, y_tree) -> cost.
-    maxPolytomy : int
+    maxPolytomy : int, default=8
         Maximum polytomy size to brute-force while reordering child sets.
-    bidirectional : bool
+    bidirectional : bool, default=True
         Whether to do backward passes as well as forward passes.
 
     **Returns**
@@ -1957,7 +1964,18 @@ def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePosi
     **Returns**
 
     dict
-        Updated regression summary.
+        Updated regression summary. ``res`` is modified in place and returned; it is
+        only updated when the candidate beats the statistic already stored in it.
+
+    **Examples**
+
+    >>> from baltic import bt_utils
+    >>> res = {}
+    >>> res = bt_utils._root_to_tip(None, [2000.0, 2001.0, 2002.0, 2003.0], [0.1, 0.21, 0.29, 0.42], res)
+    >>> sorted(res)
+    ['correlation', 'intercept', 'r^2', 'root', 'slope', 'sum of squares']
+    >>> round(float(res["slope"]), 3), round(float(res["r^2"]), 3)
+    (0.104, 0.992)
     """
     slope, intercept, rval, _, _ = linregress(tipDates, tipHeights) ## run linear regression
     corr = np.corrcoef((tipDates, tipHeights))[0,1] ## correlation coefficient
@@ -2014,7 +2032,26 @@ def _rtt_worker(args):
 
     dict
         Best regression result found for the candidate root, with the root
-        stored by index rather than by object reference.
+        stored by index rather than by object reference. Also carries
+        ``root_index``, ``score`` and ``assigned_uncertain_dates``.
+
+    **Examples**
+
+    The tree must already have heights (call :meth:`baltic.tree.Tree.traverse_tree`),
+    and any tip listed in ``uncertainDateRanges`` must carry an ``absoluteTimeRange``
+    (see :meth:`baltic.tree.Tree._assign_date_uncertainty`). Here no dates are
+    uncertain, so a single regression is run for the candidate root.
+
+    >>> import baltic as bt
+    >>> from baltic import bt_utils
+    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+    >>> _ = ll.traverse_tree()
+    >>> candidate = ll.get_leaf("C")
+    >>> res = bt_utils._rtt_worker((ll, candidate.index, {"A": 2003.0, "B": 2003.0, "C": 2002.5}, {}, 1, "r^2", True))
+    >>> res["root"] == candidate.index, round(float(res["r^2"]), 3), round(float(res["slope"]), 3)
+    (True, 1.0, 4.0)
+    >>> res["assigned_uncertain_dates"]
+    {}
     """
 
     (tree,
@@ -2137,6 +2174,23 @@ def _adjust_tip_dates_by_regression(
         Regression slope estimated from the root-to-tip fit.
     intercept : float
         Regression intercept estimated from the root-to-tip fit.
+
+    **Returns**
+
+    dict[str, float]
+        Mapping from tip name to its adjusted date. Tips are not modified.
+
+    **Examples**
+
+    Tip ``A`` lands inside its range; tip ``B`` would fall beyond it and is clamped
+    to the upper bound.
+
+    >>> from baltic.leaf import Leaf
+    >>> from baltic import bt_utils
+    >>> a = Leaf("A"); a.height = 0.25; a.absoluteTimeRange = (2001.0, 2002.0)
+    >>> b = Leaf("B"); b.height = 0.9; b.absoluteTimeRange = (2001.0, 2002.0)
+    >>> bt_utils._adjust_tip_dates_by_regression([a, b], slope=0.1, intercept=-199.9)
+    {'A': 2001.5, 'B': 2002.0}
     """
     adjustedDates = {}
 

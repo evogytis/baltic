@@ -34,11 +34,10 @@ def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt
     burnin : int
         Number of initial sampled trees to skip.
 
-    outputPath : str
-        Output path associated with the downstream processing workflow.
-
     mostRecentDate : float or None
-        Explicit most recent sampling date. Currently unused during parsing.
+        Explicit most recent sampling date (decimal year). If given it is yielded as
+        ``maxDate`` for every tree; if ``None``, ``maxDate`` is the latest tip date
+        extracted with *tipRegex* and *dateFmt*.
 
     tipRegex : str
         Regular expression used to extract dates from tip names.
@@ -325,27 +324,34 @@ def trace_lineage_trait_worker(i, state, treeString, tipRenameDict, maxDate, tip
         Tip name or names whose lineage trait history should be extracted.
 
     traitName : str
-        Trait to read along the path from each focal tip to the root.
+        Trait to read along the path from each focal tip to the root. Every branch on
+        that path, including the root, must carry this trait annotation.
 
     timeline : array-like
         Time points at which trait states should be reported.
 
     headerMode : bool, optional
-        If ``True``, return output column names instead of values.
+        If ``True``, return output column names (``"<tip>__<time>"``) instead of values.
 
     **Returns**
 
     tuple
         Tuple ``(i, state, values)`` suitable for the posterior-processing
-        pipeline.
+        pipeline. ``values`` holds one entry per focal tip and time point; time
+        points after a tip's sampling date are reported as ``''``.
 
     **Examples**
 
+    Tip ``A`` is sampled at 2019.5 and its lineage switches from ``Asia`` to ``Europe``
+    at the root (2019.0).
+
     >>> from baltic import samogitia
-    >>> tree = "(A[&region=Europe]:0.5,B[&region=Asia]:1.0):0.0;"
-    >>> _, _, values = samogitia.trace_lineage_trait_worker(0, 10, tree, {}, 2020.0, "A", "region", [2019.5, 2020.0])
-    >>> values[0]
-    'Europe'
+    >>> tree = "(A[&region=Europe]:0.5,B[&region=Asia]:1.0)[&region=Asia]:0.0;"
+    >>> _, _, values = samogitia.trace_lineage_trait_worker(0, 10, tree, {}, 2020.0, "A", "region", [2019.0, 2019.25, 2019.5])
+    >>> values
+    ['Asia', 'Asia', 'Europe']
+    >>> samogitia.trace_lineage_trait_worker(0, 10, tree, {}, 2020.0, "A", "region", [2019.0, 2019.25, 2019.5], headerMode=True)
+    (0, 10, ['A__2019.0', 'A__2019.25', 'A__2019.5'])
     """
 
     tree = make_tree(treeString, 'time')

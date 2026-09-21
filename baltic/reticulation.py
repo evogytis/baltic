@@ -77,15 +77,51 @@ class Reticulation(BranchLike):
         self.target=target
 
     def is_leaflike(self):
-        """Returns ``True`` because :class:`.Reticulation` is handled as a terminal branch."""
+        """Returns ``True`` because :class:`.Reticulation` is handled as a terminal branch.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.reticulation import Reticulation
+        >>> branch = Reticulation("ret1")
+        >>> branch.is_leaflike()
+        True
+        """
         return True
 
     def is_leaf(self):
-        """Returns ``False`` because :class:`.Reticulation` is not a true :class:`baltic.leaf.Leaf`."""
+        """Returns ``False`` because :class:`.Reticulation` is not a true :class:`baltic.leaf.Leaf`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.reticulation import Reticulation
+        >>> branch = Reticulation("ret1")
+        >>> branch.is_leaf()
+        False
+        """
         return False
 
     def is_node(self):
-        """Returns ``False`` because :class:`.Reticulation` is not an internal :class:`baltic.node.Node`."""
+        """Returns ``False`` because :class:`.Reticulation` is not an internal :class:`baltic.node.Node`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.reticulation import Reticulation
+        >>> branch = Reticulation("ret1")
+        >>> branch.is_node()
+        False
+        """
         return False
 
     def __str__(self):

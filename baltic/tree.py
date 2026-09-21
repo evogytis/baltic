@@ -436,7 +436,16 @@ class Tree: ## tree class
         **Parameters**
 
         dateUncertainties : dict
-            Mapping from tip name to ``(date, uncertainty_range)`` tuples.
+            Mapping from tip name to ``(date, uncertainty_range)`` tuples. Only the
+            range is used; it is stored as each tip's ``absoluteTimeRange``.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> ll._assign_date_uncertainty({"A": (2020.0, (2019.5, 2020.5)), "B": (2019.0, (2018.5, 2019.5)), "C": (2018.0, (2017.5, 2018.5))})
+        >>> sorted((k.name, k.absoluteTimeRange) for k in ll.get_external())
+        [('A', (2019.5, 2020.5)), ('B', (2018.5, 2019.5)), ('C', (2017.5, 2018.5))]
         """
         for k in self.get_external():
             date, uncertainty = dateUncertainties[k.name]
@@ -543,6 +552,16 @@ class Tree: ## tree class
         dict
             Dictionary of tree height, total branch length, topology flags, and
             object counts.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> stats = ll._calculate_tree_stats()
+        >>> stats["treeHeight"], stats["treeLength"], stats["numLeaves"]
+        (2.0, 4.5, 3)
+        >>> stats["strictlyBifurcating"], stats["hasTraits"]
+        (True, False)
         """
         logger.debug("Calculating tree statistics.")
         stats = {}
@@ -594,6 +613,24 @@ class Tree: ## tree class
             Current branch in the recursive walk. Defaults to the tree root.
         partitionLabel : str, optional
             Label propagated to descendants when no new partition is created.
+
+        **Returns**
+
+        :class:`.Tree`
+            The tree itself, with a ``partition`` trait on every branch.
+
+        **Examples**
+
+        Start a new partition wherever a branch's ``region`` differs from its parent's.
+        Only ``B`` changes region, so the tree ends up with two labels.
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A[&region=Asia]:1.0,B[&region=Europe]:1.0)[&region=Asia]:1.0,C[&region=Asia]:1.5)[&region=Asia];", treeType="divergence")
+        >>> _ = ll._partition_tree(lambda k: k.traits["region"] != k.parent.traits["region"])
+        >>> len({k.traits["partition"] for k in ll.Objects})
+        2
+        >>> [k.name for k in ll.get_external() if k.traits["partition"] != ll.root.traits["partition"]]
+        ['B']
         """
         if node is None: node = self.root
 
@@ -1490,6 +1527,19 @@ class Tree: ## tree class
         **Notes**
 
         formerly ``drawTree()``
+
+        **Examples**
+
+        Tips get consecutive *y* positions in traversal order; *x* is the branch height.
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> ll._assign_tree_coordinates()
+        >>> sorted((k.name, k.x, k.y) for k in ll.get_external())
+        [('A', 2.0, 2.5), ('B', 2.0, 1.5), ('C', 1.5, 0.5)]
+        >>> ll._assign_tree_coordinates(order=[ll.get_leaf("C"), ll.get_leaf("A"), ll.get_leaf("B")])
+        >>> sorted((k.name, k.y) for k in ll.get_external())
+        [('A', 1.5), ('B', 0.5), ('C', 2.5)]
         """
         if order is None:
             ## order is a list of tips recovered from a tree traversal
@@ -1631,6 +1681,18 @@ class Tree: ## tree class
             Total angular span denominator used internally.
         padNodes : dict, optional
             Mapping of branches to extra spacing values.
+
+        **Examples**
+
+        The root sits at the origin and tips are spread around it.
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
+        >>> ll._assign_unrooted_tree_coordinates()
+        >>> (ll.root.x, ll.root.y)
+        (0.0, 0.0)
+        >>> sorted((k.name, round(k.x, 2), round(k.y, 2)) for k in ll.get_external())
+        [('A', 0.0, 1.73), ('B', -1.5, 0.87), ('C', 0.75, -1.3)]
         """
 
         if circStart is None: circStart = 0.0
@@ -2618,7 +2680,12 @@ class Tree: ## tree class
         """
         Draw collapsed clades for an unrooted layout.
 
-        This is the unrooted clade helper used by :meth:`plot_tree`.
+        This is the unrooted clade helper used by :meth:`plot_tree`. Each clade is
+        drawn as a trapezoid whose base sits on the parent branch, avoiding the very
+        acute angle a plain triangle would make where the clade joins the tree.
+
+        Every branch must already carry the angle attribute assigned by
+        :meth:`_assign_unrooted_tree_coordinates`.
 
         **Parameters**
 
@@ -2631,7 +2698,8 @@ class Tree: ## tree class
         endAttrFxn : callable
             Function returning the terminal extent of a collapsed clade.
         targetFxn : callable
-            Predicate selecting which clades to draw.
+            Additional predicate applied to branches. Only :class:`.Clade`
+            objects are ever drawn; this narrows that set further.
         colour : color or callable
             Clade face colour or colour function.
         precision : int
@@ -2955,7 +3023,7 @@ class Tree: ## tree class
             Orientation of the plotted labels.
         cladeEndAttrFxn : callable
             Function returning the far edge of collapsed clades. Accepted for
-            API consistency with :meth:`plot_text`.
+            API consistency with :meth:`plot_text`; it is not used.
         colourFxn : callable
             Function returning the text colour for each branch.
         \\*\\*kwargs : dict, optional
@@ -3022,7 +3090,7 @@ class Tree: ## tree class
             Function returning the text content for each branch.
         cladeEndAttrFxn : callable
             Function returning the far edge of collapsed clades. Accepted for
-            API consistency with :meth:`plot_text`.
+            API consistency with :meth:`plot_text`; it is not used.
         colourFxn : callable
             Function returning the text colour for each branch.
         \\*\\*kwargs : dict, optional
@@ -3106,14 +3174,17 @@ class Tree: ## tree class
         circStart : float
             Fraction of the circle at which plotting begins.
         circFrac : float
-            Fraction of the full circle used for the layout.
+            Fraction of the full circle used for the layout. Must be greater
+            than zero.
         inwardSpace : float
             Radial offset applied before projection.
         normaliseHeight : callable
             Function that normalizes branch heights to the circular radius.
+            :meth:`plot_text` resolves this before calling, so it is not optional
+            here.
         cladeEndAttrFxn : callable
             Function returning the far edge of collapsed clades. Accepted for
-            API consistency with :meth:`plot_text`.
+            API consistency with :meth:`plot_text`; it is not used.
         colourFxn : callable
             Function returning the text colour for each branch.
         \\*\\*kwargs : dict, optional
@@ -3327,8 +3398,9 @@ class Tree: ## tree class
 
         **Returns**
 
-        matplotlib.axes.Axes
-            The input axes.
+        tuple[matplotlib.axes.Axes, dict]
+            The input axes and a dictionary mapping each plotted branch to its
+            ``(x, y)`` coordinates.
 
         **Examples**
 
@@ -3336,8 +3408,9 @@ class Tree: ## tree class
         >>> import baltic as bt
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
         >>> fig, ax = plt.subplots()
-        >>> ll.plot_points(ax, targetFxn=lambda k: k.is_leaf(), pointSize=60)
-        <...Axes...>
+        >>> ax, coords = ll.plot_points(ax, targetFxn=lambda k: k.is_leaf(), pointSize=60)
+        >>> sorted((k.name, xy) for k, xy in coords.items())
+        [('A', (2.0, 2.5)), ('B', (2.0, 1.5)), ('C', (1.5, 0.5))]
         """
         ### Set default values ###
         if targetFxn is None:
@@ -3524,18 +3597,27 @@ class Tree: ## tree class
         endAttrFxn : callable
             Function returning the terminal extent of a collapsed clade.
         targetFxn : callable
-            Predicate selecting which clades to draw.
+            Additional predicate applied to branches. Only :class:`.Clade`
+            objects are ever drawn; this narrows that set further.
         colour : color or callable
             Clade face colour or colour function.
         orientation : {"horizontal", "vertical"}
-            Orientation of the rectangular tree.
+            Orientation of the rectangular tree. ``"vertical"`` swaps each
+            vertex's coordinates.
         style : {"equal", "skewed"}
-            Shape interpolation mode for collapsed clades.
+            Shape interpolation mode for collapsed clades. ``"skewed"`` ends the
+            lower edge at the earliest leaf in the collapsed subtree.
         cladeBaseWidth : float
-            Width of the clade base where it joins the branch.
+            Width of the clade base where it joins the branch, as a fraction of
+            the tree's y span.
         \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to
             :class:`matplotlib.patches.Polygon`.
+
+        **Returns**
+
+        matplotlib.axes.Axes
+            The input axes.
         """
 
         valid_styles=['equal', 'skewed']
@@ -3599,11 +3681,13 @@ class Tree: ## tree class
         endAttrFxn : callable
             Function returning the terminal extent of a collapsed clade.
         targetFxn : callable
-            Predicate selecting which clades to draw.
+            Additional predicate applied to branches. Only :class:`.Clade`
+            objects are ever drawn; this narrows that set further.
         colour : color or callable
             Clade face colour or colour function.
-        widthFxn : callable or float
-            Line width specification used for clade outlines.
+        widthFxn : callable or float, optional
+            Line width specification used for clade outlines. If ``None``, the
+            polygon's default line width is used.
         circStart : float
             Fraction of the circle at which plotting begins.
         circFrac : float
@@ -3617,12 +3701,19 @@ class Tree: ## tree class
         shape : {"triangle", "rectangle"}
             Base geometry used for collapsed clades.
         style : {"equal", "skewed"}
-            Shape interpolation mode for collapsed clades.
+            Shape interpolation mode for collapsed clades. ``"skewed"`` blends the
+            closing arc towards the earliest leaf in the collapsed subtree.
         cladeBaseWidth : float
-            Width of the clade base where it joins the branch.
+            Width of the clade base where it joins the branch, as a fraction of
+            the tree's y span.
         \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to
             :class:`matplotlib.patches.Polygon`.
+
+        **Returns**
+
+        matplotlib.axes.Axes
+            The input axes.
         """
         valid_styles=['equal', 'skewed']
         assert style in valid_styles, f"Style {style} not recognised. Options are {valid_styles}"
@@ -3712,7 +3803,9 @@ class Tree: ## tree class
         ax : matplotlib.axes.Axes
             Axes on which to draw the tree.
         connectionType : {"baltic", "elbow", "direct"}
-            Branch connection geometry to use.
+            Branch connection geometry to use. Unlike :meth:`_plot_circular_tree`,
+            an unrecognised value is not an error here: no line segment is
+            produced for the affected branches.
         xCoordinateFxn : callable
             Function returning the x coordinate for a branch.
         yCoordinateFxn : callable
@@ -3722,9 +3815,12 @@ class Tree: ## tree class
         widthFxn : callable or float
             Line width specification for branches.
         colourFxn : callable
-            Function returning the branch colour for each branch.
+            Function returning the branch colour for each branch. A
+            :class:`KeyError` raised by this function is caught and the branch is
+            drawn grey.
         orientation : {"horizontal", "vertical"}
-            Orientation of the rectangular tree.
+            Orientation of the rectangular tree. ``"vertical"`` swaps each
+            coordinate pair.
         plotClades : bool
             Whether collapsed clades should be rendered.
         cladeColour : color or callable
@@ -3827,31 +3923,38 @@ class Tree: ## tree class
         widthFxn : callable or float
             Line width specification for branches.
         colourFxn : callable
-            Function returning the branch colour for each branch.
+            Function returning the branch colour for each branch. A
+            :class:`KeyError` raised by this function is caught and the branch is
+            drawn grey.
         circStart : float
             Fraction of the circle at which plotting begins.
         circFrac : float
-            Fraction of the full circle used for the layout.
+            Fraction of the full circle used for the layout. Must be greater
+            than zero.
         inwardSpace : float
             Radial offset applied before projection.
-        normaliseHeight : callable
-            Function that normalizes branch heights to the circular radius.
+        normaliseHeight : callable, optional
+            Function that normalizes branch heights to the circular radius. By
+            default heights are normalized over the full range spanned by the
+            tree and any collapsed clades.
         connectionType : {"baltic", "elbow", "direct"}
-            Branch connection geometry to use.
+            Branch connection geometry to use. An unrecognised value raises
+            :class:`AssertionError`.
         padNodes : dict
             Mapping of branches to additional spacing values.
         precision : int
             Number of interpolation points used for arcs.
         plotClades : bool
             Whether collapsed clades should be rendered.
-        cladeColour : color or callable
-            Colour specification for collapsed clades.
-        cladeEndAttrFxn : callable
-            Function returning the terminal extent of a collapsed clade.
+        cladeColour : color or callable, optional
+            Colour specification for collapsed clades. Defaults to grey.
+        cladeEndAttrFxn : callable, optional
+            Function returning the terminal extent of a collapsed clade. By
+            default the furthest coordinate in the collapsed subtree is used.
         cladeStyle : {"equal", "skewed"}
             Shape interpolation mode for collapsed clades.
-        cladeShape : {"triangle", "rectangle"}
-            Base geometry used for collapsed clades.
+        cladeShape : {"triangle", "rectangle"}, optional
+            Base geometry used for collapsed clades. Defaults to ``"triangle"``.
         cladeBaseWidth : float
             Width of the clade base where it joins the branch.
         \\*\\*kwargs : dict, optional

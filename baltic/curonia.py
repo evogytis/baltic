@@ -151,7 +151,10 @@ def make_pivots(pivots, tps):
 
 def count_observations(pivots, tps):
     """
-    Count how many individual observations fall into each pivot interval.
+    Count how many individual observations fall into the bin around each pivot.
+
+    Bins are centred on each pivot and extend half a pivot spacing on either side, so
+    an observation is counted towards the pivot it is closest to.
 
     **Parameters**
 
@@ -161,12 +164,18 @@ def count_observations(pivots, tps):
     tps : sequence[float]
         Observation time points to bin.
 
+    **Returns**
+
+    numpy.ndarray
+        Integer counts, one per pivot.
+
     **Examples**
 
+    >>> import numpy as np
     >>> from baltic import curonia
     >>> counts = curonia.count_observations(np.array([0.0, 1.0, 2.0]), [0.1, 0.9, 1.2])
     >>> counts.tolist()
-    [2, 1, 0]
+    [1, 2, 0]
 
     **Attribution**
 
@@ -1194,7 +1203,13 @@ class tree_frequencies(object):
 
 def clip_freq(ys,threshold=0.00):
     """
-    Clip a list of frequencies to the first non-zero and the last non-zero values.
+    Return the timeline indices spanning the part of a frequency trajectory that is at or above ``threshold``.
+
+    The returned indices run from one position *before* the first value at or above
+    ``threshold`` (so that a polygon drawn from them starts at zero) through the last
+    value at or above ``threshold``. No leading index is added when the trajectory already
+    starts above ``threshold``, and no trailing index is added. An empty list is returned
+    if the trajectory sums to zero or never reaches ``threshold``.
 
     This is used by :func:`plot_Muller` when trimming lineage polygons.
 
@@ -1203,14 +1218,24 @@ def clip_freq(ys,threshold=0.00):
     ys : sequence[float]
         Frequency trajectory to trim.
 
-    threshold : float, optional
-        Minimum frequency required for inclusion.
+    threshold : float, default=0.0
+        Minimum frequency required for a time point to count as present. With the
+        default of ``0.0`` every index is returned unless the trajectory sums to zero.
+
+    **Returns**
+
+    list[int]
+        Indices into ``ys`` to keep.
 
     **Examples**
 
     >>> from baltic import curonia
     >>> curonia.clip_freq([0.0, 0.2, 0.5, 0.0], threshold=0.1)
-    [1, 2]
+    [0, 1, 2]
+    >>> curonia.clip_freq([0.2, 0.5, 0.0, 0.0], threshold=0.1)
+    [0, 1]
+    >>> curonia.clip_freq([0.0, 0.0], threshold=0.1)
+    []
     """
     if sum(ys) == 0.0:
         return []
@@ -1444,10 +1469,15 @@ def position_Bezier_control(pointA, pointB, height, frac):
         Fractional position along the segment at which the perpendicular is
         constructed.
 
+    **Returns**
+
+    tuple[float, float]
+        Coordinates of the control point (as numpy floats).
+
     **Examples**
 
     >>> from baltic import curonia
-    >>> tuple(round(x, 2) for x in curonia.position_Bezier_control((0.0, 0.0), (2.0, 0.0), 1.0, 0.5))
+    >>> tuple(round(float(x), 2) for x in curonia.position_Bezier_control((0.0, 0.0), (2.0, 0.0), 1.0, 0.5))
     (1.0, 1.0)
     """
     x1, y1 = pointA
@@ -2803,6 +2833,36 @@ def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fast
         counting.
     alnFmt : str, optional
         Alignment format understood by :mod:`Bio.SeqIO`.
+
+    **Returns**
+
+    str
+        Consensus sequence. Its length is the alignment length, or ``len(SNPs)``
+        when specific columns are requested.
+
+    **Notes**
+
+    Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
+    function. It is not a declared ``baltic`` dependency, so install it separately
+    (``pip install biopython``) before calling.
+
+    **Examples**
+
+    Ties are broken by the order sequences appear in the alignment.
+
+    >>> import tempfile
+    >>> from baltic import curonia
+    >>> fasta = ">A\\nACGTA\\n>B\\nATGTA\\n>C\\nATGTC\\n>D\\nACGTC\\n"
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".fasta") as handle:
+    ...     _ = handle.write(fasta)
+    ...     _ = handle.flush()
+    ...     curonia._compute_consensus(handle.name)
+    'ACGTA'
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".fasta") as handle:
+    ...     _ = handle.write(fasta)
+    ...     _ = handle.flush()
+    ...     curonia._compute_consensus(handle.name, SNPs=[1, 4])
+    'CA'
     """
     from collections import Counter
     from Bio import SeqIO
@@ -2849,7 +2909,33 @@ def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refS
     alnFmt : str, optional
         Alignment format understood by :mod:`Bio.SeqIO`.
     refSeqFmt : str, optional
-        Sequence format for an external reference file.
+        Sequence format for an external reference file. Required when *refSeq* is
+        a path; ignored (with a warning) otherwise.
+
+    **Returns**
+
+    str
+        The reference sequence.
+
+    **Notes**
+
+    Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
+    function. It is not a declared ``baltic`` dependency, so install it separately
+    (``pip install biopython``) before calling.
+
+    **Examples**
+
+    >>> import tempfile
+    >>> from baltic import curonia
+    >>> fasta = ">A\\nACGTA\\n>B\\nATGTA\\n>C\\nATGTC\\n>D\\nACGTC\\n"
+    >>> valid = lambda nt: nt.upper() in ["A", "C", "T", "U", "G", "-"]
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".fasta") as handle:
+    ...     _ = handle.write(fasta)
+    ...     _ = handle.flush()
+    ...     curonia._get_refSeq("consensus", validNucleotideFxn=valid, alnFile=handle.name, alnFmt="fasta")
+    ...     curonia._get_refSeq("B", alnFile=handle.name, alnFmt="fasta")
+    'ACGTA'
+    'ATGTA'
     """
     from Bio import SeqIO
 
@@ -2894,6 +2980,23 @@ def _default_variable_site_selection_fxn(columnDict, validNtFxn, refNt):
     refNt : str
         Reference nucleotide at the same column. This argument is accepted for
         compatibility with custom selection call signatures.
+
+    **Returns**
+
+    bool
+        ``True`` if the column is variable and its second most common valid
+        nucleotide occurs in at least two sequences.
+
+    **Examples**
+
+    >>> from baltic import curonia
+    >>> valid = lambda nt: nt.upper() in ["A", "C", "T", "U", "G", "-"]
+    >>> curonia._default_variable_site_selection_fxn({"s1": "A", "s2": "A", "s3": "G", "s4": "G"}, valid, "A")
+    True
+    >>> curonia._default_variable_site_selection_fxn({"s1": "A", "s2": "A", "s3": "A", "s4": "G"}, valid, "A")
+    False
+    >>> curonia._default_variable_site_selection_fxn({"s1": "A", "s2": "A", "s3": "N", "s4": "N"}, valid, "A")
+    False
     """
     variable = False
     clean_column = [columnDict[seq] for seq in columnDict if validNtFxn(columnDict[seq])] ## filter to valid nucleotides
@@ -2938,16 +3041,31 @@ def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, valid
     trimStart, trimEnd : int, optional
         Number of positions to ignore at the start and end of the alignment.
 
+    **Returns**
+
+    list[int]
+        Zero-based indices of alignment columns that pass *selectionFxn*.
+
+    **Notes**
+
+    Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
+    function. It is not a declared ``baltic`` dependency, so install it separately
+    (``pip install biopython``) before calling.
+
     **Examples**
+
+    The default selector only keeps columns whose second most common nucleotide is
+    seen in at least two sequences, so a column that differs in a single sequence is
+    not reported.
 
     >>> from baltic import curonia
     >>> import tempfile
-    >>> fasta = '>A\\nACGT\\n>B\\nATGT\\n'
+    >>> fasta = '>A\\nACGTA\\n>B\\nATGTA\\n>C\\nATGTC\\n>D\\nACGTC\\n'
     >>> with tempfile.NamedTemporaryFile('w+', suffix='.fasta') as handle:
     ...     _ = handle.write(fasta)
     ...     _ = handle.flush()
     ...     curonia.get_variable_aln_sites(handle.name)
-    [1]
+    [1, 4]
     """
     from collections import Counter
     from Bio import SeqIO
@@ -3305,6 +3423,32 @@ def _identify_gene(site, seqFeatures, featType, geneName):
         Feature type to match when scanning the annotation.
     geneName : str
         Qualifier key used to recover a human-readable gene label.
+
+    **Returns**
+
+    list[tuple[str, int]]
+        One ``(name, offset)`` pair per overlapping feature, where ``offset`` is
+        the site's zero-based position within that feature. Empty if the site
+        falls outside every feature of type *featType*.
+
+    **Examples**
+
+    Features come from :func:`_load_gff`, whose spans are half-open and
+    zero-based, so a GFF gene at 1-6 covers sites 0 to 5.
+
+    >>> import tempfile
+    >>> from baltic import curonia
+    >>> gff = "##gff-version 3\\nref\\t.\\tgene\\t1\\t6\\t.\\t+\\t.\\tgene_name=orf1\\nref\\t.\\tgene\\t7\\t12\\t.\\t+\\t.\\tgene_name=orf2\\n"
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".gff") as handle:
+    ...     _ = handle.write(gff)
+    ...     _ = handle.flush()
+    ...     features = curonia._load_gff(handle.name)
+    >>> curonia._identify_gene(0, features, "gene", "gene_name")
+    [('orf1', 0)]
+    >>> curonia._identify_gene(7, features, "gene", "gene_name")
+    [('orf2', 1)]
+    >>> curonia._identify_gene(99, features, "gene", "gene_name")
+    []
     """
     hits = []
 
@@ -3348,6 +3492,45 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
         Feature type to match when resolving coding annotations.
     geneName : str, optional
         Qualifier key used to recover feature names from the annotation.
+
+    **Returns**
+
+    str
+        Label for the column. Without an overlapping feature this is just the
+        1-based site; otherwise the gene and either its amino-acid changes or
+        the amino-acid position when every change is synonymous.
+
+    **Notes**
+
+    Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
+    function. It is not a declared ``baltic`` dependency, so install it separately
+    (``pip install biopython``) before calling.
+
+    **Examples**
+
+    Site 3 changes codon ``AAA`` to ``TAA`` in one sequence, a stop; site 4 is
+    synonymous; site 3 without an annotation is reported as position only.
+
+    >>> import tempfile
+    >>> from Bio import SeqIO
+    >>> from baltic import curonia
+    >>> gff = "##gff-version 3\\nref\\t.\\tgene\\t1\\t6\\t.\\t+\\t.\\tgene_name=orf1\\n"
+    >>> aln = ">A\\nATGAAACCCGGG\\n>B\\nATGAAGCCCGGG\\n>C\\nATGTAACCCGGG\\n"
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".gff") as gffHandle:
+    ...     _ = gffHandle.write(gff)
+    ...     _ = gffHandle.flush()
+    ...     features = curonia._load_gff(gffHandle.name)
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".fasta") as alnHandle:
+    ...     _ = alnHandle.write(aln)
+    ...     _ = alnHandle.flush()
+    ...     alnDict = SeqIO.to_dict(SeqIO.parse(alnHandle.name, "fasta"))
+    >>> reference = str(alnDict["A"].seq)
+    >>> curonia._format_coding_aln_column(3, alnDict, reference, seqFeatures=features)
+    '4 nt orf1: K2* (T)'
+    >>> curonia._format_coding_aln_column(4, alnDict, reference, seqFeatures=features)
+    '5 nt orf1: 2 aa'
+    >>> curonia._format_coding_aln_column(3, alnDict, reference)
+    '4 nt'
     """
     from Bio.Seq import Seq
 
@@ -3433,6 +3616,33 @@ def _load_gff(gffFile):
 
     gffFile : str or file-like
         GFF source containing sequence feature annotations.
+
+    **Returns**
+
+    list
+        Biopython ``SeqFeature`` objects from every record in the file. Their
+        locations are zero-based and half-open, unlike the 1-based inclusive
+        coordinates written in the GFF itself.
+
+    **Notes**
+
+    Requires ``BCBio-GFF`` (which itself pulls in ``biopython``), imported lazily
+    inside this function. Neither is a declared ``baltic`` dependency, so install
+    them separately (``pip install bcbio-gff``) before calling.
+
+    **Examples**
+
+    >>> import tempfile
+    >>> from baltic import curonia
+    >>> gff = "##gff-version 3\\nref\\t.\\tgene\\t1\\t6\\t.\\t+\\t.\\tgene_name=orf1\\nref\\t.\\tgene\\t7\\t12\\t.\\t+\\t.\\tgene_name=orf2\\n"
+    >>> with tempfile.NamedTemporaryFile("w+", suffix=".gff") as handle:
+    ...     _ = handle.write(gff)
+    ...     _ = handle.flush()
+    ...     features = curonia._load_gff(handle.name)
+    >>> [feature.qualifiers.get("gene_name", ["?"])[0] for feature in features]
+    ['orf1', 'orf2']
+    >>> sorted((int(feature.location.start), int(feature.location.end)) for feature in features)
+    [(0, 6), (6, 12)]
     """
     try:
         from BCBio import GFF
@@ -3453,10 +3663,27 @@ def _assign_tracks(features):
     Assign minimal y-level tracks to features such that overlapping CDSs
     do not share a track.
 
-    features: list of (feat_obj, start, end)
-    Returns: dict {feature_index: track_index}
+    Features are placed greedily in order of start coordinate; each goes on the
+    first existing track it does not overlap, otherwise a new track is opened.
 
     This helper supports :func:`plot_seq_features`.
+
+    **Parameters**
+
+    features : list[tuple]
+        Tuples ``(feature, start, end)``; ``feature`` is carried along untouched.
+
+    **Returns**
+
+    dict[int, int]
+        Mapping from each feature's index in ``features`` to its track index
+        (``0`` is the first track).
+
+    **Examples**
+
+    >>> from baltic.curonia import _assign_tracks
+    >>> _assign_tracks([("geneA", 0, 10), ("geneB", 5, 15), ("geneC", 12, 20)])
+    {0: 0, 1: 1, 2: 0}
     """
     # Give each feature a stable index
     indexed = [(i, feat, start, end) for i, (feat, start, end) in enumerate(features)]

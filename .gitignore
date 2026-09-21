@@ -12,3 +12,5 @@ build/
 *.egg-info/
 dist/
 CLAUDE.md
+docs/DOCSTRING_AUDIT.md
+docs/audit_scripts/

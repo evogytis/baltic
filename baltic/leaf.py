@@ -59,15 +59,51 @@ class Leaf(BranchLike):
         self.name=name
 
     def is_leaflike(self):
-        """Returns ``True`` for :class:`.Leaf` objects."""
+        """Returns ``True`` for :class:`.Leaf` objects.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.leaf import Leaf
+        >>> branch = Leaf("A")
+        >>> branch.is_leaflike()
+        True
+        """
         return True
 
     def is_leaf(self):
-        """Returns ``True`` for :class:`.Leaf` objects."""
+        """Returns ``True`` for :class:`.Leaf` objects.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.leaf import Leaf
+        >>> branch = Leaf("A")
+        >>> branch.is_leaf()
+        True
+        """
         return True
 
     def is_node(self):
-        """Returns ``False`` because :class:`.Leaf` is not a :class:`baltic.node.Node`."""
+        """Returns ``False`` because :class:`.Leaf` is not a :class:`baltic.node.Node`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.leaf import Leaf
+        >>> branch = Leaf("A")
+        >>> branch.is_node()
+        False
+        """
         return False
 
     def __str__(self):

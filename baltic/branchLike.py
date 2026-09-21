@@ -114,25 +114,29 @@ class BranchLike:
 
     def get_path_to_root(self, path=None):
         """
-        Recursively find the path from this node to the root, listed in reverse-chrnonological order (starting with current node, ending with the root).
+        Recursively find the path from this node to the root, listed in reverse-chronological order (starting with the current node, ending with the root).
 
-        Operates by adding itself to the path, then recursively calling ``get_path_to_root`` on the current node's parent.
+        Operates by adding itself to the path, then recursively calling :meth:`get_path_to_root` on the current node's parent. The root itself is the last element of the returned path.
 
         **Parameters**
 
-        path : list[:class:`.BranchLike`]
-            The path that has been traversed so far.
+        path : list[:class:`.BranchLike`], optional
+            The path that has been traversed so far. By default an empty path is started.
 
         **Returns**
 
-        path : list[:class:`.BranchLike`]
+        list[:class:`.BranchLike`]
+            Branches from this node up to and including the root.
 
         **Examples**
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
-        >>> [branch.index for branch in ll.get_leaf("A").get_path_to_root()]
-        [2, 1]
+        >>> path = ll.get_leaf("A").get_path_to_root()
+        >>> [branch.index for branch in path]
+        [2, 1, 0]
+        >>> path[-1] is ll.root
+        True
         """
         if path is None: path = []
 
@@ -184,6 +188,15 @@ class BranchLike:
         **Note**
 
         This is set to always return ``False``, however this behavior is overwritten by the appropriate subclasses.
+
+        **Examples**
+
+        >>> from baltic.branchLike import BranchLike
+        >>> from baltic.leaf import Leaf
+        >>> BranchLike().is_leaflike()
+        False
+        >>> Leaf('A').is_leaflike()
+        True
         """
         return False
 
@@ -198,6 +211,17 @@ class BranchLike:
         **Note**
 
         This is set to always return ``False``, however this behavior is overwritten by the :class:`.Leaf` subclass.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> ll.get_leaf("A").is_leaf()
+        True
+        >>> ll.root.is_leaf()
+        False
+        >>> [k.name for k in ll.Objects if k.is_leaf()]
+        ['A', 'B', 'C']
         """
         return False
 
@@ -212,6 +236,17 @@ class BranchLike:
         **Note**
 
         This is set to always return ``False``, however this behavior is overwritten by the :class:`.Node` subclass.
+
+        **Examples**
+
+        >>> import baltic as bt
+        >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
+        >>> ll.root.is_node()
+        True
+        >>> ll.get_leaf("A").is_node()
+        False
+        >>> len([k for k in ll.Objects if k.is_node()])
+        2
         """
         return False
 

@@ -101,15 +101,51 @@ class Clade(BranchLike): ## clade class
         self.width=width
 
     def is_leaflike(self):
-        """Returns ``True`` because :class:`.Clade` behaves like a terminal placeholder."""
+        """Returns ``True`` because :class:`.Clade` behaves like a terminal placeholder.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.clade import Clade
+        >>> branch = Clade("cladeA")
+        >>> branch.is_leaflike()
+        True
+        """
         return True
 
     def is_leaf(self):
-        """Returns ``False`` because :class:`.Clade` is not a true :class:`baltic.leaf.Leaf`."""
+        """Returns ``False`` because :class:`.Clade` is not a true :class:`baltic.leaf.Leaf`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.clade import Clade
+        >>> branch = Clade("cladeA")
+        >>> branch.is_leaf()
+        False
+        """
         return False
 
     def is_node(self):
-        """Returns ``False`` because :class:`.Clade` is not an internal :class:`baltic.node.Node`."""
+        """Returns ``False`` because :class:`.Clade` is not an internal :class:`baltic.node.Node`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.clade import Clade
+        >>> branch = Clade("cladeA")
+        >>> branch.is_node()
+        False
+        """
         return False
 
     def __str__(self):

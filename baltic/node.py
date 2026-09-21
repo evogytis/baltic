@@ -80,15 +80,51 @@ class Node(BranchLike):
 
 
     def is_leaflike(self):
-        """Returns ``False`` because :class:`.Node` is not terminal like :class:`baltic.leaf.Leaf`."""
+        """Returns ``False`` because :class:`.Node` is not terminal like :class:`baltic.leaf.Leaf`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.node import Node
+        >>> branch = Node()
+        >>> branch.is_leaflike()
+        False
+        """
         return False
 
     def is_leaf(self):
-        """Returns ``False`` because :class:`.Node` is distinct from :class:`baltic.leaf.Leaf`."""
+        """Returns ``False`` because :class:`.Node` is distinct from :class:`baltic.leaf.Leaf`.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.node import Node
+        >>> branch = Node()
+        >>> branch.is_leaf()
+        False
+        """
         return False
 
     def is_node(self):
-        """Returns ``True`` for :class:`.Node` objects."""
+        """Returns ``True`` for :class:`.Node` objects.
+
+        **Returns**
+
+        bool
+
+        **Examples**
+
+        >>> from baltic.node import Node
+        >>> branch = Node()
+        >>> branch.is_node()
+        True
+        """
         return True
 
     def __str__(self):
