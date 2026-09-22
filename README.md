@@ -1,5 +1,7 @@
 [![downloads](https://anaconda.org/bioconda/baltic/badges/downloads.svg)](https://anaconda.org/bioconda/baltic)
 
+[📄 Documentation](https://baltic.readthedocs.io/)&nbsp;&nbsp;&nbsp;&nbsp;[🖼️ Gallery](https://phylo-baltic.github.io/baltic-gallery/)
+
 # Getting Started
 
 ## Installation
