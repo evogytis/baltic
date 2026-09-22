@@ -6,24 +6,24 @@
 
 To install `baltic` locally and prepare the documentation environment:
 
-​```bash
+```bash
 git clone https://github.com/evogytis/baltic.git
 cd baltic
 git checkout main
 conda env create -f baltic.yaml
 conda activate baltic
 pip install -e . --no-build-isolation
-​```
+```
 
 ## Create a tree from a Newick string
 
-​```python
+```python
 import baltic as bt
 
 tree_string = "((A:1.0,B:2.0):1.0,C:3.0);"
 ll = bt.make_tree(tree_string, treeType="divergence")
 ll.treeStats()
-​```
+```
 
 `treeType` should be one of:
 
@@ -39,16 +39,16 @@ The main loader functions are:
 
 Examples:
 
-​```python
+```python
 import baltic as bt
 
 newick_tree = bt.io.load_newick("tree.nwk", treeType="divergence")
 nexus_tree = bt.io.load_nexus("tree.nex", treeType="time")
-​```
+```
 
 If sampling dates are encoded in tip labels, use `tipRegex` and `dateFmt` to extract them:
 
-​```python
+```python
 ll = bt.io.load_nexus(
     "example.tree",
     treeType="time",
@@ -56,13 +56,13 @@ ll = bt.io.load_nexus(
     dateFmt="%Y-%m-%d",
     absoluteTime=True,
 )
-​```
+```
 
 ## Extract features of a tree
 
 Once loaded, a `Tree` exposes helpers for inspection and traversal:
 
-​```python
+```python
 ll.traverse_tree()
 
 tips = ll.get_external()
@@ -71,7 +71,7 @@ stats = ll.treeStatsDict()
 
 print(stats["treeHeight"])
 print(len(tips))
-​```
+```
 
 ## Plot a tree
 
@@ -81,7 +81,7 @@ print(len(tips))
 
 Styling functions can be passed as `baltic` keyword arguments (e.g. `colorFxn`, `sizeFxn`, `lineWidthFxn`), or as standard `matplotlib` keyword arguments (e.g. `color`, `markersize`, `linewidth`), which get passed onward as keyword arguments to the underlying `matplotlib` plotting functions.
 
-​```python
+```python
 import matplotlib.pyplot as plt
 import baltic as bt
 
@@ -101,7 +101,7 @@ ll.plot_points(ax)
 ax.set_axis_off()
 fig.tight_layout()
 plt.show()
-​```
+```
 
 Useful plotting helpers include:
 
@@ -117,14 +117,14 @@ The plotting `treeType` argument supports `"rectangular"`, `"circular"`, and `"u
 
 By convention, `baltic` is imported as `bt` and tree objects are often named `ll` (for linked-list) in examples.
 
-​```python
+```python
 import baltic as bt
 ll = bt.make_tree("((A:1.0,B:2.0):1.0,C:3.0);", treeType="divergence")
-​```
+```
 
 By convention, `baltic` also uses Python lambda functions in many places, especially for short filtering, sorting, coordinate, and styling callbacks. These can always be replaced with regular named functions, but `baltic` tends to use lambdas where possible because they are succinct and usually easy to read in context.
 
-​```python
+```python
 # Example of a lambda for filtering tips
 # This function returns a list of tips whose names start with "A"
 tips = ll.get_external(lambda k: k.name.startswith("A"))
@@ -135,7 +135,7 @@ tips = ll.get_external(lambda k: k.name.startswith("A"))
 def filter_tips_starting_with_A(node):
 return node.name.startswith("A")
 tips = ll.get_external(filter_tips_starting_with_A)
-​```
+```
 
 ## API reference
 
@@ -150,23 +150,23 @@ After this guide, continue with the module reference:
 
 To build the documentation from source, run the following commands from the root of the repository (with the `baltic` conda environment activated):
 
-​```bash
+```bash
 cd docs
 make html
-​```
+```
 
 The built site will be written to `docs/build/html`. To open the homepage directly on macOS:
 
-​```bash
+```bash
 open build/html/index.html
-​```
+```
 
 To serve the docs locally in a browser:
 
-​```bash
+```bash
 cd build/html
 python -m http.server 8000
-​```
+```
 
 Then visit `http://localhost:8000`.
 
