@@ -16,10 +16,12 @@ gs = GridSpec(1,1)
 
 ax = plt.subplot(gs[0])
 
-ll.plot_tree(ax, treeType = 'circular')
-ll.plot_text(ax, treeType = 'circular', size = 26)
-ll.plot_points(ax, treeType = 'circular')
+def colourFxn(node):
+    return 'maroon' if node.is_node() else 'deepskyblue'
+
+ll.plot_tree(ax, colourFxn=colourFxn)
+ll.plot_points(ax, colourFxn=colourFxn)
 
 bt_utils.clean_axes(ax)
 
-plt.savefig('basic-tree-circular.png', bbox_inches='tight')
+plt.savefig('basic-tree-colour.png', bbox_inches='tight')

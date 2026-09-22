@@ -24,7 +24,7 @@ for k in ll.get_branches():
 commonAncestor = ll.find_MRCA(descendants)
 commonAncestor.children = commonAncestor.children[::-1]
 
-ll.plot_tree(ax)
+ll.plot_tree(ax, autoSort=False)
 ll.plot_text(ax, size = 26)
 ll.plot_points(ax)
 
