@@ -133,7 +133,7 @@ tips = ll.get_external(lambda k: k.name.startswith("A"))
 # these two code blocks do the same thing, but the lambda is more concise
 # and fits the baltic convention
 def filter_tips_starting_with_A(node):
-return node.name.startswith("A")
+    return node.name.startswith("A")
 tips = ll.get_external(filter_tips_starting_with_A)
 ```
 
@@ -141,10 +141,10 @@ tips = ll.get_external(filter_tips_starting_with_A)
 
 After this guide, continue with the module reference:
 
-- [baltic](baltic.md)
-- [io](io.md)
-- [tree](tree.md)
-- [bt_utils](bt_utils.md)
+- [baltic](https://baltic.readthedocs.io/en/latest/baltic.html)
+- [io](https://baltic.readthedocs.io/en/latest/io.html)
+- [tree](https://baltic.readthedocs.io/en/latest/tree.html)
+- [bt_utils](https://baltic.readthedocs.io/en/latest/bt_utils.html)
 
 ## Build and serve the documentation locally
 
