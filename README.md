@@ -36,8 +36,8 @@ ll.treeStats()
 
 The main loader functions are:
 
-- `bt.load_newick(...)`: for Newick files
-- `bt.load_nexus(...)`: for Nexus files (e.g. from BEAST analyses)
+- `bt.io.load_newick(...)`: for Newick files
+- `bt.io.load_nexus(...)`: for Nexus files (e.g. from BEAST analyses)
 
 Examples:
 
