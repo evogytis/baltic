@@ -1,5 +1,5 @@
-``baltic``: the Backronymed Adaptable Lightweight Tree Import Code
-==================================================================
+``baltic``: the Backronymed Adaptable Lightweight Tree vIsualization Code
+=========================================================================
 
 ``baltic`` is a Python library for parsing, manipulating, and visualizing phylogenetic trees. It is designed for exploratory phylogenetics work, especially with BEAST-style Nexus trees and Nextstrain/Auspice JSON exports, while staying lightweight enough for quick scripting.
 
