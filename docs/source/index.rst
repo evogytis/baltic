@@ -3,6 +3,8 @@
 
 ``baltic`` is a Python library for parsing, manipulating, and visualizing phylogenetic trees. It is designed for exploratory phylogenetics work, especially with BEAST-style Nexus trees and Nextstrain/Auspice JSON exports, while staying lightweight enough for quick scripting.
 
+A `🖼️ gallery of examples <https://phylo-baltic.github.io/baltic-gallery/>`_ can be found here.
+
 Core capabilities
 -----------------
 
@@ -22,7 +24,7 @@ New users should begin with :doc:`getting_started`, then use the API reference p
 
 Source code
 -----------
-The source code is available on GitHub: `dev-doc branch <https://github.com/evogytis/baltic/tree/dev-doc>`_.
+The source code is available on `GitHub. <https://github.com/evogytis/baltic/tree/dev-doc>`_.
 
 Contributing
 ------------
