@@ -86,7 +86,6 @@ import matplotlib.pyplot as plt
 import baltic as bt
 
 ll = bt.io.load_newick("tree.nwk", treeType="divergence")
-
 fig, ax = plt.subplots(figsize=(8, 10))
 
 # Plot the branches using `plot_tree`
