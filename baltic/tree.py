@@ -1201,6 +1201,7 @@ class Tree: ## tree class
             fixSingletons
         ):  ## fixing singleton nodes (node's with 1 child, i.e. old root)
             logger.debug("Fixing singletons")
+            self.traverse_tree()  ## make_single_type() requires heights to be current
             self.make_single_type()  ## tree class can handle it
 
         ############
