@@ -149,6 +149,27 @@ def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, o
     Process a posterior tree set with a parallel worker function.
 
     This orchestrates work over records yielded by :func:`posterior_tree_iterator`.
+    Each tree is handed to *processFxn* in a worker process; results are buffered and
+    written to *outputPath* in tree order even though workers finish out of order.
+
+    *processFxn* must accept ``(i, state, treeString, tipRenameDict, maxDate,
+    headerMode=...)`` and return ``(i, state, values)``. It is called once with
+    ``headerMode=True`` to obtain column names, then once per tree with
+    ``headerMode=False``. See :func:`tree_length_worker` for the smallest example.
+
+    .. warning::
+
+       The output file currently gets one header line **per tree** rather than a
+       single header row, because the write is not nested under the first-tree
+       check. A run over 1000 trees produces 1000 leading ``state<TAB>...`` lines.
+       Strip the duplicates before parsing the log.
+
+    .. note::
+
+       Work is dispatched with :class:`concurrent.futures.ProcessPoolExecutor`, so on
+       macOS and Windows the calling code must sit behind
+       ``if __name__ == "__main__":`` or the pool raises ``BrokenProcessPool``. This
+       is why the example below is not executed.
 
     **Parameters**
 
@@ -158,22 +179,23 @@ def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, o
     processFxn : callable
         Worker function applied to each sampled tree.
 
-    workers : int, optional
-        Maximum number of worker processes to use. Defaults to ``4``.
+    workers : int, default=4
+        Maximum number of worker processes to use.
 
     burnin : int, optional
         Number of initial sampled trees to skip. Defaults to ``0``.
 
-    outputPath : str, optional
-        Path to the tab-delimited output file.
+    outputPath : str, default="processed-output.log.txt"
+        Path to the tab-delimited output file. It is overwritten without warning.
 
     mostRecentDate : float, optional
-        Explicit most recent sampling date to pass to workers.
+        Explicit most recent sampling date to pass to workers. If omitted, each
+        tree's own latest tip date is used.
 
     tipRegex : str, optional
         Regular expression used to extract dates from tip names.
 
-    dateFmt : str, optional
+    dateFmt : str, default="%Y-%m-%d"
         Date format used to parse extracted tip dates.
 
     treestringRegex : str, optional
@@ -181,6 +203,11 @@ def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, o
 
     \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to *processFxn*.
+
+    **Returns**
+
+    None
+        Results are written to *outputPath*.
 
     **Examples**
 
@@ -264,8 +291,9 @@ def label_timepoints(times, edges, labels):
     **Returns**
 
     np.ndarray of object
-        Labels for each time; None if time is < min(edges)
-        or > max(edges).
+        Labels for each time; ``None`` where the time falls before the first edge
+        or after the last. *edges* need not be sorted on input: they are sorted
+        here and *labels* reordered to match.
 
     **Examples**
 
@@ -413,20 +441,31 @@ def tmrca_worker(i, state, treeString, tipRenameDict, maxDate, tipNames, strictM
         Most recent sampling date used to assign absolute times.
 
     tipNames : list[str] or dict[str, list[str]]
-        Tip set definitions for which TMRCA values should be reported.
+        Tip set definitions for which TMRCA values should be reported. A bare list
+        is treated as a single set and reported under the column name ``tmrca``;
+        a dict reports one column per key. Each set needs at least two tips.
 
-    strictMRCA : bool, optional
+    strictMRCA : bool, default=False
         If ``True``, only report TMRCAs for nodes whose descendant set exactly
-        matches the requested tip set.
+        matches the requested tip set, writing ``'nan'`` when it does not. If
+        ``False``, the common ancestor is reported whatever else descends from it.
 
-    headerMode : bool, optional
+    headerMode : bool, default=False
         If ``True``, return output column names instead of values.
 
     **Returns**
 
     tuple
         Tuple ``(i, state, values)`` suitable for the posterior-processing
-        pipeline.
+        pipeline. The values are ancestor dates rendered as **strings** (or the
+        string ``'nan'``), not floats, since they are written straight to a
+        tab-delimited log.
+
+    **Raises**
+
+    AssertionError
+        If a tip set has fewer than two names, if any requested tip is missing
+        from the tree, or if the common ancestor has no absolute time.
 
     **Examples**
 
@@ -489,14 +528,15 @@ def tree_length_worker(i, state, treeString, tipRenameDict, maxDate, headerMode 
         Most recent sampling date supplied by the posterior-processing
         pipeline. It is accepted for interface compatibility.
 
-    headerMode : bool, optional
+    headerMode : bool, default=False
         If ``True``, return output column names instead of values.
 
     **Returns**
 
     tuple
         Tuple ``(i, state, values)`` suitable for the posterior-processing
-        pipeline.
+        pipeline, where ``values`` is a one-element list holding the summed branch
+        length, or the column name ``'treeLength'`` in header mode.
 
     **Examples**
 

@@ -84,6 +84,11 @@ class Clade(BranchLike): ## clade class
         width : float, optional
             Plotting width assigned to the clade. Defaults to ``1.0``.
 
+        **Returns**
+
+        None
+            The branch is initialised in place.
+
         **Examples**
 
         >>> from baltic.clade import Clade

@@ -27,6 +27,18 @@ def make_tree(data, treeType, tre=None):
     """
     Parse a Newick-like tree string into a :class:`baltic.tree.Tree`.
 
+    Handles BEAST integer tips, ``[&...]`` annotation comments and ``#label``
+    reticulations in addition to plain Newick. The returned tree has not been
+    traversed; the loaders in :mod:`baltic.io` do that, so call
+    :meth:`baltic.tree.Tree.traverse_tree` if using this directly.
+
+    .. note::
+
+       If every branch length parses as ``0.0`` -- as happens with a topology-only
+       cladogram such as ``"((A,B),C);"`` -- branch lengths are **rewritten** to make
+       the tree ultrametric with a height of 1.0, and a warning is logged. The
+       lengths in the resulting tree are therefore invented, not parsed.
+
     **Parameters**
 
     data : str
@@ -46,7 +58,11 @@ def make_tree(data, treeType, tre=None):
     **Raises**
 
     AssertionError
-        If the input string is malformed or cannot be fully parsed.
+        If the string does not end in a semicolon, if parentheses are unbalanced,
+        or if parsing stalls on a character it cannot interpret.
+
+    Exception
+        If a reticulation label is used more than once in the tree.
 
     **Examples**
 
@@ -265,7 +281,18 @@ def make_tree_JSON(jsonNode, jsonTranslationDict, treeType, tre=None,):
     **Returns**
 
     :class:`baltic.tree.Tree`
-        Parsed tree object.
+        Parsed tree object, already traversed.
+
+    **Raises**
+
+    KeyError
+        If a JSON leaf lacks the name field named by *jsonTranslationDict*.
+
+    **Notes**
+
+    Internal nodes without a name in the JSON are assigned a generated
+    ``NODE_<n>`` identifier, matching Auspice's own convention. This is why the
+    second example below reports ``'NODE_0000001'`` for an unnamed root.
 
     **Examples**
 

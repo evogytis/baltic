@@ -38,12 +38,30 @@ class Tree: ## tree class
 
         A :class:`.Tree` stores :class:`baltic.branchLike.BranchLike`
         descendants such as :class:`baltic.node.Node` and
-        :class:`baltic.leaf.Leaf`.
+        :class:`baltic.leaf.Leaf` in a flat ``Objects`` list alongside a ``root``
+        reference.
+
+        The tree starts empty: ``root`` is ``None`` and ``Objects`` is empty, while
+        ``curNode`` holds a placeholder node that :meth:`add_node` and
+        :meth:`add_leaf` attach the first branches to. Most users build trees with
+        :func:`baltic.baltic.make_tree` or the loaders in :mod:`baltic.io` rather
+        than constructing one directly.
 
         **Parameters**
 
         treeType : {"divergence", "time"}
-            Interpretation of branch lengths in the tree.
+            Interpretation of branch lengths in the tree. ``"divergence"`` makes
+            ``height`` authoritative, ``"time"`` makes ``absoluteTime``
+            authoritative.
+
+        **Returns**
+
+        None
+
+        **Raises**
+
+        AssertionError
+            If *treeType* is neither ``"divergence"`` nor ``"time"``.
 
         **Examples**
 
@@ -77,10 +95,22 @@ class Tree: ## tree class
 
         This creates a :class:`baltic.reticulation.Reticulation`.
 
+        **Notes**
+
+        The new reticulation's ``index`` is set to *name* rather than to an integer,
+        and ``self.curNode`` moves onto it. Since a reticulation is leaf-like, the
+        next :meth:`add_node` or :meth:`add_leaf` would try to attach a child to it
+        and raise :class:`TypeError`; reassign ``self.curNode`` first.
+
         **Parameters**
 
         name : str
-            Name assigned to the new reticulation object.
+            Name assigned to the new reticulation object. Also used as its index.
+
+        **Returns**
+
+        None
+            The tree is modified in place.
 
         **Examples**
 
@@ -117,6 +147,11 @@ class Tree: ## tree class
         then the new node will be set as the root of the tree.
 
         After the new node is added, ``self.curNode`` will update to the newly created node.
+
+        **Returns**
+
+        None
+            The tree is modified in place.
 
         **Raises**
 
@@ -170,15 +205,21 @@ class Tree: ## tree class
         **Notes**
 
         If the tree does not have a root (i.e. a tree with no branches), then the
-        new node will be set at the root of the tree.
+        new leaf will be set as the root of the tree.
 
-        After the new node is added, ``self.curNode`` will update to the newly
-        created node.
+        After the new leaf is added, ``self.curNode`` will update to the newly
+        created leaf. Because a leaf cannot take children, adding another branch
+        requires reassigning ``self.curNode`` first.
+
+        **Returns**
+
+        None
+            The tree is modified in place.
 
         **Raises**
 
         TypeError
-            If the current node of the tree to which the new node will be added is not itself a
+            If the current node of the tree to which the new leaf will be added is not itself a
             valid node (e.g. if ``self.curNode`` is a :class:`.Leaf`).
 
         **Examples**
@@ -218,12 +259,12 @@ class Tree: ## tree class
 
         **Parameters**
 
-        startingNode : :class:`.BranchLike`
+        startingNode : :class:`.BranchLike`, optional
             The node from which the new subtree will descend.
 
             By default, the root of the tree is used.
 
-        traverseCondition : function, optional
+        traverseCondition : callable, optional
             Function defining the conditional inclusion descendant nodes.
 
             By convention, the function should take a single :class:`.BranchLike` object
@@ -231,14 +272,21 @@ class Tree: ## tree class
             For example, to include all branches with length greater than ``0.5``:
             ``traverseCondition = lambda k: k.length > 0.5``.
 
-            By default, all branches are included.
+            By default, all branches are included. Supplying one also prunes children
+            that were not traversed and runs :meth:`fix_hanging_nodes` on the result.
 
-        stem : bool, optional
-            Include the stem branch leading into the root.
+        stem : bool, default=True
+            Include the stem branch leading into *startingNode*. When ``False``, the
+            new root's ``length`` is set to ``0.0``. Has no effect beyond that when
+            *startingNode* is already the root.
 
         **Returns**
 
-        :class:`.Tree`
+        :class:`.Tree` or None
+            A new tree whose branches are deep copies, so editing it never affects
+            the original. ``None`` is returned, with an error logged, when the
+            traversal collects no leaves -- which is what an over-restrictive
+            *traverseCondition* produces.
 
         **Examples**
 
@@ -249,6 +297,12 @@ class Tree: ## tree class
         >>> sub = ll.subtree(startingNode=node, stem=False)
         >>> sorted(tip.name for tip in sub.get_external())
         ['A', 'B', 'C']
+
+        The copy is independent of the tree it came from:
+
+        >>> sub.get_leaf("A").name = "renamed"
+        >>> sorted(tip.name for tip in ll.get_external())
+        ['A', 'B', 'C', 'D']
         """
         logger.info("Generating subtree.")
         if startingNode is None:
@@ -346,11 +400,18 @@ class Tree: ## tree class
         """
         Remove singleton internal nodes by merging them into their descendants.
 
-        The resulting layout is typically refreshed with :meth:`sort_branches`.
+        A singleton is an internal node with exactly one child, as produced by
+        multitype (structured-coalescent) BEAST analyses. Each is spliced out and its
+        branch length added to the child, leaving a strictly branching tree. Requires
+        heights, so call :meth:`traverse_tree` first.
+
+        :meth:`sort_branches` is called on the way out, so plotting coordinates are
+        already refreshed when this returns.
 
         **Returns**
 
         None
+            The tree is modified in place.
 
         **Examples**
 
@@ -397,15 +458,28 @@ class Tree: ## tree class
         """
         Assign absolute times to branches from their heights.
 
+        Each branch's ``absoluteTime`` becomes
+        ``mostRecentSamplingDate - treeHeight + height``, so heights must already be
+        set: call :meth:`traverse_tree` first, or this raises :class:`TypeError` on
+        the unset heights. The tree's ``mostRecent`` attribute is set to the latest
+        assigned date. Branches are modified in place.
+
         These dates are later consumed by :meth:`get_all_tip_TMRCAs` and
         :meth:`count_lineages_at_time`.
 
         **Parameters**
 
         mostRecentSamplingDate : float
-            Absolute date corresponding to the most recent sampled tip.
-        justLeaves : bool, optional
-            If ``True``, only assign absolute times to leaves.
+            Absolute date corresponding to the most recent sampled tip, usually a
+            decimal year from :func:`baltic.bt_utils.calendar_to_decimal_date`.
+        justLeaves : bool, default=False
+            If ``True``, only assign absolute times to leaves, leaving internal
+            nodes with whatever ``absoluteTime`` they already had.
+
+        **Returns**
+
+        None
+            Branches are modified in place.
 
         **Examples**
 
@@ -415,6 +489,8 @@ class Tree: ## tree class
         >>> ll.set_absolute_time(2020.0)
         >>> round(ll.get_leaf("C").absoluteTime, 1)
         2020.0
+        >>> round(ll.root.absoluteTime, 1), ll.mostRecent
+        (2017.0, 2020.0)
         """
         logger.debug("Setting absoluteTime for all branches.")
         logger.debug(f"MRSD: {mostRecentSamplingDate}")
@@ -463,6 +539,11 @@ class Tree: ## tree class
         factor : float
             Scaling factor applied to every branch length.
 
+        **Returns**
+
+        None
+            Branches are modified in place.
+
         **Examples**
 
         >>> import baltic as bt
@@ -481,11 +562,15 @@ class Tree: ## tree class
         """
         Print a short textual summary of tree statistics.
 
-        This is a print-oriented wrapper around :meth:`_calculate_tree_stats`.
+        This is a print-oriented wrapper around :meth:`_calculate_tree_stats`; use
+        :meth:`treeStatsDict` to get the same numbers as data. Because the statistics
+        are recomputed, this calls :meth:`traverse_tree` and therefore refreshes branch
+        heights as a side effect.
 
         **Returns**
 
         None
+            The summary is written to standard output.
 
         **Examples**
 
@@ -524,12 +609,17 @@ class Tree: ## tree class
         """
         Return summary statistics describing the current tree.
 
-        This exposes the dictionary returned by :meth:`_calculate_tree_stats`.
+        This exposes the dictionary returned by :meth:`_calculate_tree_stats`, the
+        same numbers :meth:`treeStats` prints. Because the statistics are recomputed,
+        this calls :meth:`traverse_tree` and therefore refreshes branch heights as a
+        side effect.
 
         **Returns**
 
         dict
-            Dictionary of tree height, length, topology flags, and object counts.
+            Dictionary of tree height and length, the ``strictlyBifurcating``,
+            ``multitypeTree``, ``singletonTree`` and ``hasTraits`` topology flags,
+            and counts of objects, nodes and leaves.
 
         **Examples**
 
@@ -661,21 +751,39 @@ class Tree: ## tree class
         """
         Traverse the tree recursively while updating heights and descendant sets.
 
+        This is the method that recomputes tree state, so call it after any structural
+        edit. As it walks it sets each branch's ``height``, fills each node's ``leaves``
+        set with the names of its descendant tips, sets each node's ``childHeight``, and
+        updates the tree's ``treeHeight``. When started from the root with neither
+        condition given, the existing ``height``, ``leaves`` and ``childHeight`` values
+        are cleared first; supplying either condition skips that reset, so a filtered
+        traversal refines existing state rather than rebuilding it.
+
         **Parameters**
 
         curNode : :class:`.BranchLike`, optional
-            Node at which to start traversal. Defaults to the root.
+            Node at which to start traversal. By default the root is used.
         includeCondition : callable, optional
-            Predicate deciding whether a visited branch should be collected.
+            Predicate deciding whether a visited branch should be collected. By
+            default only leaf-like branches are collected, so a bare
+            ``traverse_tree()`` returns the tips rather than every branch.
         traverseCondition : callable, optional
-            Predicate deciding whether a child branch should be traversed.
+            Predicate deciding whether a child branch should be traversed. By
+            default every child is traversed.
         collect : list, optional
-            Existing collection list to append to during recursive calls.
+            Existing collection list to append to. Used by the recursive calls;
+            callers normally leave this unset.
 
         **Returns**
 
-        list
-            Branches satisfying ``includeCondition`` in traversal order.
+        list[:class:`.BranchLike`]
+            Branches satisfying ``includeCondition``, in traversal order.
+
+        **Raises**
+
+        AttributeError
+            If a node without children is encountered. Repair such a tree with
+            :meth:`fix_hanging_nodes`.
 
         **Examples**
 
@@ -683,6 +791,13 @@ class Tree: ## tree class
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
         >>> leaves = ll.traverse_tree(includeCondition=lambda k: k.is_leaf())
         >>> [tip.name for tip in leaves]
+        ['A', 'B', 'C']
+
+        Heights and descendant sets are a side effect of the walk:
+
+        >>> ll.root.childHeight, ll.treeHeight
+        (2.0, 2.0)
+        >>> sorted(ll.root.leaves)
         ['A', 'B', 'C']
         """
         logger.info("Beginning tree traversal.")
@@ -767,13 +882,28 @@ class Tree: ## tree class
         """
         Rename leaf nodes using a mapping.
 
-        Renamed tips are visible through :meth:`get_external`.
+        Renamed tips are visible through :meth:`get_external`. Only true leaves are
+        renamed, so collapsed clades keep their names.
 
         **Parameters**
 
         tipNameMap : dict, optional
-            Mapping from current tip name to replacement name. If omitted,
-            ``self.tipMap`` is used.
+            Mapping from current tip name to replacement name. Every tip in the tree
+            must appear as a key. If omitted, ``self.tipMap`` is used.
+
+        **Returns**
+
+        None
+            Tips are renamed in place.
+
+        **Raises**
+
+        ValueError
+            If *tipNameMap* is omitted and the tree has no ``tipMap``.
+
+        KeyError
+            If a tip's current name is missing from the mapping. Tips are renamed as
+            they are visited, so a partial mapping leaves the tree partly renamed.
 
         **Examples**
 
@@ -798,15 +928,31 @@ class Tree: ## tree class
         """
         Reroot the tree at the midpoint of the longest tip-to-tip path.
 
+        The longest path is found by rerooting on every tip in turn and recording
+        the greatest resulting tip height, so the cost grows with the number of tips
+        and the tree is repeatedly rerooted along the way. The tree is modified in
+        place throughout; if this raises part-way, the tree is left rooted wherever
+        the search had reached rather than in its original state. Work on a copy if
+        that matters.
+
+        Inherits the restrictions of :meth:`reroot`, so it is divergence-trees only.
+
         **Parameters**
 
-        fixSingletons : bool, optional
-            If ``True``, collapse singleton nodes after rerooting.
+        fixSingletons : bool, default=True
+            If ``True``, collapse singleton nodes after rerooting. Passed through to
+            :meth:`reroot`.
 
         **Returns**
 
         :class:`.Tree`
-            The rerooted tree.
+            The same tree object, rerooted. The return value is a convenience for
+            chaining, not a copy.
+
+        **Raises**
+
+        AttributeError
+            If the tree's ``treeType`` is ``"time"``, via :meth:`reroot`.
 
         **Examples**
 
@@ -880,21 +1026,42 @@ class Tree: ## tree class
         """
         Reroot the tree on a branch or branch midpoint.
 
+        Only divergence trees can be rerooted: moving the root would invalidate the
+        calibration of a time tree, so one raises :class:`AttributeError` instead.
+        Total tree length is preserved, and this is checked before returning.
+
+        The tree is modified in place. If the current root carries a non-zero branch
+        length, it is silently reset to ``0.0`` (with a warning logged) since a root
+        stub is a plotting convenience rather than real divergence.
+
         **Parameters**
 
         branch : :class:`.BranchLike`, optional
             Branch on which the new root should be placed. If omitted, midpoint
-            rooting is used.
-        branchFrac : float, optional
-            Fraction of ``branch.length`` placed between the branch start and the
-            new root.
-        fixSingletons : bool, optional
-            If ``True``, collapse singleton nodes after rerooting.
+            rooting is used via :meth:`midpoint_root`. Passing the current root
+            logs a warning and returns the tree unchanged.
+        branchFrac : float, default=0.5
+            Where along ``branch`` to place the new root, as a fraction of its
+            length measured from the branch's parent end. ``0.0`` puts the root at
+            the top of the branch, ``1.0`` at the branch itself.
+        fixSingletons : bool, default=True
+            If ``True``, run :meth:`make_single_type` afterwards to splice out the
+            singleton node the old root becomes.
 
         **Returns**
 
         :class:`.Tree`
-            The rerooted tree.
+            The same tree object, rerooted. The return value is a convenience for
+            chaining, not a copy.
+
+        **Raises**
+
+        AttributeError
+            If the tree's ``treeType`` is ``"time"``.
+
+        AssertionError
+            If total tree length changed during rerooting, which would indicate a
+            branch-length bookkeeping error.
 
         **Examples**
 
@@ -1065,42 +1232,78 @@ class Tree: ## tree class
         analytically rather than sampled on a grid. Tips with date ranges are
         alternately projected into their ranges and refitted until convergence.
 
+        The tree is rerooted in place, and tips whose dates were uncertain have
+        their ``absoluteTime`` overwritten with the inferred value. Requires a
+        divergence tree whose tips carry dates, as produced by loading with
+        ``absoluteTime=True``.
+
+        Progress is written to standard output through a dedicated handler on the
+        ``baltic.tree.root_by_regression`` logger, independent of the root logger's
+        configuration.
+
         **Parameters**
 
-        stat : {"r^2", "correlation", "sum of squares"}, optional
+        stat : {"r^2", "correlation", "sum of squares"}, default="r^2"
             Regression statistic to optimize. ``"sum of squares"`` is
             minimized; the other statistics are maximized.
-        forcePositive : bool, optional
+        forcePositive : bool, default=True
             If true, exclude root positions with a negative regression slope.
         nJobs : int or None, optional
             Number of worker threads used to evaluate branches. ``None`` or a
             non-positive value uses the available CPU count.
-        baseRefineIters : int, optional
+        baseRefineIters : int, default=20
             Base number of ranged-date refinement iterations.
-        refineItersPerTip : int, optional
+        refineItersPerTip : int, default=10
             Additional ranged-date iterations allowed per uncertain tip.
-        maxRefineIters : int, optional
+        maxRefineIters : int, default=400
             Upper limit on ranged-date refinement iterations.
-        returnRefinedDates : bool, optional
-            If true, return ``(tree, refined_dates)``. Otherwise return the tree.
+        returnRefinedDates : bool, default=True
+            If true, return ``(tree, refined_dates)``. Otherwise return the tree
+            alone. Note the default is the tuple.
 
         **Returns**
 
         :class:`.Tree` or tuple
-            Rerooted tree and, when requested, inferred uncertain tip dates.
+            The same tree object, rerooted, and -- when *returnRefinedDates* is
+            true -- a dict of inferred dates for the tips that had ranges. The
+            dict is empty when every tip date was already exact. A tree with fewer
+            than three tips is returned unchanged, with a warning logged.
+
+        **Raises**
+
+        ValueError
+            If *stat* is not one of the three supported statistics, if the tree is
+            not a divergence tree, or if the refinement iteration limits are not
+            positive.
+
+        **Warns**
+
+        RuntimeWarning
+            If ranged-date refinement hits its iteration limit without converging.
 
         **Notes**
 
         Exact dates require one closed-form solve per branch. Date ranges use
-        iterative projection; a warning is emitted if refinement reaches its
-        iteration limit. The previous implementation remains available as
-        :meth:`root_by_regression_legacy`.
+        iterative projection. The previous implementation remains available as
+        :meth:`root_by_regression_legacy`, which differs in several respects -- see
+        its docstring before switching.
 
         **Examples**
 
-        >>> rooted, inferred = tree.root_by_regression(  # doctest: +SKIP
-        ...     stat="sum of squares", nJobs=4
-        ... )
+        Progress lines go to standard output, so this example captures them to keep
+        the doctest readable.
+
+        >>> import io
+        >>> import baltic as bt
+        >>> from contextlib import redirect_stdout
+        >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
+        >>> ll = bt.io.load_newick(handle, treeType="divergence", absoluteTime=True, variableDate=True)
+        >>> with redirect_stdout(io.StringIO()):
+        ...     rooted, inferred = ll.root_by_regression(nJobs=1)
+        >>> rooted is ll
+        True
+        >>> inferred
+        {}
         """
         import sys
         from os import cpu_count
@@ -1222,35 +1425,68 @@ class Tree: ## tree class
         """
         Reroot using the preserved legacy root-to-tip regression search.
 
+        Superseded by :meth:`root_by_regression`, which solves each branch in closed
+        form instead of searching, runs in threads, and validates its arguments more
+        consistently. Prefer that method for new code; this one is kept so earlier
+        results can be reproduced.
+
+        Every non-root branch is evaluated as a candidate root, each in a worker
+        **process**. The tree is rerooted in place and uncertain tips have their
+        ``absoluteTime`` overwritten with the best-fitting inferred value.
+
+        .. warning::
+
+           Because the work is dispatched with
+           :class:`concurrent.futures.ProcessPoolExecutor`, on platforms that spawn
+           rather than fork (macOS and Windows) the calling code must be guarded by
+           ``if __name__ == "__main__":``. Without it the pool dies with
+           ``BrokenProcessPool``, and it generally cannot be called straight from a
+           notebook or an interactive session. This applies even with ``nJobs=1``.
+           :meth:`root_by_regression` uses threads and has no such restriction.
+
         **Parameters**
 
-        stat : {"r^2", "correlation", "sum of squares"}
-            Which regression stat to optimize, by default ``"r^2"``
+        stat : {"r^2", "correlation", "sum of squares"}, default="r^2"
+            Which regression stat to optimize.
 
-        forcePositive : bool
+        forcePositive : bool, default=True
             Forbid date inference to allow negative branch lengths.
 
         nJobs : int or None, optional
-            Number of parallel threads to use for Monte Carlo regression.
+            Number of parallel worker **processes** to use for the search. ``None``
+            or a non-positive value uses the available CPU count.
 
-        baseRefineIters : int, optional
-            Minimum number of Monte Carlo iterations, by default ``20``.
+        baseRefineIters : int, default=20
+            Minimum number of Monte Carlo iterations.
 
-        refineItersPerTip : int, optional
-            Additional Monte Carlo iterations per tip, by default ``10``.
+        refineItersPerTip : int, default=10
+            Additional Monte Carlo iterations per tip.
 
-        maxRefineIters : int, optional
-            Maximum number of Monte Carlo iterations, by default ``400``.
+        maxRefineIters : int, default=400
+            Maximum number of Monte Carlo iterations.
 
-        returnRefinedDates : bool, optional
-            True if the best-fitting inferred dates should be returned, by default ``True``.
+        returnRefinedDates : bool, default=True
+            True if the best-fitting inferred dates should be returned.
 
         **Returns**
 
-        :class:`.Tree`
+        :class:`.Tree` or tuple
+            The same tree object, rerooted, and -- when *returnRefinedDates* is
+            true -- a dict mapping tip names to the best-fitting dates. A tree with
+            no candidate branches is returned bare, without the dict, regardless of
+            *returnRefinedDates*.
 
-        dict
-            Mapping of tip names to the best-fitting dates.
+        **Raises**
+
+        AssertionError
+            If *stat* is not one of the three supported statistics, or if no tip
+            carries an ``absoluteTimeRange`` (load the tree with
+            ``absoluteTime=True``). Note that :meth:`root_by_regression` raises
+            :class:`ValueError` for the equivalent argument error.
+
+        ValueError
+            If only some tips carry an ``absoluteTimeRange``; the range of every tip
+            is differenced, so a mix of set and unset ranges fails.
 
         **Examples**
 
@@ -1261,6 +1497,13 @@ class Tree: ## tree class
         >>> rooted, inferred_dates = ll.root_by_regression_legacy(nJobs=1)  # doctest: +SKIP
         >>> isinstance(inferred_dates, dict)  # doctest: +SKIP
         True
+
+        The final two steps are skipped rather than run: the process pool requires a
+        ``__main__`` guard, which a doctest cannot provide. Run them from a script
+        shaped like this instead::
+
+            if __name__ == "__main__":
+                rooted, inferred_dates = ll.root_by_regression_legacy(nJobs=1)
         """
         from baltic.bt_utils import _rtt_worker, _root_to_tip, decimal_to_calendar_date
         from concurrent.futures import ProcessPoolExecutor
@@ -1460,12 +1703,25 @@ class Tree: ## tree class
 
         **Parameters**
 
-        descending : bool, optional
-            Controls the default sort direction.
+        descending : bool, default=True
+            Controls the direction of the default sort. Ignored when *sortFxn* or
+            *operationFxn* is given.
         sortFxn : callable, optional
-            Key function used to sort each node's children.
+            Key function used to sort each node's children. By default children are
+            ordered by type, then descendant count, then branch length.
         operationFxn : callable, optional
-            Callable that receives and returns each node's child list directly.
+            Callable that receives and returns each node's child list directly, for
+            reorderings a key function cannot express (such as reversing).
+
+        **Returns**
+
+        None
+            Child lists and plotting coordinates are updated in place.
+
+        **Raises**
+
+        Exception
+            If both *sortFxn* and *operationFxn* are given.
 
         **Examples**
 
@@ -1780,14 +2036,28 @@ class Tree: ## tree class
         """
         Find the most recent common ancestor of a list of descendant nodes.
 
+        Descendants may be passed as separate arguments, as a single list, as tip
+        name strings, or as branch objects -- but strings and branches cannot be
+        mixed in one call.
+
         **Parameters**
 
-        \\*descendants : list[:class:`.BranchLike`] or str
-            Descendant branches or tip names whose MRCA is being searched.
+        \\*descendants : :class:`.BranchLike` or str
+            Descendant branches or tip names whose MRCA is being searched. A single
+            list argument is unpacked. Mixing strings and branch objects raises
+            :class:`AttributeError`.
 
         **Returns**
 
-        :class:`.Node`
+        :class:`.BranchLike` or None
+            The most recent common ancestor: a :class:`.Node` in the usual case, but
+            the branch itself when only one descendant is given, and ``None`` when no
+            descendants are given at all.
+
+        **Raises**
+
+        AssertionError
+            If any tip name cannot be found in the tree.
 
         **Examples**
 
@@ -1797,6 +2067,8 @@ class Tree: ## tree class
         >>> mrca = ll.find_MRCA("A", "B")
         >>> sorted(mrca.leaves)
         ['A', 'B']
+        >>> ll.find_MRCA("A", "B", "C", "D") is ll.root
+        True
         """
         if len(descendants) == 1 and isinstance(descendants[0], list):
             descendants = descendants[0]
@@ -1828,19 +2100,35 @@ class Tree: ## tree class
         """
         Replace a subtree with a collapsed :class:`.Clade` placeholder.
 
+        The subtree's branches are removed from the tree and stored on the clade, so
+        the operation is reversible with :meth:`restore_all_collapsed_subtrees`. The
+        clade inherits the node's index, length, height, absolute time and traits;
+        the tree is re-traversed and re-sorted before returning. If the tree has a
+        ``tipMap``, an entry is added for the new clade.
+
+        Requires a traversed tree, since the clade's width and descendant set come
+        from the node's ``leaves``.
+
         **Parameters**
 
         cl : :class:`.Node`
-            Root of the subtree to collapse.
+            Root of the subtree to collapse. Must be an internal node.
         givenName : str
             Name assigned to the collapsed clade object.
         widthFunction : callable, optional
-            Function computing the visual width of the collapsed clade.
+            Function computing the visual width of the collapsed clade. By default
+            the number of descendant tips is used.
 
         **Returns**
 
         :class:`.Clade`
-            The newly created collapsed clade.
+            The newly created collapsed clade. The tree itself is modified in place.
+
+        **Raises**
+
+        AssertionError
+            If *cl* is not an internal node, or if collapsing it would consume the
+            entire tree.
 
         **Examples**
 
@@ -1895,7 +2183,15 @@ class Tree: ## tree class
         """
         Restore every previously collapsed clade back into its original subtree.
 
-        This reverses :meth:`collapse_subtree_to_clade`.
+        This reverses :meth:`collapse_subtree_to_clade`. All clades are restored, and
+        the loop repeats until none remain, so clades nested inside a restored
+        subtree are expanded too. Any ``tipMap`` entries created for the clades are
+        removed, and the tree is re-traversed before returning.
+
+        **Returns**
+
+        None
+            The tree is modified in place.
 
         **Examples**
 
@@ -1929,16 +2225,45 @@ class Tree: ## tree class
         """
         Collapse branches according to a determined function, creating polytomies.
 
+        Unlike most manipulation methods, this does **not** modify the tree: it works
+        on a deep copy and returns that, leaving the original untouched. A collapsed
+        node's children are reattached to its parent and its branch length is added
+        to each of theirs, so tree length is preserved. Collapsing is repeated until
+        no node satisfies the condition.
+
+        The tree must have been traversed first, since node heights order the
+        collapsing.
+
         **Parameters**
 
-        collapseIfFxn : function
-            Function which determines branch collapse.
-
-            By default branches with posterior support less than or equal to 0.5 are
-            collapsed (``lambda x: x.traits["posterior"] <= 0.5``)
+        collapseIfFxn : callable, optional
+            Function deciding whether a node should be collapsed. By default,
+            branches with posterior support at or below 0.5 are collapsed
+            (``lambda x: x.traits["posterior"] <= 0.5``), which raises
+            :class:`KeyError` on a tree whose nodes carry no ``posterior`` trait --
+            pass an explicit function for non-BEAST trees.
 
         designatedNodes : list[:class:`.Node`], optional
-            List of nodes that should be collapsed.
+            Explicit list of nodes to collapse instead of using *collapseIfFxn*.
+
+            .. warning::
+
+               This parameter does not currently work. Its guard compares the nodes
+               you pass against the root of the internal deep copy, which is never
+               the same object, so any non-empty list raises ``AssertionError:
+               Root node was designated for deletion``. Use *collapseIfFxn* --
+               for example ``lambda n: n.index in {...}`` -- until this is fixed.
+
+        **Returns**
+
+        :class:`.Tree`
+            A new, collapsed tree. The original is unchanged.
+
+        **Raises**
+
+        AssertionError
+            If the requested collapsing would remove every internal branch, or if
+            *designatedNodes* is non-empty (see the warning above).
 
         **Examples**
 
@@ -2056,35 +2381,59 @@ class Tree: ## tree class
         """
         Serialize the tree to Newick- or NEXUS-like text.
 
+        Annotations are written as BEAST-style ``[&key=value]`` comments. Tip names
+        are always quoted, and branch lengths are written with fifteen decimal
+        places.
+
         **Parameters**
 
         curNode : :class:`.BranchLike`, optional
-            Current node during recursive serialization.
+            Current node during recursive serialization. Callers normally leave this
+            unset; see the note on the return value below.
         traits : iterable, optional
-            Trait names to include in branch comments.
-        nexus : bool, optional
+            Trait names to include in branch comments. By default **every** trait
+            found anywhere on the tree is exported; pass an empty list for a plain
+            Newick string.
+        nexus : bool, default=False
             If ``True``, wrap the result in a simple NEXUS tree block.
         stringFragment : list, optional
             Internal accumulator used during recursion.
         traverseCondition : callable, optional
-            Predicate selecting which descendants to serialize.
+            Predicate selecting which descendants to serialize. By default every
+            descendant is written.
         rename : dict, optional
-            Optional mapping from existing tip names to exported names.
-        quoteCharacter : str, optional
+            Optional mapping from existing tip names to exported names. Must contain
+            every tip in the tree.
+        quoteCharacter : str, default="'"
             Quote character used around tip names.
-        json : bool, optional
-            Reserved compatibility flag.
+        json : bool, default=False
+            Compatibility flag. Its only effect is to forbid combining it with
+            *nexus*.
 
         **Returns**
 
-        str
-            Serialized tree string.
+        str or None
+            Serialized tree string. The string is assembled and returned only when
+            recursion reaches the tree's root, so calling this with an explicit
+            *curNode* other than the root returns ``None``. Use :meth:`subtree`
+            first to serialize part of a tree.
+
+        **Raises**
+
+        AssertionError
+            If *rename* is not a dict or omits a tip name; if *traverseCondition*
+            leaves a node with no traversable children; or if *nexus* and *json* are
+            both true.
 
         **Examples**
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.0);", treeType="divergence")
         >>> ll.to_string().endswith(";")
+        True
+        >>> ll.to_string(traits=[])
+        "(('A':1.000000000000000,'B':1.000000000000000):1.000000000000000,'C':1.000000000000000):0.000000000000000;"
+        >>> ll.to_string(nexus=True).startswith("#NEXUS")
         True
         """
         #TODO this feels like it should go in io.py, not here
@@ -2194,12 +2543,25 @@ class Tree: ## tree class
         """
         Compute the pairwise TMRCA matrix for all tips in a time tree.
 
-        Absolute dates must already be assigned with :meth:`set_absolute_time`.
+        Values are the ``absoluteTime`` of each pair's common ancestor -- a date on
+        the tree's calendar, not an elapsed duration. A tip paired with itself is
+        ``0.0`` rather than its own date, and a pair sharing no common ancestor stays
+        ``None``.
+
+        Requires a traversed tree, since the descendant sets come from each node's
+        ``leaves``, and absolute dates must already be assigned with
+        :meth:`set_absolute_time`.
 
         **Returns**
 
-        dict
-            Nested dictionary keyed by tip names with TMRCA values.
+        dict[str, dict[str, float]]
+            Nested dictionary keyed by tip names in both directions, so
+            ``matrix[a][b]`` and ``matrix[b][a]`` are both populated.
+
+        **Raises**
+
+        AssertionError
+            If the tree's ``treeType`` is not ``"time"``.
 
         **Examples**
 
@@ -2208,8 +2570,10 @@ class Tree: ## tree class
         >>> _ = ll.traverse_tree()
         >>> ll.set_absolute_time(2020.0)
         >>> tmrcas = ll.get_all_tip_TMRCAs()
-        >>> tmrcas["A"]["B"] < 2020.0
-        True
+        >>> tmrcas["A"]["B"]
+        2019.0
+        >>> tmrcas["A"]["A"]
+        0.0
         """
         assert (
             self.treeType == "time"
@@ -2238,11 +2602,21 @@ class Tree: ## tree class
         """
         Extract the minimal subtree spanning a set of retained tips.
 
+        Every ancestor on the path from a retained tip to the root is kept, so
+        root-to-tip distances are preserved exactly. Nodes whose other children were
+        pruned are **not** collapsed, so the reduced tree generally contains
+        singleton nodes; run :meth:`make_single_type` afterwards for a strictly
+        branching result.
+
+        Requires a traversed tree, since branches are ordered by height; call
+        :meth:`traverse_tree` or :meth:`sort_branches` first or this raises
+        :class:`TypeError`. Duplicate entries in *tipsToKeep* are ignored.
+
         **Parameters**
 
         tipsToKeep : list[:class:`.BranchLike`]
             Leaf-like branches from this tree that should remain in the reduced
-            tree.
+            tree. Must be branch objects from this tree, not tip names.
 
         **Raises**
 
@@ -2263,6 +2637,14 @@ class Tree: ## tree class
         >>> reduced = ll.reduce_tree([ll.get_leaf("A"), ll.get_leaf("D")])
         >>> sorted(tip.name for tip in reduced.get_external())
         ['A', 'D']
+
+        Distances survive the reduction, at the cost of leaving singleton nodes
+        behind:
+
+        >>> reduced.get_leaf("A").height == ll.get_leaf("A").height
+        True
+        >>> any(len(node.children) == 1 for node in reduced.get_internal())
+        True
         """
         tipsToKeep = list(dict.fromkeys(tipsToKeep))
         if not tipsToKeep:
@@ -2326,16 +2708,22 @@ class Tree: ## tree class
         """
         Count branches spanning a given time value.
 
+        A branch is counted when ``parent_time < t <= branch_time``, so the interval
+        is open at the parent's end and closed at the branch's own. A branch whose
+        parent has no time assigned is skipped, which excludes the root.
+
         This is typically used after :meth:`set_absolute_time`.
 
         **Parameters**
 
         t : float
             Time point at which to count extant lineages.
-        timeAttr : str, optional
-            Branch attribute to use as the time coordinate.
+        timeAttr : str, default="absoluteTime"
+            Branch attribute to use as the time coordinate. Pass ``"height"`` to
+            count lineages on a divergence tree.
         inclusionConditionFxn : callable, optional
-            Predicate selecting which branches contribute to the count.
+            Predicate selecting which branches contribute to the count. By default
+            every spanning branch counts.
 
         **Returns**
 
@@ -2348,8 +2736,10 @@ class Tree: ## tree class
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:2.0);", treeType="time")
         >>> _ = ll.traverse_tree()
         >>> ll.set_absolute_time(2020.0)
-        >>> ll.count_lineages_at_time(2019.5) >= 1
-        True
+        >>> ll.count_lineages_at_time(2019.5)
+        3
+        >>> ll.count_lineages_at_time(2018.5)
+        2
         """
         return len(
             [
@@ -2372,15 +2762,16 @@ class Tree: ## tree class
         **Parameters**
 
         filterFxn : callable, optional
-            Additional predicate applied to candidate branches.
-        onlyLeaves : bool, optional
+            Additional predicate applied to candidate branches. By default no
+            additional filtering is done.
+        onlyLeaves : bool, default=True
             If ``True``, return only true leaves; otherwise include all leaf-like
-            objects such as collapsed clades.
+            objects such as collapsed clades and reticulations.
 
         **Returns**
 
-        list
-            External branches satisfying the filter.
+        list[:class:`.BranchLike`]
+            External branches satisfying the filter, in ``Objects`` order.
 
         **Examples**
 
@@ -2405,15 +2796,25 @@ class Tree: ## tree class
         """
         Look up a single leaf by name.
 
+        Only true leaves are searched, so collapsed clades are not found; use
+        :meth:`get_external` with ``onlyLeaves=False`` to include them.
+
         **Parameters**
 
         tipName : str
-            Tip name to match.
+            Tip name to match. Matching is exact.
 
         **Returns**
 
         :class:`.Leaf`
-            Matching leaf.
+            The matching leaf.
+
+        **Raises**
+
+        AssertionError
+            If *tipName* is not a string, or if the number of matching tips is
+            anything other than one. A missing name is an error rather than
+            ``None``, and duplicate tip names are rejected the same way.
 
         **Examples**
 
@@ -2437,12 +2838,13 @@ class Tree: ## tree class
         **Parameters**
 
         filterFxn : callable, optional
-            Additional predicate applied to nodes.
+            Additional predicate applied to nodes. By default every internal node
+            is returned.
 
         **Returns**
 
         list[:class:`.Node`]
-            Internal nodes satisfying the filter.
+            Internal nodes satisfying the filter, in ``Objects`` order.
 
         **Examples**
 
@@ -2465,14 +2867,20 @@ class Tree: ## tree class
         **Parameters**
 
         filterFxn : callable, optional
-            Predicate used to select branches.
-        failIfNoResults : bool, optional
-            If ``True``, raise an exception when no branches match.
+            Predicate used to select branches. By default every branch is returned.
+        failIfNoResults : bool, default=True
+            If ``True``, raise when nothing matches. If ``False``, log a warning
+            and return an empty list instead.
 
         **Returns**
 
-        list
-            Matching branches.
+        list[:class:`.BranchLike`]
+            Matching branches, in ``Objects`` order.
+
+        **Raises**
+
+        Exception
+            If no branch matches and *failIfNoResults* is ``True``.
 
         **Examples**
 
@@ -2512,15 +2920,21 @@ class Tree: ## tree class
 
         statistic : str
             Attribute name or trait key to extract.
-        useTraitsDict : bool, optional
-            If ``True``, read from each branch's ``traits`` dictionary.
+        useTraitsDict : bool, default=False
+            If ``True``, read *statistic* from each branch's ``traits``
+            dictionary instead of as an attribute.
         filterFxn : callable, optional
-            Predicate selecting which branches to inspect.
+            Predicate selecting which branches to inspect. By default every
+            branch is inspected.
 
         **Returns**
 
         list
-            Extracted values.
+            Extracted values. Branches that lack the attribute or trait are
+            skipped silently, so the result can be shorter than the number of
+            branches inspected and its entries do not line up positionally with
+            any branch list. An unknown *statistic* yields an empty list rather
+            than an error.
 
         **Examples**
 
@@ -2528,6 +2942,12 @@ class Tree: ## tree class
         >>> ll = bt.make_tree("((A:1.0,B:2.0):1.0,C:3.0);", treeType="divergence")
         >>> sorted(ll.get_parameter_list("length"))
         [0.0, 1.0, 1.0, 2.0, 3.0]
+
+        Only the three tips carry a ``name``, so the list is shorter than the
+        five branches in the tree:
+
+        >>> sorted(ll.get_parameter_list("name")), len(ll.Objects)
+        (['A', 'B', 'C'], 5)
         """
         if filterFxn is None:
             branches = self.Objects
@@ -2546,8 +2966,18 @@ class Tree: ## tree class
         """
         Remove internal nodes that no longer have children.
 
+        Removal repeats until no childless nodes remain, so a node orphaned by the
+        removal of its only child is cleaned up in the same call. Hanging nodes
+        otherwise make :meth:`traverse_tree` raise :class:`AttributeError`.
+
         This cleanup step is often needed after :meth:`subtree` or
         :meth:`collapse_branches`.
+
+        **Returns**
+
+        None
+            The tree is modified in place. Heights are not recomputed -- call
+            :meth:`traverse_tree` afterwards if you need them current.
 
         **Examples**
 
@@ -2576,19 +3006,33 @@ class Tree: ## tree class
         """
         Split a tree into subtrees at trait transitions or custom breakpoints.
 
+        A new subtree starts at the root and at every branch the split rule marks;
+        each is extracted with :meth:`subtree`, so the results are deep copies and
+        editing them does not affect this tree.
+
+        Exactly one of *trait* or *customFxn* must be given.
+
         **Parameters**
 
         trait : str, optional
-            Trait name used to define subtree boundaries when its value changes.
+            Trait name used to define subtree boundaries when its value differs from
+            the parent's. Raises :class:`KeyError` if any branch lacks the trait.
         customFxn : callable, optional
             Custom predicate that marks branches starting new subtrees.
-        stem : bool, optional
+        stem : bool, default=True
             If ``True``, include the stem branch leading into each extracted subtree.
 
         **Returns**
 
         list[:class:`.Tree`]
-            Extracted subtrees.
+            Extracted subtrees. A split point whose subtree contains no leaves is
+            logged as an error and dropped, so this can be shorter than the number
+            of branches the rule marked.
+
+        **Raises**
+
+        ValueError
+            If both *trait* and *customFxn* are given, or neither.
 
         **Examples**
 
@@ -2629,19 +3073,38 @@ class Tree: ## tree class
         """
         Collapse eligible subtrees into clade placeholders.
 
+        Each qualifying node is replaced via :meth:`collapse_subtree_to_clade` and
+        named ``"collapsed clade <n>"``. Only the outermost qualifying nodes are
+        collapsed, so clades are never nested. The tree is modified in place, and
+        the collapsing is reversible with :meth:`restore_all_collapsed_subtrees`.
+
+        Requires a traversed tree, since eligibility is decided from each node's
+        ``leaves``.
+
         **Parameters**
 
         cutoffs : tuple, optional
-            Inclusive ``(min_size, max_size)`` bounds for collapsible clades.
+            Inclusive ``(min_size, max_size)`` bounds, in descendant tips, for
+            collapsible clades. By default ``(3, int(0.2 * number_of_tips))``.
+
+            .. note::
+
+               On a tree with fewer than 15 tips that default makes the upper bound
+               smaller than the lower one, so nothing qualifies and the call is a
+               silent no-op. Pass *cutoffs* explicitly for small trees.
+
         protectedTips : list, optional
-            Tip names that must remain outside collapsed clades.
+            Tip names that must remain outside collapsed clades. Any node whose
+            descendants include one of these is skipped.
         widthFxn : callable, optional
-            Function computing the visual width of each collapsed clade.
+            Function computing the visual width of each collapsed clade. By default
+            a clade occupies as much vertical space as its tip count.
 
         **Returns**
 
         :class:`.Tree`
-            The modified tree.
+            The same tree object, modified in place. The return value is a
+            convenience for chaining, not a copy.
 
         **Examples**
 
@@ -2818,7 +3281,17 @@ class Tree: ## tree class
         tuple[float, float]
             Cartesian coordinates in the circular tree's data space.
 
+        **Raises**
+
+        ValueError
+            If *circFrac* is not positive; if the tree has no ``y`` span because
+            coordinates were never assigned; if no branch carries the coordinate
+            attribute implied by ``treeType``; or if every branch shares one
+            coordinate, leaving no radial span to normalize over.
+
         **Examples**
+
+        Coordinates must already be assigned, by a plotting call or directly:
 
         >>> import baltic as bt
         >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
@@ -2920,8 +3393,9 @@ class Tree: ## tree class
             Circular-layout controls.
         cladeEndAttrFxn : callable, optional
             Function returning the far edge of collapsed clades.
-        recomputeCoordinates : bool, optional
-            If ``True``, recompute tree coordinates before plotting.
+        recomputeCoordinates : bool, default=True
+            If ``True``, recompute tree coordinates before plotting. This reassigns
+            the tree's ``x``/``y`` attributes, so the call modifies the tree.
         \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to ``Axes.text``.
 
@@ -3253,16 +3727,30 @@ class Tree: ## tree class
         """
         Plot tip labels aligned to a common terminal coordinate.
 
+        Labels are placed a fixed distance past the furthest tip rather than at each
+        tip, with optional dotted guide lines connecting the two.
+
+        .. warning::
+
+           Rectangular and circular layouts are supported. Passing
+           ``treeType="unrooted"`` warns and then raises
+           :class:`UnboundLocalError` while building the connecting lines; pass
+           ``connectingLines=False`` to use an unrooted layout.
+
         **Parameters**
 
         ax : matplotlib.axes.Axes
             Axes on which to draw labels.
-        xSpace : float, optional
-            Extra horizontal offset, expressed as a fraction of tree height.
-        connectingLines : bool, optional
+        xSpace : float, default=0.005
+            Extra horizontal offset, expressed as a fraction of tree height. ``0``
+            places labels level with the furthest tip, ``1`` a full tree height
+            beyond it.
+        connectingLines : bool, default=True
             If ``True``, draw guide lines between tips and aligned labels.
         \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to :meth:`plot_text`.
+            ``xCoordinateFxn`` and ``normaliseHeight`` are computed here and cannot
+            be overridden -- passing either warns and discards it.
 
         **Returns**
 
@@ -3391,8 +3879,9 @@ class Tree: ## tree class
             Orientation for rectangular layouts.
         circStart, circFrac, inwardSpace, normaliseHeight : optional
             Circular-layout controls.
-        recomputeCoordinates : bool, optional
-            If ``True``, recompute coordinates before plotting.
+        recomputeCoordinates : bool, default=True
+            If ``True``, recompute coordinates before plotting. This reassigns the
+            tree's ``x``/``y`` attributes, so the call modifies the tree.
         \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to ``Axes.scatter``.
 
@@ -4087,10 +4576,11 @@ class Tree: ## tree class
             If ``True``, draw collapsed clades.
         cladeColour, cladeEndAttrFxn, cladeStyle, cladeShape, cladeBaseWidth : optional
             Styling and geometry options for collapsed clades.
-        recomputeCoordinates : bool, optional
+        recomputeCoordinates : bool, default=True
             If ``True``, recompute branch coordinates before plotting.
-        autoSort : bool, optional
-            If ``True``, sort branches before drawing.
+        autoSort : bool, default=True
+            If ``True``, sort branches before drawing. Note this reorders the
+            tree's own child lists -- see the note below.
         \\*\\*kwargs : dict, optional
             Additional keyword arguments forwarded to the line collection.
 
@@ -4107,6 +4597,14 @@ class Tree: ## tree class
         >>> fig, ax = plt.subplots()
         >>> ll.plot_tree(ax, colourFxn=lambda k: "firebrick" if k.is_leaf() else "k")
         <...Axes...>
+
+        .. note::
+
+           Despite being a plotting call, this modifies the tree by default: with
+           ``autoSort=True`` it calls :meth:`sort_branches`, which reorders every
+           node's children, and with ``recomputeCoordinates=True`` it reassigns all
+           ``x``/``y`` coordinates. Pass ``autoSort=False`` to draw a tree in its
+           existing order.
         """
         ### Set default values ###
         if targetFxn is None:
@@ -4252,7 +4750,9 @@ class Tree: ## tree class
         """
         Plot subtrees extracted by trait transitions or custom split rules.
 
-        Subtrees are generated with :meth:`explode_tree`.
+        Subtrees are generated with :meth:`explode_tree`, which requires exactly one
+        of *trait* or *customFxn* and works on deep copies, so this leaves the
+        original tree's structure alone.
 
         **Parameters**
 
@@ -4291,6 +4791,14 @@ class Tree: ## tree class
 
         matplotlib.axes.Axes
             The input axes.
+
+        **Raises**
+
+        ValueError
+            If both a scalar and its ``*Fxn`` counterpart are given for any of
+            width, point size, outline size or colour; or, via
+            :meth:`explode_tree`, if both or neither of *trait* and *customFxn* is
+            given.
 
         **Examples**
 
@@ -4439,18 +4947,39 @@ class Tree: ## tree class
         Branch dictionaries are constructed with
         :func:`baltic.bt_utils.branch_to_json`.
 
+        Only traits Auspice can colour by are carried into the metadata: those
+        ending ``_95%_HPD`` (continuous), ``.set.prob`` (categorical) or
+        ``_median``, plus ``posterior``. Other traits are dropped from the
+        colourings.
+
+        .. note::
+
+           This modifies the tree. Every internal node gains a ``node_idx`` trait
+           holding its Auspice node name, and :meth:`traverse_tree` is run to
+           establish the ordering.
+
         **Parameters**
 
         traits : iterable, optional
-            Trait names to export. If omitted, export all traits that look
-            compatible with Auspice metadata.
+            Trait names to export. If omitted, every trait found on the tree is
+            considered. When passing an explicit list, include the ``_95%_HPD`` and
+            ``.set.prob`` companions of any trait whose uncertainty should survive.
         mostRecentDate : float, optional
-            Most recent sampling date for time trees.
+            Most recent sampling date for time trees. Must be a ``float`` --
+            an ``int`` such as ``2024`` is rejected. For a time tree it defaults to
+            the tree's ``mostRecent``; supplying it for a divergence tree logs a
+            warning.
 
         **Returns**
 
         dict
-            Auspice JSON payload containing ``meta`` and ``tree`` sections.
+            Auspice JSON payload with ``version``, ``meta`` and ``tree`` keys.
+
+        **Raises**
+
+        AssertionError
+            If *mostRecentDate* is not a float, or if it was omitted for a time tree
+            whose ``mostRecent`` has not been set by :meth:`set_absolute_time`.
 
         **Examples**
 

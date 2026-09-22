@@ -91,6 +91,11 @@ class BranchLike:
         traits : dict, optional
             Mapping of parsed annotations associated with the branch.
 
+        **Returns**
+
+        None
+            The branch is initialised in place.
+
         **Examples**
 
         >>> from baltic.branchLike import BranchLike
@@ -159,6 +164,12 @@ class BranchLike:
         **Returns**
 
         list[:class:`.BranchLike`]
+            The parent's other children, or every child including this one when
+            *include_self* is ``True``. An empty list is returned for the root,
+            which has no parent, along with a logged warning.
+
+            The list is built from a ``set``, so its order is not the tree's child
+            order and is not stable between runs. Sort it if order matters.
 
         **Examples**
 

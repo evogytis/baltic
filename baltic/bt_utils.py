@@ -32,11 +32,24 @@ def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     variable : bool, default=False
         Set to ``True`` when dates may be of variable lengths (e.g. when
         looping over ``["2025-01-01", "2025-02"]``). Will use highest
-        precision available.
+        precision available. With ``False`` a date that does not match *fmt*
+        exactly raises :class:`ValueError`.
 
     **Returns**
 
-    str
+    float or tuple[float, tuple[float, float]]
+        With ``variable=False``, the decimal year. With ``variable=True``, a
+        ``(midpoint, (earliest, latest))`` pair: the bounds span the whole month
+        for ``YYYY-MM`` input and the whole year for ``YYYY``, and collapse to the
+        date itself when a full date was given.
+
+        As a special case, a falsy *fmt* short-circuits the conversion and returns
+        *date* unchanged, so the result is then a ``str``.
+
+    **Raises**
+
+    ValueError
+        If *date* does not match *fmt* and *variable* is ``False``.
 
     **Examples**
 
@@ -177,13 +190,21 @@ def decimal_to_calendar_date(timepoint,fmt='%Y-%m-%d'):
     timepoint : float
         Decimal year to convert.
 
-    fmt : str, optional
+    fmt : str, default="%Y-%m-%d"
         Output date format passed to :meth:`datetime.datetime.strftime`.
 
     **Returns**
 
     str
         Formatted calendar date.
+
+    **Raises**
+
+    ValueError
+        If *timepoint* falls outside :mod:`datetime`'s supported range of years
+        1 to 9999. Decimal dates from deep-time or BCE trees are therefore not
+        convertible; :func:`generate_calendar_timeline` handles those with its
+        deep-time spacing options instead.
 
     **Examples**
 
@@ -320,13 +341,18 @@ def state_collapse_tree(tree, switchFxn, keepLast=True, adjustEarlyHeights=False
         Function that receives a branch and returns ``True`` when a new
         partition should start at that branch.
 
-    keepLast : bool, optional
+    keepLast : bool, default=True
         If ``True``, retain the most recent descendant branch for each
         partition. If ``False``, retain the earliest descendant instead.
 
-    adjustEarlyHeights : bool, optional
+    adjustEarlyHeights : bool, default=False
         If ``True`` and ``keepLast`` is ``False``, adjust the retained early
         descendants to end at the most recent representative height.
+
+    **Returns**
+
+    :class:`baltic.tree.Tree`
+        A new, deep-copied tree. The tree passed in is left unmodified.
 
     **Examples**
 
@@ -523,7 +549,7 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
     endDateStr : str or float
         End date of the interval. Same convention as ``startDateStr``.
 
-    spacing : {'yearly', 'monthly', 'weekly', 'decadal', 'centennial', 'millennial'}, int, or (n, unit) tuple, optional
+    spacing : {'yearly', 'monthly', 'weekly', 'decadal', 'centennial', 'millennial'}, int, or (n, unit) tuple, default="monthly"
         Calendar spacing to use.
 
         - ``'yearly'``, ``'monthly'`` or ``'weekly'``, or an int number of
@@ -541,11 +567,11 @@ def generate_calendar_timeline(startDateStr,endDateStr,spacing='monthly',dateFmt
         >9999, which BALTIC represents as negative or very large decimal
         dates (as parsed from BEAST trees).
 
-    dateFmt : str, optional
+    dateFmt : str, default="%Y-%m-%d"
         Date format used to parse inputs and format outputs. Ignored for
         deep-time ``spacing``, where boundaries are plain decimal years.
 
-    roundDates : bool, optional
+    roundDates : bool, default=True
         Whether to align the timeline to calendar boundaries when possible.
         For deep-time spacing this rounds down to the nearest multiple of
         the step (e.g. the nearest earlier millennium boundary).
@@ -660,17 +686,17 @@ def plot_scale_bar(ax, xy, L = None, tree = None, alnL = None, textXY = None, un
         Text describing the units of the scale bar. If not provided, defaults to "subs/site" for divergence trees
         or "years" for time trees.
 
-    style : {'simple', 'fancy'}, optional
+    style : {'simple', 'fancy'}, default="simple"
         Style of the scale bar. Defaults to ``'simple'``.
 
-    orientation : {'horizontal', 'vertical'}, optional
+    orientation : {'horizontal', 'vertical'}, default="horizontal"
         Orientation of the scale bar. Defaults to ``'horizontal'``.
 
     ySpan : float, optional
         Vertical span of the scale bar, used to calculate default label positions. If not provided, it will be
         inferred from the tree.
 
-    fancyWidth : float, optional
+    fancyWidth : float, default=0.1
         Width of the terminal markers for ``style='fancy'`` expressed as a
         fraction of the scale-bar length.
 
@@ -925,7 +951,14 @@ def branch_to_json(curNode, treeType, traits, mostRecentDate, treeDict=None):
         intervals.
 
     treeDict : dict, optional
-        Existing dictionary to populate during recursive export.
+        Existing dictionary to populate during recursive export. Callers normally
+        leave this unset.
+
+    **Returns**
+
+    dict
+        Auspice-shaped node dictionary for *curNode*, with its descendants nested
+        under ``children``.
 
     **Examples**
 
@@ -1012,27 +1045,34 @@ def plot_node_bar(ax, node, traitName, traitColourDict, xyFxn = None, height = 1
     xyFxn : callable, optional
         Function returning the anchor coordinates for the bar.
 
-    height : float, optional
+    height : float, default=10
         Total span of the stacked bar.
 
-    width : float, optional
+    width : float, default=0.2
         Width of the bar orthogonal to *height*.
 
-    otherThres : float, optional
+    otherThres : float, default=0.0
         Probability threshold below which states are grouped into ``other``.
 
-    connectNode : bool, optional
+    connectNode : bool, default=True
         If ``True``, draw a dashed connector back to the node location.
 
-    connectingCorner : str, optional
+    connectingCorner : str, default="lower middle"
         Corner of the bar used as the connector origin.
 
-    orientation : {'vertical', 'horizontal'}, optional
+    orientation : {'vertical', 'horizontal'}, default="vertical"
         Orientation of the stacked bar.
 
     \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to
         :class:`matplotlib.patches.Rectangle`.
+
+    **Returns**
+
+    None
+        Patches are added to *ax* in place. Note this differs from
+        :func:`plot_node_piechart` and :func:`plot_node_treemap`, which return the
+        axes.
 
     **Examples**
 
@@ -1133,15 +1173,26 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
     centerFxn : callable, optional
         Function returning the rectangle center.
 
-    area : float, optional
+    area : float, default=1.0
         Included for API compatibility with related plotting helpers.
 
-    other_thres : float, optional
+    other_thres : float, default=0.0
         Probability threshold below which states are grouped into ``other``.
 
     \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to
         :class:`matplotlib.patches.Rectangle`.
+
+    **Notes**
+
+    Requires ``squarify``, imported lazily inside this function. It ships with the
+    ``baltic`` conda environment but is not in ``requirements.txt``, so a pip-only
+    install may need ``pip install squarify``.
+
+    **Returns**
+
+    :obj:`matplotlib.axes.Axes`
+        The axes with the treemap patches added.
 
     **Examples**
 
@@ -1151,7 +1202,7 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
     ...     x, y = 0.0, 0.0
     ...     traits = {"location.set": ["A", "B"], "location.set.prob": [0.7, 0.3]}
     >>> fig, ax = plt.subplots()
-    >>> bt_utils.plot_node_treemap(ax, DummyNode(), "location", {"A": "tab:blue", "B": "tab:orange"}, height=1.0, width=1.0)  # doctest: +SKIP
+    >>> bt_utils.plot_node_treemap(ax, DummyNode(), "location", {"A": "tab:blue", "B": "tab:orange"}, height=1.0, width=1.0)
     <...Axes...>
     """
 
@@ -1216,15 +1267,20 @@ def plot_node_piechart(ax, node, traitName, traitColourDict, centerFxn = None, r
     centerFxn : callable, optional
         Function returning the chart center.
 
-    radius : float, optional
+    radius : float, default=0.5
         Pie chart radius.
 
-    other_thres : float, optional
+    other_thres : float, default=0.0
         Probability threshold below which states are grouped into ``other``.
 
     \\*\\*kwargs : dict, optional
         Additional keyword arguments forwarded to
         :meth:`matplotlib.axes.Axes.pie`.
+
+    **Returns**
+
+    :obj:`matplotlib.axes.Axes`
+        The axes with the pie wedges added.
 
     **Examples**
 
@@ -1278,7 +1334,7 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     tmrcaFile : str
         Path to the tab-delimited log file containing posterior samples.
 
-    tmrcaName : str, optional
+    tmrcaName : str, default="age(root)"
         Column name to extract from the log file.
 
     burnin : int, optional
@@ -1287,25 +1343,25 @@ def plot_tmrca_posterior(ax, tmrcaFile, tmrcaName = 'age(root)', burnin = None, 
     yCoord : float, optional
         Anchor coordinate for plotting the density.
 
-    fullViolin : bool, optional
+    fullViolin : bool, default=True
         If ``True``, draw the full violin; otherwise draw a half violin.
 
-    hpdLvl : float, optional
+    hpdLvl : float, default=0.95
         Highest posterior density mass to report.
 
-    precision : int, optional
+    precision : int, default=100
         Number of x positions used to evaluate the KDE.
 
-    kdeWidth : float, optional
+    kdeWidth : float, default=3
         Width scaling applied to the KDE curve.
 
-    normalise : bool, optional
+    normalise : bool, default=True
         If ``True``, normalise the KDE height before scaling by *kdeWidth*.
 
-    orientation : {'horizontal', 'vertical'}, optional
+    orientation : {'horizontal', 'vertical'}, default="horizontal"
         Orientation of the violin plot.
 
-    connectNode : bool, optional
+    connectNode : bool, default=False
         If ``True``, connect the posterior summary back to *node*.
 
     node : :class:`baltic.branchLike.BranchLike`, optional
@@ -1493,7 +1549,7 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
         from a deep-time :func:`generate_calendar_timeline` call spanning
         decades, millennia, or millions of years).
 
-    dateFmt : str, optional
+    dateFmt : str, default="%Y-%m-%d"
         Date format used when *timeline* contains calendar strings. Ignored
         when *timeline* already holds plain decimal years.
 
@@ -1504,7 +1560,7 @@ def plot_time_grid(ax, timeline, dateFmt='%Y-%m-%d', colourFxn=None, colour=None
         Constant face and edge colours used when the corresponding functions
         are not provided.
 
-    axis : {'x', 'y'}, optional
+    axis : {'x', 'y'}, default="x"
         Axis along which spans should be drawn.
 
     \\*\\*kwargs : dict, optional
@@ -1586,7 +1642,7 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
         deep-time timeline (decades, millennia, or millions of years; see
         :func:`generate_calendar_timeline`), defining grid boundaries.
 
-    inputDateFmt : str, optional
+    inputDateFmt : str, default="%Y-%m-%d"
         Date format used to parse entries in *timeline*. Ignored when
         *timeline* already holds plain decimal years.
 
@@ -1598,10 +1654,10 @@ def format_time_grid(ax, timeline, inputDateFmt='%Y-%m-%d', outputFmtFxn=None, l
         boundary magnitude, e.g. ``-3 Ma`` for 3 million years before year
         0.
 
-    labelPosition : {'left', 'mid'}, optional
+    labelPosition : {'left', 'mid'}, default="mid"
         Whether labels should be placed on boundaries or interval midpoints.
 
-    axis : {'x', 'y'}, optional
+    axis : {'x', 'y'}, default="x"
         Axis whose ticks should be updated.
 
     \\*\\*kwargs : dict, optional
@@ -1674,11 +1730,16 @@ def clean_axes(ax, hideSpines = ['left', 'top', 'right', 'bottom'], removeTickLa
     ax : :obj:`matplotlib.axes.Axes`
         Axes to modify.
 
-    hideSpines : list[str], optional
+    hideSpines : list[str], default=['left', 'top', 'right', 'bottom']
         Spine names to hide.
 
-    removeTickLabels : {'x', 'y', 'both', 'none'}, optional
+    removeTickLabels : {'x', 'y', 'both', 'none'}, default="both"
         Tick-label groups to remove.
+
+    **Returns**
+
+    :obj:`matplotlib.axes.Axes`
+        The cleaned axes.
 
     **Examples**
 
@@ -1718,24 +1779,21 @@ def untangle(tree, reference, min_shared=2, maxPolytomy=9):
     reference : :class:`baltic.tree.Tree`
         Reference tree whose tip ordering guides the untangling.
 
-    min_shared : int, optional
+    min_shared : int, default=2
         Minimum number of shared descendant tips required before a child set is
         considered in the local ordering score.
 
-    maxPolytomy : int, optional
-        Maximum number of children for which exhaustive permutation search will
-        be attempted.
+    maxPolytomy : int, default=9
+        Largest number of children for which the exhaustive permutation search is
+        attempted. Nodes with more children than this are skipped silently and
+        keep their existing child order, avoiding a factorial blow-up.
 
     **Returns**
 
-    list[:class:`.Tree`]
-        The input trees with child orderings updated in place.
-
-    **Raises**
-
-    RuntimeWarning
-        If a node has ten or more children, making exhaustive permutation
-        search impractical.
+    :class:`baltic.tree.Tree`
+        The same *tree* object, with child orderings updated in place. The return
+        value is a convenience for chaining, not a copy, and *reference* is not
+        modified.
 
     **Examples**
 
@@ -1896,14 +1954,16 @@ def unnest(nodeList, towardsRoot = True):
     nodeList : iterable[:class:`baltic.branchLike.BranchLike`]
         Nodes or leaf-like branches to filter.
 
-    towardsRoot : bool, optional
+    towardsRoot : bool, default=True
         If ``True``, preferentially keep deeper nodes; otherwise keep more
         tip-proximal entries.
 
     **Returns**
 
     list
-        Filtered list with nested overlaps removed.
+        Filtered list in which no entry's descendant tips overlap another's. Used
+        by :meth:`baltic.tree.Tree.condense_tree` to pick the outermost
+        collapsible nodes.
 
     **Examples**
 
@@ -2220,10 +2280,10 @@ def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
     yRange : float
         Total span of the non-informative axis.
 
-    circleStart : float, optional
+    circleStart : float, default=0.0
         Starting angular offset as a fraction of a full turn.
 
-    circleFraction : float, optional
+    circleFraction : float, default=1.0
         Fraction of the circle used by the layout.
 
     **Returns**
@@ -2273,10 +2333,17 @@ def project_polar_vector(x,y,radians,length):
 
     **Examples**
 
+    Angles are measured counter-clockwise from the positive x axis, so a quarter
+    turn of length 2 moves straight up. The x component is rounded here because it
+    is a floating-point residue rather than an exact zero.
+
     >>> import math
     >>> from baltic import bt_utils
-    >>> bt_utils.project_polar_vector(0.0, 0.0, math.pi / 2, 2.0)
-    (1.2246467991473532e-16, 2.0)
+    >>> x, y = bt_utils.project_polar_vector(0.0, 0.0, math.pi / 2, 2.0)
+    >>> round(x, 12), round(y, 12)
+    (0.0, 2.0)
+    >>> tuple(round(v, 12) for v in bt_utils.project_polar_vector(1.0, 1.0, 0.0, 3.0))
+    (4.0, 1.0)
     """
 
     new_x = x + length * math.cos(radians)
@@ -2297,16 +2364,27 @@ def desaturate(colour, desat=0.65, out="auto"):
     colour : str or tuple
         Input colour specification.
 
-    desat : float, optional
+    desat : float, default=0.65
         Saturation multiplier in the interval ``[0, 1]``.
 
-    out : {'auto', 'hex', 'rgb', 'rgba'}, optional
-        Output format for the desaturated colour.
+    out : {'auto', 'hex', 'rgb', 'rgba'}, default='auto'
+        Output format for the desaturated colour. ``'auto'`` matches the form of
+        *colour*, returning a hex string for string input and a tuple of the same
+        arity for tuple input.
 
     **Returns**
 
     str or tuple
         Desaturated colour in the requested format.
+
+    **Raises**
+
+    ValueError
+        If *desat* lies outside ``[0, 1]``.
+
+    TypeError
+        If *colour* is neither a colour string nor a 3- or 4-element RGB(A)
+        sequence.
 
     **Examples**
 
@@ -2378,7 +2456,7 @@ def make_cmap(colours, position=None, name="custom_cmap"):
         Positions associated with each color. Must start at ``0`` and end at
         ``1`` when provided.
 
-    name : str, optional
+    name : str, default="custom_cmap"
         Name assigned to the resulting colormap.
 
     **Returns**
@@ -2450,7 +2528,7 @@ def desaturate_cmap(cmap, desat=0.65):
     cmap : :obj:`matplotlib.colors.Colormap`
         Colormap to desaturate.
 
-    desat : float, optional
+    desat : float, default=0.65
         Saturation multiplier applied to sampled colours.
 
     **Returns**
@@ -2484,22 +2562,43 @@ def hpd(data, level=0.95):
     **Parameters**
 
     data : sequence[float]
-        Posterior samples.
+        Posterior samples. Must support ``len()``, so a generator has to be
+        materialised first.
 
-    level : float, optional
-        Posterior mass to include in the interval. Defaults to ``0.95``.
+    level : float, default=0.95
+        Posterior mass to include in the interval, between 0 and 1. Values above
+        1 are not validated and raise :class:`IndexError`.
 
     **Returns**
 
     tuple[float, float] or None
         Lower and upper bounds of the highest posterior density interval, or
-        ``None`` if there are too few samples to estimate the interval.
+        ``None`` when ``round(level * len(data))`` is below 2, which is the case
+        for a single sample or a *level* near zero.
+
+    **Notes**
+
+    This is the empirical HPD: the narrowest window containing
+    ``round(level * n)`` of the sorted samples. Both bounds are therefore observed
+    data values rather than interpolated quantiles, and the interval is only
+    meaningful for a unimodal posterior -- on a bimodal sample it collapses onto
+    whichever mode is tightest rather than reporting a disjoint region.
+
+    Original implementation copyright (C) 2010 Joseph Heled.
 
     **Examples**
 
     >>> from baltic import bt_utils
     >>> bt_utils.hpd([1, 2, 2, 3, 4], level=0.8)
     (1, 3)
+
+    The bounds are always observed values, and a bimodal sample yields a
+    degenerate interval over one mode:
+
+    >>> bt_utils.hpd([1.0, 2.0, 2.5, 3.0, 10.0], level=0.6)
+    (2.0, 3.0)
+    >>> bt_utils.hpd([0, 0, 0, 0, 10, 10, 10, 10], level=0.5)
+    (0, 0)
 
     **Attribution**
 
@@ -2554,7 +2653,7 @@ def five_point_bezier(points, precision=50):
     points : sequence[tuple[float, float]]
         Five control points defining the quartic Bézier curve.
 
-    precision : int, optional
+    precision : int, default=50
         Number of samples to evaluate along the curve.
 
     **Returns**
@@ -2625,25 +2724,25 @@ def draw_gradient_polygon(
     minAlpha, maxAlpha : float, optional
         Alpha range used to build the gradient ramp.
 
-    n : int, optional
+    n : int, default=256
         Number of gradient samples.
 
-    axis : {'x', 'y'}, optional
+    axis : {'x', 'y'}, default="y"
         Direction along which alpha should vary.
 
-    origin : {'lower', 'upper'}, optional
+    origin : {'lower', 'upper'}, default="lower"
         Image origin passed to ``imshow``.
 
-    reverse : bool, optional
+    reverse : bool, default=False
         If ``True``, reverse the alpha ramp.
 
-    zorder : float, optional
+    zorder : float, default=0
         Z-order for the gradient image and default clipping patch.
 
-    interpolation : str, optional
+    interpolation : str, default="bicubic"
         Interpolation mode used by ``imshow``.
 
-    addPatch : bool, optional
+    addPatch : bool, default=True
         If ``True``, add the clipping patch to the axes.
 
     patchKwargs : dict, optional
@@ -2740,16 +2839,16 @@ def get_path_effects(mainColour='k', outlineColour='w', mainWeight=0.5, outlineW
 
     **Parameters**
 
-    mainColour : color, optional
+    mainColour : color, default="k"
         Foreground colour for the inner stroke.
 
-    outlineColour : color, optional
+    outlineColour : color, default="w"
         Colour for the outer stroke.
 
-    mainWeight : float, optional
+    mainWeight : float, default=0.5
         Line width of the inner stroke.
 
-    outlineWeight : float, optional
+    outlineWeight : float, default=4
         Line width of the outer stroke.
 
     **Returns**

@@ -50,4 +50,3 @@ Even if suggested manipulations/visualisations don't make it into baltic's code 
    bt_utils
    curonia
    samogitia
-   publications

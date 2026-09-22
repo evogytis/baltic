@@ -63,6 +63,11 @@ class Reticulation(BranchLike):
         target : :class:`.BranchLike`, optional
             Destination branch into which the reticulation merges.
 
+        **Returns**
+
+        None
+            The branch is initialised in place.
+
         **Examples**
 
         >>> from baltic.reticulation import Reticulation

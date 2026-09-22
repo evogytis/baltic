@@ -47,6 +47,11 @@ class Leaf(BranchLike):
         name : str
             Tip label associated with the leaf.
 
+        **Returns**
+
+        None
+            The branch is initialised in place.
+
         **Examples**
 
         >>> from baltic.leaf import Leaf

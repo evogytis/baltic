@@ -65,6 +65,11 @@ class Node(BranchLike):
         leaves : set[str], optional
             Descendant leaf names associated with the node.
 
+        **Returns**
+
+        None
+            The branch is initialised in place.
+
         **Examples**
 
         >>> from baltic.node import Node

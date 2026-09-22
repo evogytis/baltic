@@ -31,6 +31,13 @@ def load_newick(treePath,
     """
     Load a tree from a Newick file or file-like object.
 
+    The first ``(`` on a line marks the start of a tree string. Every such line is
+    parsed, but only the **last** one is kept, so a file holding several trees
+    silently yields only the final tree.
+
+    A path is opened and closed here; a file-like object is read but left open for
+    the caller to close.
+
     **Parameters**
 
     treePath : str or file-like
@@ -39,30 +46,41 @@ def load_newick(treePath,
     treeType : {'divergence', 'time'}
         Interpretation of branch lengths in the parsed tree.
 
-    tipRegex : str, optional
-        Regular expression used to extract tip dates from leaf names.
+    tipRegex : str, default=r"\\|([0-9\\-]+)$"
+        Regular expression used to extract tip dates from leaf names. Only
+        consulted when *absoluteTime* is ``True``.
 
-    dateFmt : str, optional
-        Date format used to parse the value captured by *tipRegex*.
+    dateFmt : str, default="%Y-%m-%d"
+        Date format used to parse the value captured by *tipRegex*. Only
+        consulted when *absoluteTime* is ``True``.
 
-    variableDate : bool, optional
+    variableDate : bool, default=True
         Whether partially specified tip dates should be interpreted as date
         ranges.
 
-    absoluteTime : bool, optional
-        If ``True``, assign absolute times from the tip labels.
+    absoluteTime : bool, default=False
+        If ``True``, assign absolute times from the tip labels via
+        :func:`process_tip_dates`. Note this defaults to ``False`` here but
+        ``True`` in :func:`load_nexus`.
 
-    sortBranches : bool, optional
+    sortBranches : bool, default=True
         If ``True``, sort branches after parsing.
 
-    setNodes : bool, optional
+    setNodes : bool, default=False
         If ``True``, propagate absolute times to internal nodes when date
-        information is available.
+        information is available. Only consulted when *absoluteTime* is ``True``.
 
     **Returns**
 
     :class:`baltic.tree.Tree`
-        Parsed tree object.
+        Parsed tree object, already traversed.
+
+    **Raises**
+
+    AssertionError
+        If no line contained a ``(`` and so no tree string was found. (The
+        message mentions a regular expression, but this loader does not use one
+        to find the tree.)
 
     **Examples**
 
@@ -109,6 +127,26 @@ def load_nexus(treePath,
     """
     Load a tree from a Nexus file or file-like object.
 
+    Every line matching *treestringRegex* is parsed, but only the **last** tree is
+    kept. To iterate over the trees in a BEAST posterior file, use
+    :func:`baltic.samogitia.posterior_tree_iterator` instead.
+
+    Tips are renamed from their Nexus numbers using the ``Translate`` block, and the
+    mapping is kept on the tree as ``tipMap``.
+
+    .. note::
+
+       Tips whose names end in ``_ancestor_taxon``, produced by travel-aware
+       phylogeographic analyses, are removed after parsing and the tree rebuilt with
+       :meth:`baltic.tree.Tree.reduce_tree`, which leaves a multitype tree. A
+       warning is logged when this happens. In practice this only completes with
+       ``absoluteTime=False``, because such tip names put the date before the
+       suffix and so fail *tipRegex*, which raises in :func:`process_tip_dates`
+       first.
+
+    A path is opened and closed here; a file-like object is read but left open for
+    the caller to close.
+
     **Parameters**
 
     treePath : str or file-like
@@ -117,33 +155,50 @@ def load_nexus(treePath,
     treeType : {'divergence', 'time'}
         Interpretation of branch lengths in the parsed tree.
 
-    tipRegex : str, optional
+    tipRegex : str, default=r"\\|([0-9\\-]+)$"
         Regular expression used to extract tip dates from translated tip names.
+        Every tip must match it when *absoluteTime* is ``True``.
 
-    dateFmt : str, optional
+    dateFmt : str, default="%Y-%m-%d"
         Date format used to parse the value captured by *tipRegex*.
 
-    treestringRegex : str, optional
+    treestringRegex : str, default=r"tree [A-Za-z\\_]+([0-9]+)"
         Regular expression used to identify the tree line in the Nexus file.
 
-    variableDate : bool, optional
+    variableDate : bool, default=True
         Whether partially specified tip dates should be interpreted as date
         ranges.
 
-    absoluteTime : bool, optional
-        If ``True``, assign absolute times from the tip labels.
+    absoluteTime : bool, default=True
+        If ``True``, assign absolute times from the tip labels via
+        :func:`process_tip_dates`. Note this defaults to ``True`` here but
+        ``False`` in :func:`load_newick`.
 
-    sortBranches : bool, optional
+    sortBranches : bool, default=True
         If ``True``, sort branches after parsing.
 
-    setNodes : bool, optional
-        If ``True``, propagate absolute times to internal nodes when date
-        information is available.
+    setNodes : bool, default=True
+        Intended to propagate absolute times to internal nodes.
+
+        .. warning::
+
+           This argument currently has no effect: it is accepted but not passed on
+           to :func:`process_tip_dates`, which applies its own default of ``True``.
+           Call :func:`process_tip_dates` directly if you need ``setNodes=False``.
 
     **Returns**
 
     :class:`baltic.tree.Tree`
-        Parsed tree object.
+        Parsed tree object, already traversed.
+
+    **Raises**
+
+    AssertionError
+        If no line matched *treestringRegex*.
+
+    KeyError
+        Via :func:`process_tip_dates`, if any tip name fails *tipRegex* while
+        *absoluteTime* is ``True``.
 
     **Examples**
 
@@ -228,7 +283,9 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     **Parameters**
 
     jsonObject : str or dict
-        Local path, Nextstrain URL, or already loaded JSON object.
+        Local path, Nextstrain URL, or already loaded JSON object. A string
+        containing ``nextstrain.org`` is fetched over the network with
+        ``requests``; any other string is treated as a local path.
 
     treeType : {'divergence', 'time'}
         Interpretation of branch lengths in the parsed tree.
@@ -236,16 +293,23 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
     jsonTranslation : dict, optional
         Mapping from ``baltic`` attribute names to JSON keys or callables.
 
-    sort : bool, optional
+    sort : bool, default=True
         If ``True``, sort branches after parsing.
 
-    stats : bool, optional
-        If ``True``, report tree statistics after parsing.
+    stats : bool, default=True
+        If ``True``, print tree statistics after parsing via
+        :meth:`baltic.tree.Tree.treeStats`.
 
     **Returns**
 
     tuple[:class:`baltic.tree.Tree`, dict]
-        Parsed tree and the associated metadata block from the JSON.
+        Parsed tree and the JSON's ``meta`` block. A top-level ``root_sequence``
+        key, if present, is folded into the returned metadata.
+
+    **Raises**
+
+    AssertionError
+        If *treeType* is neither ``"divergence"`` nor ``"time"``.
 
     **Examples**
 
@@ -388,6 +452,18 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
     """
     Extract sampling dates from tip labels and assign absolute times.
 
+    Called by :func:`load_newick` and :func:`load_nexus` when ``absoluteTime`` is
+    set. Only dates that resolve to an exact day contribute to the tree's time
+    calibration; partially specified dates still get an uncertainty range through
+    :meth:`baltic.tree.Tree._assign_date_uncertainty`.
+
+    .. warning::
+
+       Every tip must match *tipRegex*. A tip that does not is logged as a warning
+       but is **not** skipped: the function goes on to index it and raises
+       :class:`KeyError` with just the tip name. Undated tips therefore need
+       ``absoluteTime=False`` at load time rather than being tolerated here.
+
     **Parameters**
 
     tree : :class:`baltic.tree.Tree`
@@ -403,8 +479,25 @@ def process_tip_dates(tree, tipRegex, dateFmt, variableDate, setNodes=True):
         Whether partially specified dates should be interpreted with
         uncertainty ranges.
 
-    setNodes : bool, optional
-        If ``True``, assign absolute times to internal nodes as well as tips.
+    setNodes : bool, default=True
+        If ``True``, assign absolute times to internal nodes as well as tips, by
+        calibrating the whole tree against the most recent exact tip date. If
+        ``False``, only tips receive an ``absoluteTime``, taken from their own
+        parsed date.
+
+    **Returns**
+
+    None
+        The tree's branches are modified in place.
+
+    **Raises**
+
+    AssertionError
+        If no tip name yielded a date, with a message naming the regex and format
+        that were tried.
+
+    KeyError
+        If some, but not all, tip names matched *tipRegex* (see the warning above).
 
     **Examples**
 
