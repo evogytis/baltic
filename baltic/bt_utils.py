@@ -13,6 +13,36 @@ from matplotlib.collections import LineCollection
 
 logger = logging.getLogger("baltic.bt_utils")
 
+__all__ = [
+    "calendar_to_decimal_date",
+    "decimal_to_calendar_date",
+    "convert_date_format",
+    "to_scientific_notation_str",
+    "state_collapse_tree",
+    "generate_calendar_timeline",
+    "plot_scale_bar",
+    "branch_to_json",
+    "plot_node_bar",
+    "plot_node_treemap",
+    "plot_node_piechart",
+    "plot_tmrca_posterior",
+    "plot_time_grid",
+    "format_time_grid",
+    "clean_axes",
+    "untangle",
+    "untangle_trees",
+    "unnest",
+    "project_to_polar",
+    "project_polar_vector",
+    "desaturate",
+    "make_cmap",
+    "desaturate_cmap",
+    "hpd",
+    "five_point_bezier",
+    "draw_gradient_polygon",
+    "get_path_effects",
+]
+
 def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
     Convert a calendar date of a specified format into a decimal number.

@@ -20,6 +20,13 @@ from baltic.bt_utils import calendar_to_decimal_date
 
 logger = logging.getLogger("baltic.io")
 
+__all__ = [
+    "load_newick",
+    "load_nexus",
+    "load_JSON",
+    "process_tip_dates",
+]
+
 def load_newick(treePath,
                 treeType,
                 tipRegex=r'\|([0-9\-]+)$',
