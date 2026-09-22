@@ -9,7 +9,7 @@
 project = 'baltic'
 copyright = '2026, Gytis Dudas & Barney Potter'
 author = 'Gytis Dudas & Barney Potter'
-release = 'v0.9 (Birch)'
+release = 'v1.0 (Cedar)'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

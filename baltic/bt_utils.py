@@ -1,3 +1,16 @@
+"""This module provides ``baltic`` utility functions with no :class:`~baltic.tree.Tree` dependency in their signature: date conversion, plot scale bars and time grids, node bar/piechart/treemap annotations, tanglegram tip-order optimization (``untangle``), root-to-tip regression, colormap helpers, bezier/gradient polygon drawing, and highest posterior density (``hpd``) intervals.
+
+**Notes**
+
+This version of ``baltic`` (v1.0 (Cedar)) contains many API changes from previous versions, and is not backwards-compatible. If you find pieces of documentation that refer to the old API, please let us know and we will try to update them with the next update.
+
+
+**Attributes**
+
+logger : ``logging.Logger``
+    Default logger which will be passed to other ``baltic`` functions.
+"""
+
 import re
 import copy
 import logging
