@@ -22,6 +22,31 @@ from baltic.reticulation import Reticulation
 logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
 
+def _split_annotation_fields(comment):
+    """Split a BEAST annotation body outside quotes and nested braces."""
+    start = 0
+    depth = 0
+    quote = None
+    for pos, char in enumerate(comment):
+        if quote is not None:
+            if char == quote:
+                quote = None
+        elif char in ('"', "'"):
+            quote = char
+        elif char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth < 0:
+                raise ValueError("Unbalanced braces in BEAST annotation")
+        elif char == ',' and depth == 0:
+            yield comment[start:pos].strip()
+            start = pos + 1
+    if quote is not None or depth != 0:
+        raise ValueError("Unterminated quote or braces in BEAST annotation")
+    yield comment[start:].strip()
+
+
 def make_tree(data, treeType, tre=None):
     """
     Parse a Newick-like tree string into a :class:`baltic.tree.Tree`.
@@ -158,57 +183,70 @@ def make_tree(data, treeType, tre=None):
         if match:
             logger.debug(f'{i} comment: {match.group(2)}')
             comment=match.group(2)
-            numerics=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-            strings=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
-            treelist=re.findall(r'[,&][A-Za-z\_\.\-0-9]+={[A-Za-z\_\-,+{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
-            sets=re.findall(r'[,&][A-Za-z\_\.\-0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
-            figtree=re.findall(r'\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
+            for field in _split_annotation_fields(comment[1:]):
+                tr, separator, val = field.partition('=')
+                tr, val = tr.strip(), val.strip()
+                if (separator and re.fullmatch(r'[A-Za-z_.0-9-]+', tr)
+                        and len(val) >= 2 and val[0] in ('"', "'")
+                        and val[-1] == val[0]):
+                    # Keep the existing ambiguity and boolean conversions.
+                    val = val[1:-1].split('+', 1)[0]
+                    tre.curNode.traits[tr] = {'true': True, 'false': False}.get(val, val)
+                    continue
 
-            for vals in strings:
-                tr,val=vals.split('=') # tr := trait; val := value
-                tr=tr[1:]
-                if '+' in val:
-                    val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
-                tre.curNode.traits[tr]=val.strip('"')
+                # Reuse the existing parser for this complete unquoted field.
+                comment = '&' + field
+                numerics=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
+                strings=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
+                treelist=re.findall(r'[,&][A-Za-z\_\.\-0-9]+={[A-Za-z\_\-,+{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
+                sets=re.findall(r'[,&][A-Za-z\_\.\-0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
+                figtree=re.findall(r'\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
 
-                if tre.curNode.traits[tr] in ['true', 'false']:
-                    tre.curNode.traits[tr] = True if tre.curNode.traits[tr] == 'true' else False ## convert to actual Boolean
+                for vals in strings:
+                    tr,val=vals.split('=') # tr := trait; val := value
+                    tr=tr[1:]
+                    if '+' in val:
+                        val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
+                    tre.curNode.traits[tr]=val.strip('"')
 
-            for vals in numerics: ## assign all parsed annotations to traits of current branch
-                tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
-                tr=tr[1:]
-                if val.replace('E','',1).replace('e','',1).replace('-','',1).replace('.','',1).isdigit():
-                    tre.curNode.traits[tr]=float(val)
+                    if tre.curNode.traits[tr] in ['true', 'false']:
+                        tre.curNode.traits[tr] = True if tre.curNode.traits[tr] == 'true' else False ## convert to actual Boolean
 
-            for val in treelist:
-                tr,val=val.split('=')
-                tr=tr[1:]
-                tre.curNode.traits[tr]=[]
-                for entry in re.findall(r'{([^{}]+)}',val):
-                    fields=[field.strip() for field in entry.split(',')]
-                    if len(fields) in [3,4]:
-                        if tr in ['all_S','all_N'] or tr.endswith(('.all_S','.all_N')):
-                            fields=[int(fields[0]),float(fields[1])]+fields[2:]
-                        tre.curNode.traits[tr].append(fields)
+                for vals in numerics: ## assign all parsed annotations to traits of current branch
+                    tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
+                    tr=tr[1:]
+                    if val.replace('E','',1).replace('e','',1).replace('-','',1).replace('.','',1).isdigit():
+                        tre.curNode.traits[tr]=float(val)
 
-            for vals in sets:
-                tr,val=vals.split('=')
-                tr=tr[1:]
-                if 'set' in tr:
+                for val in treelist:
+                    tr,val=val.split('=')
+                    tr=tr[1:]
                     tre.curNode.traits[tr]=[]
-                    for v in val[1:-1].split(','):
-                        if 'set.prob' in tr:
-                            tre.curNode.traits[tr].append(float(v))
-                        else:
-                            tre.curNode.traits[tr].append(v.strip('"'))
-                else:
-                    try:
-                        tre.curNode.traits[tr]=list(map(float,val[1:-1].split(',')))
-                    except:
-                        logger.error(f'some other trait: {vals}')
+                    for entry in re.findall(r'{([^{}]+)}',val):
+                        fields=[field.strip() for field in entry.split(',')]
+                        if len(fields) in [3,4]:
+                            if tr in ['all_S','all_N'] or tr.endswith(('.all_S','.all_N')):
+                                fields=[int(fields[0]),float(fields[1])]+fields[2:]
+                            tre.curNode.traits[tr].append(fields)
 
-            if len(figtree)>0:
-                logger.info('FigTree comment found, ignoring')
+                for vals in sets:
+                    tr,val=vals.split('=')
+                    tr=tr[1:]
+                    if 'set' in tr:
+                        tre.curNode.traits[tr]=[]
+                        for v in val[1:-1].split(','):
+                            if 'set.prob' in tr:
+                                tre.curNode.traits[tr].append(float(v))
+                            else:
+                                tre.curNode.traits[tr].append(v.strip('"'))
+                    else:
+                        try:
+                            tre.curNode.traits[tr]=list(map(float,val[1:-1].split(',')))
+                        except:
+                            logger.error(f'some other trait: {vals}')
+
+                if len(figtree)>0:
+                    logger.info('FigTree comment found, ignoring')
 
             i+=len(match.group()) ## advance in tree string by however many characters it took to encode labels
 
