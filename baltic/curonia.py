@@ -19,7 +19,7 @@ import numpy as np
 import matplotlib as mpl
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
-from baltic.bt_utils import calendar_to_decimal_date, desaturate_cmap
+from baltic.bt_utils import calendar_to_decimal_date, desaturate_cmap, _import_optional
 from baltic import Reticulation
 
 logger = logging.getLogger("baltic.curonia")
@@ -2027,7 +2027,7 @@ def connect_tree_to_map(
 
     Requires ``cartopy`` for the map axes and its projections. It is not a
     ``baltic`` dependency and is not in the conda environment, so install it
-    separately (``conda install -c conda-forge cartopy``) before use. This is why
+    separately (``pip install 'baltic[maps]'`` or ``conda install -c conda-forge cartopy``) before use. This is why
     the example below is not executed.
 
     **Examples**
@@ -2045,7 +2045,7 @@ def connect_tree_to_map(
     >>> curonia.connect_tree_to_map(tree_ax, map_ax, ll, tip_coords, ccrs.PlateCarree())  # doctest: +SKIP
     """
     from matplotlib.patches import ConnectionPatch
-    import cartopy.crs as ccrs
+    ccrs = _import_optional("cartopy.crs", "cartopy", "maps")
     from baltic.bt_utils import desaturate_cmap
 
     if originProjection is None: originProjection = ccrs.PlateCarree()
@@ -2950,7 +2950,7 @@ def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fast
 
     Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
     function. It is not a declared ``baltic`` dependency, so install it separately
-    (``pip install biopython``) before calling.
+    (``pip install 'baltic[seq]'``) before calling.
 
     **Examples**
 
@@ -2971,7 +2971,7 @@ def _compute_consensus(alnFile, SNPs=None, validNucleotideFxn=None, alnFmt='fast
     'CA'
     """
     from collections import Counter
-    from Bio import SeqIO
+    SeqIO = _import_optional("Bio.SeqIO", "biopython", "seq")
 
     alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt))
 
@@ -3027,7 +3027,7 @@ def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refS
 
     Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
     function. It is not a declared ``baltic`` dependency, so install it separately
-    (``pip install biopython``) before calling.
+    (``pip install 'baltic[seq]'``) before calling.
 
     **Examples**
 
@@ -3043,7 +3043,7 @@ def _get_refSeq(refSeq, validNucleotideFxn=None, alnFile=None, alnFmt=None, refS
     'ACGTA'
     'ATGTA'
     """
-    from Bio import SeqIO
+    SeqIO = _import_optional("Bio.SeqIO", "biopython", "seq")
 
     summarySeq = None
     if refSeq == 'consensus': ## compute consensus
@@ -3156,7 +3156,7 @@ def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, valid
 
     Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
     function. It is not a declared ``baltic`` dependency, so install it separately
-    (``pip install biopython``) before calling.
+    (``pip install 'baltic[seq]'``) before calling.
 
     **Examples**
 
@@ -3174,7 +3174,7 @@ def get_variable_aln_sites(alnFile, refSeq='consensus', selectionFxn=None, valid
     [1, 4]
     """
     from collections import Counter
-    from Bio import SeqIO
+    SeqIO = _import_optional("Bio.SeqIO", "biopython", "seq")
 
     alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt)) ## load sequence
 
@@ -3320,7 +3320,7 @@ def plot_snp_alignment(alnAx, SNPs, alnFile, tree, refSeq='consensus', ntColours
     """
     from matplotlib.patches import Rectangle
     from matplotlib.collections import PatchCollection, LineCollection
-    from Bio import SeqIO
+    SeqIO = _import_optional("Bio.SeqIO", "biopython", "seq")
 
     alnDict = SeqIO.to_dict(SeqIO.parse(alnFile, alnFmt))
 
@@ -3615,7 +3615,7 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
 
     Requires ``biopython``, which :mod:`baltic.curonia` imports lazily inside this
     function. It is not a declared ``baltic`` dependency, so install it separately
-    (``pip install biopython``) before calling.
+    (``pip install 'baltic[seq]'``) before calling.
 
     **Examples**
 
@@ -3643,7 +3643,7 @@ def _format_coding_aln_column(site, alnDict, referenceSeq, seqFeatures=None, fea
     >>> curonia._format_coding_aln_column(3, alnDict, reference)
     '4 nt'
     """
-    from Bio.Seq import Seq
+    Seq = _import_optional("Bio.Seq", "biopython", "seq").Seq
 
     # Identify all overlapping ORFs
     hits = []
@@ -3739,7 +3739,7 @@ def _load_gff(gffFile):
 
     Requires ``BCBio-GFF`` (which itself pulls in ``biopython``), imported lazily
     inside this function. Neither is a declared ``baltic`` dependency, so install
-    them separately (``pip install bcbio-gff``) before calling.
+    them separately (``pip install 'baltic[seq]'``) before calling.
 
     **Examples**
 
@@ -3755,10 +3755,7 @@ def _load_gff(gffFile):
     >>> sorted((int(feature.location.start), int(feature.location.end)) for feature in features)
     [(0, 6), (6, 12)]
     """
-    try:
-        from BCBio import GFF
-    except ImportError:
-        raise ImportError(f"BCBio-GFF needs to be installed for processing GFF files. Install with: pip install bcbio-gff")
+    GFF = _import_optional("BCBio.GFF", "bcbio-gff", "seq")
 
     handle = open(gffFile, 'r') if isinstance(gffFile, str) else gffFile
 

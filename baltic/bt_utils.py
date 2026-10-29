@@ -18,6 +18,7 @@ import datetime as dt
 import calendar
 import warnings
 import math
+import importlib
 import numpy as np
 from itertools import permutations
 from scipy.stats import linregress
@@ -55,6 +56,20 @@ __all__ = [
     "draw_gradient_polygon",
     "get_path_effects",
 ]
+
+def _import_optional(module, package, extra):
+    """Import an optional dependency, or raise an ImportError that says how to install it.
+
+    ``module`` is the import path (e.g. ``"Bio.SeqIO"``), ``package`` the name to
+    ``pip install`` and ``extra`` the matching ``baltic`` extra in ``setup.py``.
+    """
+    try:
+        return importlib.import_module(module)
+    except ImportError:
+        raise ImportError(
+            f"This feature requires the optional dependency '{package}'. "
+            f"Install it with: pip install {package}  (or: pip install 'baltic[{extra}]')"
+        ) from None
 
 def calendar_to_decimal_date(date, fmt="%Y-%m-%d", variable=False):
     """
@@ -1230,7 +1245,7 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
 
     Requires ``squarify``, imported lazily inside this function. It ships with the
     ``baltic`` conda environment but is not in ``requirements.txt``, so a pip-only
-    install may need ``pip install squarify``.
+    install may need ``pip install squarify`` (or ``pip install 'baltic[treemap]'``).
 
     **Returns**
 
@@ -1251,7 +1266,7 @@ def plot_node_treemap(ax, node, traitName, traitColourDict, height, width, cente
 
     assert other_thres < 1.0, f"Threshold for assigning state to 'other' category ({other_thres}) should be <1.0."
 
-    import squarify
+    squarify = _import_optional("squarify", "squarify", "treemap")
     from matplotlib.patches import Rectangle
 
     if centerFxn is None: centerFxn = lambda k: (k.x, k.y)
