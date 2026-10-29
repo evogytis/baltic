@@ -11,7 +11,12 @@ setup(
     version="1.0.0",
     packages=find_packages(),
     url="https://github.com/evogytis/baltic",
-    download_url="https://github.com/evogytis/baltic/archive/v0.3.0.tar.gz",
+    project_urls={
+        "Documentation": "https://baltic.readthedocs.io/",
+        "Gallery": "https://phylo-baltic.github.io/baltic-gallery/",
+        "Source": "https://github.com/evogytis/baltic",
+        "Releases": "https://github.com/evogytis/baltic/releases",
+    },
     keywords = ['phylogeny', 'visualization'],
     license="gpl-3.0",
     author="Gytis Dudas",
