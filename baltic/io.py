@@ -15,7 +15,7 @@ import json
 from io import BytesIO as csio
 import logging
 import requests
-from baltic.baltic import make_tree, make_tree_JSON
+from baltic.baltic import make_tree, make_tree_JSON, TreeParseError
 from baltic.bt_utils import calendar_to_decimal_date
 
 logger = logging.getLogger("baltic.io")
@@ -26,6 +26,102 @@ __all__ = [
     "load_JSON",
     "process_tip_dates",
 ]
+
+## a quoted Nexus token, with doubled quotes as escapes
+_QUOTED_TOKEN = re.compile(r"'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\"")
+
+
+def _read_translate_entries(text):
+    """
+    Read the ``number name`` entries of a Nexus ``Translate`` block body (without
+    the keyword and the final ``;``) into a dict.
+
+    Quoted names may hold any character; unquoted names run to the next ``,`` and
+    may contain spaces. Raises :class:`~baltic.baltic.TreeParseError` on anything
+    else, so that no tip is silently left untranslated.
+    """
+    tips = {}
+    pos = 0
+    while True:
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+        if pos >= len(text):
+            return tips
+
+        key = re.match(r'[^\s,]+', text[pos:])
+        if key is None:
+            raise TreeParseError(f'Could not read Translate entry at {text[pos:pos+40]!r}')
+        pos += key.end()
+
+        while pos < len(text) and text[pos].isspace():
+            pos += 1
+        quoted = _QUOTED_TOKEN.match(text, pos)
+        if quoted:
+            quote = quoted.group()[0]
+            name = (quoted.group(1) if quote == "'" else quoted.group(2)).replace(quote * 2, quote)
+            pos = quoted.end()
+            rest = re.match(r'\s*(,|$)', text[pos:])
+            if rest is None:
+                raise TreeParseError(f'Unexpected text after quoted Translate name {quoted.group()!r}: {text[pos:pos+40]!r}')
+            pos += rest.end()
+        else:
+            end = text.find(',', pos)
+            end = len(text) if end == -1 else end
+            name = text[pos:end].strip()
+            pos = end + 1
+        if not name:
+            raise TreeParseError(f'Translate entry {key.group()!r} has no name')
+        if key.group() in tips:
+            raise TreeParseError(f'Translate entry {key.group()!r} appears more than once')
+        tips[key.group()] = name
+
+
+class _TranslateBlock:
+    """
+    Collect a Nexus ``Translate`` block fed one line at a time, which may span many
+    lines or hold several entries per line, and read it with
+    :func:`_read_translate_entries` once its closing ``;`` is reached.
+    """
+    keyword = re.compile(r'(?:^|;)\s*translate\b', re.IGNORECASE) ## at the start of a line, or after e.g. "begin trees;"
+
+    def __init__(self):
+        self.tips = {}
+        self._text = None ## body of a block that has started but not ended
+
+    def feed(self, line):
+        """Read *line*; returns ``True`` if it belonged to a Translate block."""
+        if self._text is None:
+            match = self.keyword.search(line)
+            if match is None:
+                return False
+            line = line[match.end():]
+            self._text = ''
+        self._text += line + '\n'
+
+        text = self._text
+        quote = None
+        pos = 0
+        while pos < len(text): ## block ends at the first ; outside quoted names
+            char = text[pos]
+            if quote is not None:
+                if char == quote:
+                    if text[pos+1:pos+2] == quote: ## doubled quote is an escape, e.g. 'O''Brien'
+                        pos += 1
+                    else:
+                        quote = None
+            elif char in ('"', "'") and (pos == 0 or text[pos-1].isspace() or text[pos-1] == ','):
+                quote = char ## a quote opens a name only at the start of a token, so Cote_d'Ivoire is not quoted
+            elif char == ';':
+                self.tips.update(_read_translate_entries(text[:pos]))
+                self._text = None
+                break
+            pos += 1
+        return True
+
+    def close(self):
+        """Raise if the file ended inside a Translate block."""
+        if self._text is not None:
+            raise TreeParseError('Translate block has no closing ";"')
 
 def load_newick(treePath,
                 treeType,
@@ -40,7 +136,7 @@ def load_newick(treePath,
 
     The first ``(`` on a line marks the start of a tree string. Every such line is
     parsed, but only the **last** one is kept, so a file holding several trees
-    silently yields only the final tree.
+    yields only the final tree; a warning is logged when this happens.
 
     A path is opened and closed here; a file-like object is read but left open for
     the caller to close.
@@ -99,17 +195,21 @@ def load_newick(treePath,
     3
     """
     ll = None
+    treeCount = 0
 
-    handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
+    handle = open(treePath, 'r', encoding='utf-8') if isinstance(treePath, str) else treePath ## explicit, or Windows reads UTF-8 names like São_Paulo as SÃ£o_Paulo
 
     for line in handle:
         l = line.strip('\n')
         if '(' in l:
             treeStringStart = l.index('(')
             ll = make_tree(l[treeStringStart:], treeType) ## send tree string to make_tree function
+            treeCount += 1
             logger.debug('Identified tree string')
 
     assert ll, 'Regular expression failed to find tree string'
+    if treeCount > 1:
+        logger.warning(f'{treeCount} trees found; only the last one was kept.')
 
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
@@ -126,7 +226,7 @@ def load_nexus(treePath,
                 treeType,
                 tipRegex=r'\|([0-9\-]+)$',
                 dateFmt='%Y-%m-%d',
-                treestringRegex=r'tree [A-Za-z\_]+([0-9]+)',
+                treestringRegex=r'^\s*tree\s+[^\s=]+\s*=',
                 variableDate=True,
                 absoluteTime=True,
                 sortBranches=True,
@@ -135,11 +235,16 @@ def load_nexus(treePath,
     Load a tree from a Nexus file or file-like object.
 
     Every line matching *treestringRegex* is parsed, but only the **last** tree is
-    kept. To iterate over the trees in a BEAST posterior file, use
+    kept, and a warning is logged if there was more than one. To iterate over the
+    trees in a BEAST posterior file, use
     :func:`baltic.samogitia.posterior_tree_iterator` instead.
 
     Tips are renamed from their Nexus numbers using the ``Translate`` block, and the
-    mapping is kept on the tree as ``tipMap``.
+    mapping is kept on the tree as ``tipMap``. The block may span several lines or
+    hold several entries per line; quoted names may contain any character, and an
+    entry that can't be read raises :class:`~baltic.baltic.TreeParseError`. As in the Nexus standard, keywords
+    (``tree``, ``Translate``, ``Dimensions``) are matched case-insensitively, so files
+    written by MrBayes (``translate``) and TreeTime/Biopython (``Tree tree1=``) load.
 
     .. note::
 
@@ -169,8 +274,10 @@ def load_nexus(treePath,
     dateFmt : str, default="%Y-%m-%d"
         Date format used to parse the value captured by *tipRegex*.
 
-    treestringRegex : str, default=r"tree [A-Za-z\\_]+([0-9]+)"
-        Regular expression used to identify the tree line in the Nexus file.
+    treestringRegex : str, default=r"^\\s*tree\\s+[^\\s=]+\\s*="
+        Regular expression used to identify the tree line in the Nexus file. It is
+        matched case-insensitively. The default accepts any tree name, e.g.
+        ``tree STATE_0 =``, ``tree con_50_majrule =`` or ``Tree tree1=``.
 
     variableDate : bool, default=True
         Whether partially specified tip dates should be interpreted as date
@@ -224,42 +331,37 @@ def load_nexus(treePath,
     >>> sorted(tip.name for tip in ll.get_external())
     ['A|2020-01-01', 'B|2020-02-01']
     """
-    tip_flag = False
-    tips = {}
+    translate = _TranslateBlock()
     tip_num = 0
+    treeCount = 0
     ll = None
 
-    handle = open(treePath, 'r') if isinstance(treePath, str) else treePath
+    handle = open(treePath, 'r', encoding='utf-8') if isinstance(treePath, str) else treePath ## explicit, or Windows reads UTF-8 names like São_Paulo as SÃ£o_Paulo
 
     for line in handle:
         l = line.strip('\n')
 
-        match = re.search('Dimensions ntax=([0-9]+);',l)
+        match = re.search(r'Dimensions\s+ntax\s*=\s*([0-9]+)',l,re.IGNORECASE)
         if match:
             tip_num = int(match.group(1))
             logger.debug(f'File should contain {tip_num} taxa')
 
-        match = re.search(treestringRegex,l)
+        if translate.feed(l): ## Translate block (BEAST: Translate, MrBayes: translate), possibly over several lines
+            continue
+
+        match = re.search(treestringRegex,l,re.IGNORECASE)
         if match:
             treeString_start = l.index('(')
             ll = make_tree(l[treeString_start:], treeType) ## send tree string to make_tree function
+            treeCount += 1
             logger.debug('Identified tree string')
 
-        if tip_flag:
-            match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
-            if match:
-                tips[match.group(1)] = match.group(2).strip('"').strip("'")
-                logger.debug(f'Identified tip translation {match.group(1)}: {tips[match.group(1)]}')
-            elif ';' not in l:
-                stripped = l.replace('\t', '')
-                logger.warning(f'Tip not captured by regex: {stripped}')
-
-        if 'Translate' in l:
-            tip_flag = True
-        if ';' in l:
-            tip_flag = False
+    translate.close()
+    tips = translate.tips
 
     assert ll,'Failed to find tree string using regular expression'
+    if treeCount > 1:
+        logger.warning(f'{treeCount} trees found; only the last one was kept. To work through every tree, use baltic.samogitia.posterior_tree_iterator.')
 
     if sortBranches: ll.sort_branches() ## traverses tree, sorts branches, draws tree
 
@@ -350,7 +452,7 @@ def load_JSON(jsonObject, treeType, jsonTranslation=None, sort=True, stats=True)
             auspice_json = json.load(csio(requests.get(jsonObject).content))
         else: ## not nextstrain.org URL - assume local path to auspice v2 json
             logger.debug('Loading JSON from local path')
-            with open(jsonObject) as json_data:
+            with open(jsonObject, encoding='utf-8') as json_data: ## JSON files are UTF-8
                 auspice_json = json.load(json_data)
     else: ## not string, assume auspice v2 json object given
         logger.debug('Loading JSON from object given')

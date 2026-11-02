@@ -16,6 +16,7 @@ import logging
 import numpy as np
 from baltic.baltic import make_tree
 from baltic.bt_utils import calendar_to_decimal_date
+from baltic.io import _TranslateBlock
 
 logger = logging.getLogger("baltic.samogitia")
 
@@ -73,12 +74,12 @@ def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt
     >>> len(records)
     1
     """
-    tip_flag = False
-    tips = {}
+    translate = _TranslateBlock()
+    tips = translate.tips ## filled in place as the Translate block is read
     tip_num = 0
     treeCounter = 0
     ############
-    handle = open(treesPath, 'r')
+    handle = open(treesPath, 'r', encoding='utf-8') ## explicit, or Windows reads UTF-8 names like São_Paulo as SÃ£o_Paulo
 
     for line in handle:
         l = line.strip('\n')
@@ -88,6 +89,9 @@ def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt
         if match:
             tip_num = int(match.group(1))
             logger.debug(f'File should contain {tip_num} taxa')
+
+        if translate.feed(l): ## Translate block, possibly over several lines
+            continue
 
         ###############
         match = re.search(treestringRegex,l)
@@ -127,21 +131,8 @@ def posterior_tree_iterator(treesPath, burnin, mostRecentDate, tipRegex, dateFmt
             treeCounter += 1
 
             logger.debug('Identified tree string')
-        ##############
-        if tip_flag:
-            match = re.search(r'([0-9]+) ([A-Za-z\-\_\/\.\'0-9 \|?]+)',l)
-            if match:
-                tips[match.group(1)] = match.group(2).strip('"').strip("'")
-                logger.debug(f'Identified tip translation {match.group(1)}: {tips[match.group(1)]}')
-            elif ';' not in l:
-                stripped = l.replace('\t', '')
-                logger.warning(f'Tip not captured by regex: {stripped}')
 
-        if 'Translate' in l:
-            tip_flag = True
-        if ';' in l:
-            tip_flag = False
-
+    translate.close()
     handle.close()
 
 def process_posterior_trees(treesPath, processFxn, workers = 4, burnin = None, outputPath = 'processed-output.log.txt', mostRecentDate = None, tipRegex=r'\|([0-9]+\-[0-9]+\-[0-9]+)', dateFmt='%Y-%m-%d', treestringRegex=r'tree [A-Za-z\_]+([0-9]+)', **kwargs):

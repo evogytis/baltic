@@ -10,7 +10,7 @@ This version of ``baltic`` (v1.0 (Cedar)) contains many API changes from previou
 logger : ``logging.Logger``
     Default logger which will be passed to other ``baltic`` functions.
 """
-__all__ = ['make_tree', 'make_tree_JSON']
+__all__ = ['make_tree', 'make_tree_JSON', 'TreeParseError']
 import re
 import sys
 import logging
@@ -21,6 +21,75 @@ from baltic.reticulation import Reticulation
 
 logger = logging.getLogger("baltic")
 sys.setrecursionlimit(9001)
+
+## characters allowed inside [&...] annotations, as a regex character class body
+_ANNOTATION_CHARS = r'A-Za-z\_\-{}\,0-9\.\%=\"\'\+!# :\/\(\)\&'
+## the same without quote characters: quoted values are matched separately and may hold any character
+_ANNOTATION_CHARS_UNQUOTED = r'A-Za-z\_\-{}\,0-9\.\%=\+!# :\/\(\)\&'
+
+## a decimal number, optionally signed and in scientific notation (MrBayes writes 1.00000000e+00)
+_NUMBER = r'[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?'
+_NUMBER_RE = re.compile(_NUMBER)
+## annotation keys: BEAST (height_95%_HPD, location.set.prob), MrBayes (prob(percent), prob+-sd)
+## and IQ-TREE concordance factors (gCF/gDF1/gDF2/gDFP)
+_ANNOTATION_KEY_RE = re.compile(r'[A-Za-z0-9_.%()+/-]+')
+## unquoted annotation values that are read as strings
+_ANNOTATION_WORD_RE = re.compile(r'[A-Za-z0-9_.+ :/()&-]+')
+
+
+class TreeParseError(ValueError, AssertionError):
+    """
+    Raised when :func:`make_tree` cannot interpret a tree string.
+
+    The message gives the position in the string, a short snippet around it and,
+    where possible, a hint about what to fix. It subclasses ``ValueError`` and,
+    for backwards compatibility with code written against earlier versions (which
+    raised assertion errors), ``AssertionError``.
+    """
+
+
+def _parse_error(data, pos, message, hint=None, context=30):
+    """Build a :class:`TreeParseError` pointing at position ``pos`` of ``data``."""
+    start, end = max(0, pos - context), min(len(data), pos + context)
+    prefix = '...' if start > 0 else ''
+    suffix = '...' if end < len(data) else ''
+    snippet = data[start:end].replace('\n', ' ').replace('\t', ' ')
+    lines = [f'{message} at position {pos}',
+             f'  {prefix}{snippet}{suffix}',
+             '  ' + ' ' * (len(prefix) + pos - start) + '^']
+    if hint:
+        lines.append(hint)
+    return TreeParseError('\n'.join(lines))
+
+
+def _stalled_parse_error(data, i):
+    """Explain why parsing could not advance past position ``i``."""
+    j = i + 1 if data[i] == ':' else i ## annotations may follow a colon
+    if data.startswith('[&', j):
+        if data.find(']', j) == -1:
+            return _parse_error(data, j, 'Unterminated annotation (no closing "]")')
+        allowed = re.compile(f'[{_ANNOTATION_CHARS_UNQUOTED}]')
+        quote = None
+        for pos in range(j + 2, len(data)): ## scan the annotation, skipping quoted values
+            char = data[pos]
+            if quote is not None:
+                if char == quote:
+                    quote = None
+            elif char in ('"', "'"):
+                quote, opened = char, pos
+            elif char == ']':
+                break
+            elif not allowed.match(char):
+                return _parse_error(data, pos,
+                                    f'Unsupported character {char!r} in annotation',
+                                    hint='Check the tree file; outside quoted values, annotations may only contain '
+                                         'letters, digits, spaces and the characters _-{},.%=+!#:/()&')
+        else:
+            if quote is not None:
+                return _parse_error(data, opened, 'Unterminated quote in annotation')
+            return _parse_error(data, j, 'Unterminated annotation (no closing "]")')
+    return _parse_error(data, i, f'Tree string unparseable: unexpected character {data[i]!r}')
+
 
 def _split_annotation_fields(comment):
     """Split a BEAST annotation body outside quotes and nested braces."""
@@ -47,12 +116,104 @@ def _split_annotation_fields(comment):
     yield comment[start:].strip()
 
 
+def _unquote_label(match):
+    """Text of a matched quoted node label, with doubled quotes (the Newick escape) undone."""
+    quote = match.group()[0]
+    text = match.group(1) if quote == "'" else match.group(2)
+    return text.replace(quote * 2, quote)
+
+
+def _set_member_to_float(value):
+    """Convert one member of a numeric annotation set, accepting only numbers (and NaN/Inf)."""
+    value = value.strip()
+    if _NUMBER_RE.fullmatch(value) or value.lower() in ('nan', 'inf', '-inf', '+inf'):
+        return float(value)
+    raise ValueError(value)
+
+
+def _first_of_tie(value):
+    """
+    Reduce a tied discrete state such as ``"Asia+Europe"`` to its first state.
+
+    Only values whose parts are all non-numeric words are split, so MrBayes values
+    such as ``prob+-sd="100+-0"`` are kept whole. Returns ``(value, tied)``.
+    """
+    parts = value.split('+')
+    if len(parts) > 1 and all(part and not _NUMBER_RE.fullmatch(part) for part in parts):
+        return parts[0], True
+    return value, False
+
+
+def _read_annotation_field(field):
+    """
+    Read one ``key=value`` field of a ``[&...]`` annotation.
+
+    Returns ``(key, value, tied)``, or ``None`` for FigTree display fields (``!key=value``),
+    which are ignored. Raises ``ValueError(message, hint)`` if the field cannot be read,
+    so that nothing is dropped silently.
+    """
+    key, separator, value = field.partition('=')
+    key, value = key.strip(), value.strip()
+
+    if key.startswith('!'): ## FigTree display settings, e.g. !color=#ff0000
+        logger.info('FigTree comment found, ignoring')
+        return None
+
+    unreadable = (f'Could not read annotation field {field!r}',
+                  'Check the tree file; the field is not in a format baltic recognises.')
+    if not separator or not _ANNOTATION_KEY_RE.fullmatch(key):
+        raise ValueError(*unreadable)
+
+    tied = False
+    if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]: ## quoted string
+        value, tied = _first_of_tie(value[1:-1])
+        value = {'true': True, 'false': False}.get(value, value)
+
+    elif value.startswith('{') and value.endswith('}'):
+        body = value[1:-1].strip()
+        if not body: ## empty set, e.g. segments={} on a reassortment network node
+            value = []
+        elif '{' in body: ## complete history logged by robust counting (MCMC trees)
+            history = []
+            for entry in re.findall(r'{([^{}]+)}', body):
+                entryFields = [entryField.strip() for entryField in entry.split(',')]
+                if len(entryFields) in [3,4]:
+                    if key in ['all_S','all_N'] or key.endswith(('.all_S','.all_N')):
+                        entryFields = [int(entryFields[0]), float(entryFields[1])] + entryFields[2:]
+                    history.append(entryFields)
+            value = history
+        elif 'set' in key and 'set.prob' not in key: ## set of discrete states
+            value = [member.strip().strip('"') for member in body.split(',')]
+        else: ## set of state probabilities, or a range or HPD interval
+            try:
+                value = [_set_member_to_float(member) for member in body.split(',')]
+            except ValueError:
+                raise ValueError(f'Could not read annotation field {field!r}: expected a set of numbers',
+                                 'Fields named without "set" must hold numbers, e.g. height_95%_HPD={0.1,0.2}.') from None
+
+    elif _NUMBER_RE.fullmatch(value):
+        value = float(value)
+
+    elif _ANNOTATION_WORD_RE.fullmatch(value): ## unquoted string
+        value, tied = _first_of_tie(value)
+        value = {'true': True, 'false': False}.get(value, value)
+
+    else:
+        raise ValueError(*unreadable)
+
+    return key, value, tied
+
+
 def make_tree(data, treeType, tre=None):
     """
     Parse a Newick-like tree string into a :class:`baltic.tree.Tree`.
 
     Handles BEAST integer tips, ``[&...]`` annotation comments and ``#label``
-    reticulations in addition to plain Newick. The returned tree has not been
+    reticulations in addition to plain Newick. Node labels, quoted or not (e.g.
+    IQ-TREE support ``)95.5/100:`` or ASTRAL ``)'[pp1=0.95;q1=0.6]':``), are stored
+    as written in ``traits['label']``; when a name is followed directly by a quoted
+    label (``N5'[pp1=1]'``), the name goes in ``label`` and the quoted text in
+    ``quoted_label``. The returned tree has not been
     traversed; the loaders in :mod:`baltic.io` do that, so call
     :meth:`baltic.tree.Tree.traverse_tree` if using this directly.
 
@@ -81,12 +242,15 @@ def make_tree(data, treeType, tre=None):
 
     **Raises**
 
-    AssertionError
+    TreeParseError
         If the string does not end in a semicolon, if parentheses are unbalanced,
-        or if parsing stalls on a character it cannot interpret.
-
-    Exception
-        If a reticulation label is used more than once in the tree.
+        if parsing stalls on a character it cannot interpret (for example an
+        unsupported character inside an annotation), if the string ends before
+        its final semicolon, if a branch length is malformed (e.g. ``1.2e``), if an
+        annotation field cannot be read, or if a
+        reticulation label is used more than once in the tree. The message gives
+        the position and a snippet of the string. ``TreeParseError`` subclasses
+        both ``ValueError`` and ``AssertionError``.
 
     **Examples**
 
@@ -96,25 +260,57 @@ def make_tree(data, treeType, tre=None):
     ['A', 'B', 'C']
     """
     patterns = {
-        'beast_tip': r'(\(|,)([0-9]+)(\[|\:)', # Pattern to match tips in BEAST format (integers)
-        'non_beast_tip': r'(\(|,)(\'|\")*([^\(\):\[\'\"#,]+)(\'|\"|)*(\[)*' # Pattern to match tips with unencoded names
+        'beast_tip': re.compile(r'(\(|,)([0-9]+)(\[|\:)'), # Pattern to match tips in BEAST format (integers)
+        'non_beast_tip': re.compile(r'(\(|,)(\'|\")*([^\(\):\[\'\"#,]+)(\'|\"|)*(\[)*'), # Pattern to match tips with unencoded names
+        'multitype': re.compile(r'\)([0-9]+)\['), # Pattern to match multitype tree singletons
+        'reticulation_start': re.compile(r'[\(,](#[A-Za-z0-9]+)'), # Pattern to match the beginning of a reticulate branch
+        'reticulation_end': re.compile(r'\)(#[A-Za-z0-9]+)'), # Pattern to match the landing point of a reticulate branch
+        'annotation': re.compile(rf'(\:)*\[(&(?:"[^"]*"|\'[^\']*\'|[{_ANNOTATION_CHARS_UNQUOTED}])+)\]'), # Pattern to match MCC comments; quoted values may hold any character, e.g. label="[pp1=0.95;q1=0.6]"
+        'node_label': re.compile(r'([A-Za-z\_\-0-9\.\/]+)(\:|\;|\[|,|\)|\'|\")'), # Pattern to match old school node labels
+        'quoted_label': re.compile(r"'((?:[^']|'')*)'|\"((?:[^\"]|\"\")*)\""), # Pattern to match quoted node labels, with doubled quotes as escapes
+        'branch_length': re.compile(rf'(\:)*({_NUMBER})'), # Pattern to match branch lengths without comments
     }
+    ## patterns are matched in place (pattern.match(data, pos)) rather than on slices of data,
+    ## so long tip names or annotations are never truncated by a fixed-size window
+    match_at = lambda name, pos: patterns[name].match(data, pos) if pos >= 0 else None
+
     if not isinstance(data,str): ## tree string is not an instance of string (could be unicode) - convert
         data=str(data)
+    data=data.rstrip() ## whitespace after the final semicolon (e.g. "; " or a Windows "\r") carries no data
 
     # Add in some checks that the data are in correct format
-    assert data.endswith(";"), "Improperly formatted string: must end in semicolon"
-    assert data.count("(")==data.count(")"), "Improperly formatted string: must have matching parentheses"
+    if not data.endswith(";"):
+        raise _parse_error(data, max(len(data) - 1, 0), 'Improperly formatted string: must end in semicolon')
+    if data.count("(") != data.count(")"): ## recount outside quotes - quoted labels may contain parentheses
+        opened = [] ## locate the first unmatched parenthesis to point at it
+        quote = None
+        for pos, char in enumerate(data):
+            if quote is not None:
+                if char == quote:
+                    quote = None
+            elif char in ('"', "'"):
+                quote = char
+            elif char == '(':
+                opened.append(pos)
+            elif char == ')':
+                if not opened:
+                    raise _parse_error(data, pos, "Improperly formatted string: unmatched ')'")
+                opened.pop()
+        if opened:
+            raise _parse_error(data, opened[-1],
+                               f"Improperly formatted string: {data.count('(')} '(' but {data.count(')')} ')'")
 
     if tre is None: ## calling without providing a tree object - create one
         tre=Tree(treeType)
     i=0 ## is an adjustable index along the tree string, it is incremented to advance through the string
     storedI=None ## store the i at the end of the loop, to make sure we haven't gotten stuck somewhere in an infinite loop
+    tiedFields=[] ## annotation fields with tied states ("A+B") reduced to their first state
 
     while i < len(data): ## while there's characters left in the tree string - loop away
         if storedI == i: logger.debug(f'{i} >{data[i]}<')
 
-        assert (storedI != i),f'\nTree string unparseable\nStopped at >>{data[i]}<<\nstring region looks like this: {data[i:i+5000]}' # Ensure that the index has advanced; if not, raise an error indicating an unparseable string
+        if storedI == i: ## index has not advanced - the string cannot be parsed here
+            raise _stalled_parse_error(data, i)
         storedI=i # Store the current index at the end of the loop to check for infinite loops
 
         if data[i] == '(': ## look for new nodes
@@ -122,24 +318,32 @@ def make_tree(data, treeType, tre=None):
             tre.add_node(i) ## add node to current node in tree ll
             i+=1 ## advance in tree string by one character
 
-        match=re.match(patterns['beast_tip'],data[i-1:i+100]) ## look for tips in BEAST format (integers).
+        if data[i-1] in ('(', ',') and data[i] in ('"', "'"): ## quoted tip name, which may hold any character, e.g. 'A, b' or 'O''Brien'
+            match=match_at('quoted_label',i)
+            if match is None:
+                raise _parse_error(data, i, 'Unterminated quoted tip name')
+            logger.debug(f'{i} adding leaf (quoted) {_unquote_label(match)}')
+            tre.add_leaf(i,_unquote_label(match))
+            i=match.end()
+
+        match=match_at('beast_tip',i-1) ## look for tips in BEAST format (integers).
         if match:
             logger.debug(f'{i} adding leaf (BEAST) {match.group(2)}')
             tre.add_leaf(i,match.group(2)) ## add tip
             i+=len(match.group(2)) ## advance in tree string by however many characters the tip is encoded
 
-        match=re.match(patterns['non_beast_tip'],data[i-1:i+200])  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
+        match=match_at('non_beast_tip',i-1)  ## look for tips with unencoded names - if the tips have some unusual format you'll have to modify this
         if match:
             logger.debug(f'{i} adding leaf (non-BEAST) {match.group(3)}')
             tre.add_leaf(i,match.group(3).strip('"').strip("'"))  ## add tip
             i+=len(match.group(3))+match.group().count("'")+match.group().count('"') ## advance in tree string by however many characters the tip is encoded
 
-        match=re.match(r'\)([0-9]+)\[',data[i-1:i+100]) ## look for multitype tree singletons.
+        match=match_at('multitype',i-1) ## look for multitype tree singletons.
         if match:
             logger.debug(f'{i} adding multitype node {match.group(1)}')
             i+=len(match.group(1))
 
-        match=re.match(r'[\(,](#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for beginning of reticulate branch
+        match=match_at('reticulation_start',i-1) ## look for beginning of reticulate branch
         if match:
             logger.debug(f'{i} adding outgoing reticulation branch {match.group(1)}')
             tre.add_reticulation(match.group(1)) ## add reticulate branch
@@ -150,7 +354,7 @@ def make_tree(data, treeType, tre=None):
                     if destination is None: ## not set destination before
                         destination=k ## destination is matching node
                     else: ## destination seen before - raise an error (indicates reticulate branch ids are not unique)
-                        raise Exception(f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
+                        raise _parse_error(data, i, f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
             if destination: ## identified destination of this branch
                 logger.debug(f'identified {match.group(1)} destination')
                 tre.curNode.target=destination ## set current node's target as the destination
@@ -159,7 +363,7 @@ def make_tree(data, treeType, tre=None):
                 logger.debug(f'destination of {match.group(1)} not identified yet')
             i+=len(match.group())-1
 
-        match=re.match(r'\)(#[A-Za-z0-9]+)',data[i-1:i+200]) ## look for landing point of reticulate branch
+        match=match_at('reticulation_end',i-1) ## look for landing point of reticulate branch
         if match:
             logger.debug(f'{i} adding incoming reticulation branch {match.group(1)}')
             tre.curNode.traits['label']=match.group(1) ## set node label
@@ -170,7 +374,7 @@ def make_tree(data, treeType, tre=None):
                     if origin is None: ## origin not identified yet
                         origin=k ## origin is reticulate branch with the correct name
                     else: ## origin has been identified - shouldn't happen, implies that multiple reticulate branches exist with the same name
-                        raise Exception(f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
+                        raise _parse_error(data, i, f'Reticulate branch not unique: {match.group(1)} seen elsewhere in the tree')
             if origin: ## identified origin
                 logger.debug(f'identified {match.group(1)} origin')
                 origin.target=tre.curNode ## set origin's landing at this node
@@ -179,79 +383,40 @@ def make_tree(data, treeType, tre=None):
                 logger.debug(f'origin of {match.group(1)} not identified yet')
             i+=len(match.group())-1
 
-        match=re.match(r'(\:)*\[(&[A-Za-z\_\-{}\,0-9\.\%=\"\'\+!# :\/\(\)\&]+)\]',data[i:])## look for MCC comments
+        match=match_at('annotation',i)## look for MCC comments
         if match:
             logger.debug(f'{i} comment: {match.group(2)}')
             comment=match.group(2)
-            for field in _split_annotation_fields(comment[1:]):
-                tr, separator, val = field.partition('=')
-                tr, val = tr.strip(), val.strip()
-                if (separator and re.fullmatch(r'[A-Za-z_.0-9-]+', tr)
-                        and len(val) >= 2 and val[0] in ('"', "'")
-                        and val[-1] == val[0]):
-                    # Keep the existing ambiguity and boolean conversions.
-                    val = val[1:-1].split('+', 1)[0]
-                    tre.curNode.traits[tr] = {'true': True, 'false': False}.get(val, val)
+            try:
+                fields=list(_split_annotation_fields(comment[1:]))
+            except ValueError as err:
+                raise _parse_error(data, i, f'Malformed annotation: {err}') from None
+            for field in fields:
+                if not field: ## nothing to read, e.g. an empty [&] comment
                     continue
-
-                # Reuse the existing parser for this complete unquoted field.
-                comment = '&' + field
-                numerics=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=[0-9\-Ee\.]+',comment) ## find all entries that have values as floats
-                strings=re.findall(r'[,&][A-Za-z\_\.\-0-9]+=["|\']*[A-Za-z\_0-9\.\+ :\/\(\)\&\-]+[\"|\']*',comment) ## strings
-                treelist=re.findall(r'[,&][A-Za-z\_\.\-0-9]+={[A-Za-z\_\-,+{}0-9\. :\/\(\)\&]+}',comment) ## complete history logged robust counting (MCMC trees)
-                sets=re.findall(r'[,&][A-Za-z\_\.\-0-9\%]+={[A-Za-z\.\-0-9eE,\"\_ :\/\(\)\&]+}',comment) ## sets and ranges
-                figtree=re.findall(r'\![A-Za-z]+=[A-Za-z0-9# :\/\(\)\&]+',comment)
-
-                for vals in strings:
-                    tr,val=vals.split('=') # tr := trait; val := value
-                    tr=tr[1:]
-                    if '+' in val:
-                        val=val.split('+')[0] ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
-                    tre.curNode.traits[tr]=val.strip('"')
-
-                    if tre.curNode.traits[tr] in ['true', 'false']:
-                        tre.curNode.traits[tr] = True if tre.curNode.traits[tr] == 'true' else False ## convert to actual Boolean
-
-                for vals in numerics: ## assign all parsed annotations to traits of current branch
-                    tr,val=vals.split('=') ## split each value by =, left side is name, right side is value
-                    tr=tr[1:]
-                    if val.replace('E','',1).replace('e','',1).replace('-','',1).replace('.','',1).isdigit():
-                        tre.curNode.traits[tr]=float(val)
-
-                for val in treelist:
-                    tr,val=val.split('=')
-                    tr=tr[1:]
-                    tre.curNode.traits[tr]=[]
-                    for entry in re.findall(r'{([^{}]+)}',val):
-                        fields=[field.strip() for field in entry.split(',')]
-                        if len(fields) in [3,4]:
-                            if tr in ['all_S','all_N'] or tr.endswith(('.all_S','.all_N')):
-                                fields=[int(fields[0]),float(fields[1])]+fields[2:]
-                            tre.curNode.traits[tr].append(fields)
-
-                for vals in sets:
-                    tr,val=vals.split('=')
-                    tr=tr[1:]
-                    if 'set' in tr:
-                        tre.curNode.traits[tr]=[]
-                        for v in val[1:-1].split(','):
-                            if 'set.prob' in tr:
-                                tre.curNode.traits[tr].append(float(v))
-                            else:
-                                tre.curNode.traits[tr].append(v.strip('"'))
-                    else:
-                        try:
-                            tre.curNode.traits[tr]=list(map(float,val[1:-1].split(',')))
-                        except:
-                            logger.error(f'some other trait: {vals}')
-
-                if len(figtree)>0:
-                    logger.info('FigTree comment found, ignoring')
+                try:
+                    parsed = _read_annotation_field(field)
+                except ValueError as err:
+                    raise _parse_error(data, i, *err.args) from None
+                if parsed is None: ## FigTree display field
+                    continue
+                tr, val, tied = parsed
+                tre.curNode.traits[tr] = val
+                if tied: ## DO NOT ALLOW EQUIPROBABLE DOUBLE ANNOTATIONS (which are in format "A+B") - just get the first one
+                    tiedFields.append(field)
 
             i+=len(match.group()) ## advance in tree string by however many characters it took to encode labels
 
-        # match=re.match(r'([A-Za-z\_\-0-9\.]+)(\:|\;)',data[i:])## look for old school node labels
-        match=re.match(r'([A-Za-z\_\-0-9\.\/]+)(\:|\;|\[|,|\))',data[i:])## look for old school node labels
+        if i > 0 and data[i-1] == ')' and data[i] in ('"', "'"): ## quoted node label, e.g. IQ-TREE )'95.5/100': or ASTRAL )'[pp1=0.95;q1=0.6]':
+            match=match_at('quoted_label',i)
+            if match is None:
+                raise _parse_error(data, i, 'Unterminated quoted node label')
+            label=_unquote_label(match)
+            logger.debug(f'quoted node label found: {label}')
+            tre.curNode.traits['label']=label ## stored as text, exactly as written - support values are not split or converted
+            i=match.end()
+
+        match=match_at('node_label',i)## look for old school node labels
 
         if match:
             logger.debug(f'old school comment found: {match.group(1)}')
@@ -259,8 +424,19 @@ def make_tree(data, treeType, tre=None):
 
             i+=len(match.group(1))
 
-        micromatch=re.match(r'(\:)*([0-9\.\-Ee]+)',data[i:i+100]) ## look for branch lengths without comments
+            if data[i] in ('"', "'"): ## name followed by a quoted label, e.g. ASTRAL N5'[pp1=1;pp2=0;pp3=0]' - kept apart from the name
+                match=match_at('quoted_label',i)
+                if match is None:
+                    raise _parse_error(data, i, 'Unterminated quoted node label')
+                tre.curNode.traits['quoted_label']=_unquote_label(match)
+                i=match.end()
+
+        micromatch=match_at('branch_length',i) ## look for branch lengths without comments
         if micromatch is not None:
+            end=micromatch.end()
+            if end < len(data) and (data[end].isalnum() or data[end] in '._'): ## e.g. 1.2e - the rest would otherwise become a node label
+                token=re.match(r'[^,;\(\)\[\]:]*', data[micromatch.start(2):]).group()
+                raise _parse_error(data, micromatch.start(2), f'Malformed branch length {token!r}')
             logger.debug(f'adding branch length ({i}) {float(micromatch.group(2))}')
             tre.curNode.length=float(micromatch.group(2)) ## set branch length of current node
             i+=len(micromatch.group()) ## advance in tree string by however many characters it took to encode branch length
@@ -270,6 +446,10 @@ def make_tree(data, treeType, tre=None):
             tre.curNode=tre.curNode.parent
 
         if data[i] == ';': ## look for string end
+            if i != len(data) - 1: ## a semicolon before the end would silently drop the rest of the tree
+                raise _parse_error(data, i, 'Unexpected ";" before the end of the tree string')
+            if tiedFields:
+                logger.warning(f'{len(tiedFields)} annotation values held tied states (e.g. {tiedFields[0]}); kept the first state of each.')
             if sum(tre.get_parameter_list('length')) == 0.0:
                 logger.warning(f"All branch lengths 0.0, setting branch lengths to make tree ultrametric with a height of 1.0")
 

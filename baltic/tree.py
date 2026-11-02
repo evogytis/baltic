@@ -2521,6 +2521,8 @@ class Tree: ## tree class
                 treeName = rename[curNode.name]
 
             logger.debug(f"leaf: {curNode.index} ({treeName})")
+            if quoteCharacter: ## double any quote inside the name, the Newick escape, e.g. 'O''Brien'
+                treeName = str(treeName).replace(quoteCharacter, quoteCharacter * 2)
             stringFragment.append(f"{quoteCharacter}{treeName}{quoteCharacter}")
 
         if len(comment) > 0:
