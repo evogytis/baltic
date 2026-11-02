@@ -983,6 +983,8 @@ class Tree: ## tree class
         License: https://github.com/biopython/biopython/blob/master/LICENSE.rst
         """
         logger.debug("No branch provided, rooting at midpoint")
+        if nodeTraits is not None and not isinstance(nodeTraits, str) and hasattr(nodeTraits, "__iter__"):
+            nodeTraits = list(nodeTraits) ## passed to reroot several times, and an iterator could only be read once; reroot validates it
         # Identify the largest pairwise distance
         maxDistance = 0.0
 
@@ -1079,6 +1081,11 @@ class Tree: ## tree class
         AttributeError
             If the tree's ``treeType`` is ``"time"``.
 
+        TypeError
+            If *nodeTraits* is not an iterable of strings, e.g. a single string
+            such as ``"label"`` or a list containing a non-string. The tree is left
+            unchanged.
+
         AssertionError
             If total tree length changed during rerooting, which would indicate a
             branch-length bookkeeping error.
@@ -1108,6 +1115,13 @@ class Tree: ## tree class
         Source: https://github.com/biopython/biopython/blob/master/Bio/Phylo/BaseTree.py
         License: https://github.com/biopython/biopython/blob/master/LICENSE.rst
         """
+        if nodeTraits is not None: ## must be an iterable of trait names; set("label") would silently become {"l", "a", "b", "e"}
+            if isinstance(nodeTraits, str) or not hasattr(nodeTraits, "__iter__"):
+                raise TypeError(f"nodeTraits must be a list of trait names (strings), e.g. ['label'], not {nodeTraits!r}.")
+            nodeTraits = list(nodeTraits) ## an iterator could only be read once
+            if not all(isinstance(trait, str) for trait in nodeTraits):
+                raise TypeError(f"nodeTraits must be a list of trait names (strings), e.g. ['label'], not {nodeTraits!r}.")
+
         if self.treeType == "time":
             logger.error("Cannot reroot a time-calibrated tree.")
             raise AttributeError
@@ -1327,6 +1341,10 @@ class Tree: ## tree class
             not a divergence tree, or if the refinement iteration limits are not
             positive.
 
+        TypeError
+            If *nodeTraits* is not an iterable of strings, e.g. a single string
+            such as ``"label"`` or a list containing a non-string.
+
         **Warns**
 
         RuntimeWarning
@@ -1372,6 +1390,12 @@ class Tree: ## tree class
             )
         if baseRefineIters < 1 or refineItersPerTip < 0 or maxRefineIters < 1:
             raise ValueError("Regression refinement iteration limits must be positive.")
+        if nodeTraits is not None: ## checked here as in reroot, so the search isn't run first
+            if isinstance(nodeTraits, str) or not hasattr(nodeTraits, "__iter__"):
+                raise TypeError(f"nodeTraits must be a list of trait names (strings), e.g. ['label'], not {nodeTraits!r}.")
+            nodeTraits = list(nodeTraits) ## an iterator could only be read once
+            if not all(isinstance(trait, str) for trait in nodeTraits):
+                raise TypeError(f"nodeTraits must be a list of trait names (strings), e.g. ['label'], not {nodeTraits!r}.")
 
         func_logger = logging.getLogger("baltic.tree.root_by_regression")
         func_logger.setLevel(logging.INFO)
