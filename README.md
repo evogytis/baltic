@@ -1,4 +1,6 @@
 [![downloads](https://anaconda.org/bioconda/baltic/badges/downloads.svg)](https://anaconda.org/bioconda/baltic)
+[![tests](https://img.shields.io/github/actions/workflow/status/evogytis/baltic/tests.yml?branch=main&event=push&label=tests)](https://github.com/evogytis/baltic/actions/workflows/tests.yml)
+[![real-tree tests (nightly)](https://img.shields.io/github/actions/workflow/status/phylo-baltic/baltic-tests/tests.yml?event=schedule&label=real-tree%20tests%20%28nightly%29)](https://github.com/phylo-baltic/baltic-tests/actions/workflows/tests.yml)
 
 [📄 Documentation](https://baltic.readthedocs.io/)&nbsp;&nbsp;&nbsp;&nbsp;[🖼️ Gallery](https://phylo-baltic.github.io/baltic-gallery/)
 
