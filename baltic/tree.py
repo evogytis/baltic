@@ -3147,7 +3147,10 @@ class Tree: ## tree class
         ax : matplotlib.axes.Axes
             Axes on which to draw labels.
         targetFxn : callable, optional
-            Predicate selecting branches to label.
+            Predicate selecting branches to label. Defaults to tips only
+            (``k.is_leaf()``), so collapsed clades and reticulations are not
+            labelled; to label collapsed clades too, pass
+            ``targetFxn=lambda k: k.is_leaf() or isinstance(k, bt.Clade)``.
         xCoordinateFxn, yCoordinateFxn : callable, optional
             Coordinate functions for label placement.
         xSpace, ySpace : float, optional
@@ -3165,7 +3168,10 @@ class Tree: ## tree class
         circStart, circFrac, inwardSpace, normaliseHeight : optional
             Circular-layout controls.
         cladeEndAttrFxn : callable, optional
-            Function returning the far edge of collapsed clades.
+            Function returning the far edge of a collapsed clade, where its label is
+            placed in rectangular and circular layouts. Defaults to the furthest
+            point of the clade's subtree. Unrooted layouts label the middle of the
+            clade's outer edge as :meth:`plot_tree` draws it.
         recomputeCoordinates : bool, default=True
             If ``True``, recompute tree coordinates before plotting. This reassigns
             the tree's ``x``/``y`` attributes, so the call modifies the tree.
@@ -3217,7 +3223,8 @@ class Tree: ## tree class
             ax = self._plot_rectangular_text(ax=ax,targetFxn=targetFxn,xCoordinateFxn=xCoordinateFxn,yCoordinateFxn=yCoordinateFxn,textContentFxn=textContentFxn,orientation=orientation,cladeEndAttrFxn=cladeEndAttrFxn,colourFxn=colourFxn,**kwargs)
 
         elif treeType == 'circular':
-            allXs = list(map(xCoordinateFxn, self.Objects))
+            ## include the far ends of collapsed clades, as plot_tree and plot_points do, so labels share their scale
+            allXs = list(map(xCoordinateFxn, self.Objects)) + sum([list(map(xCoordinateFxn, w.subtree)) for w in self.Objects if isinstance(w, Clade)], [])
             if normaliseHeight is None:
                 normaliseHeight = lambda value: (value - min(allXs)) / (
                     max(allXs) - min(allXs)
@@ -3269,8 +3276,8 @@ class Tree: ## tree class
         orientation : {"horizontal", "vertical"}
             Orientation of the plotted labels.
         cladeEndAttrFxn : callable
-            Function returning the far edge of collapsed clades. Accepted for
-            API consistency with :meth:`plot_text`; it is not used.
+            Function returning the far edge of collapsed clades; their labels are
+            placed there instead of at the start of the clade.
         colourFxn : callable
             Function returning the text colour for each branch.
         \\*\\*kwargs : dict, optional
@@ -3298,7 +3305,8 @@ class Tree: ## tree class
             localKwargs['zorder'] = 4
 
         for k in filter(targetFxn, self.Objects):
-            x, y = xCoordinateFxn(k), yCoordinateFxn(k)
+            x = cladeEndAttrFxn(k) if isinstance(k, Clade) else xCoordinateFxn(k) ## collapsed clades are labelled at their far end
+            y = yCoordinateFxn(k)
             if orientation == 'vertical':
                 x, y = y, x
             colour = colourFxn(k)
@@ -3336,8 +3344,10 @@ class Tree: ## tree class
         textContentFxn : callable
             Function returning the text content for each branch.
         cladeEndAttrFxn : callable
-            Function returning the far edge of collapsed clades. Accepted for
-            API consistency with :meth:`plot_text`; it is not used.
+            Not used: collapsed clades are labelled at the middle of their outer
+            edge as :meth:`_plot_unrooted_clades` draws it, ``lastHeight - height``
+            from the clade's start. (Subtree coordinates are not computed in this
+            layout.)
         colourFxn : callable
             Function returning the text colour for each branch.
         \\*\\*kwargs : dict, optional
@@ -3360,8 +3370,12 @@ class Tree: ## tree class
 
         for k in filter(targetFxn, self.Objects):
 
-            x, y = xCoordinateFxn(k), yCoordinateFxn(k)
-            xp, yp = xCoordinateFxn(k.parent), yCoordinateFxn(k.parent)
+            if isinstance(k, Clade): ## middle of the clade's outer edge, which spans _tau to _tau + width
+                xp, yp = xCoordinateFxn(k), yCoordinateFxn(k) ## orient the text along the clade, away from its start
+                x, y = project_polar_vector(xp, yp, k._tau + k.width / self.ySpan * math.pi, k.lastHeight - k.height)
+            else:
+                x, y = xCoordinateFxn(k), yCoordinateFxn(k)
+                xp, yp = xCoordinateFxn(k.parent), yCoordinateFxn(k.parent)
 
             # assert (
             #     hasattr(k,"_tau")
@@ -3430,8 +3444,8 @@ class Tree: ## tree class
             :meth:`plot_text` resolves this before calling, so it is not optional
             here.
         cladeEndAttrFxn : callable
-            Function returning the far edge of collapsed clades. Accepted for
-            API consistency with :meth:`plot_text`; it is not used.
+            Function returning the far edge of collapsed clades; their labels are
+            placed there instead of at the start of the clade.
         colourFxn : callable
             Function returning the text colour for each branch.
         \\*\\*kwargs : dict, optional
@@ -3460,7 +3474,7 @@ class Tree: ## tree class
             localKwargs['zorder'] = 4
 
         for k in filter(targetFxn, self.Objects):  ## iterate over branches
-            x = xCoordinateFxn(k)
+            x = cladeEndAttrFxn(k) if isinstance(k, Clade) else xCoordinateFxn(k) ## collapsed clades are labelled at their far end
             y = yCoordinateFxn(k)  ## get y position
 
             rotationRadians = (circStart + (circFrac * y/total_y)) * 2*math.pi
@@ -3553,7 +3567,9 @@ class Tree: ## tree class
         xCoordinateFxn = lambda k: self.treeHeight * (1 + xSpace) if self.treeType == 'divergence' else self.root.absoluteTime + self.treeHeight * (1 + xSpace)
 
         ## this is for handling circular layouts (prevents automatic normaliseHeight from doing division by 0 because xCoordinateFxn returns a constant value)
-        allXs = self.get_parameter_list('absoluteTime') if self.treeType == 'time' else self.get_parameter_list('height')
+        heightFxn = (lambda k: k.absoluteTime) if self.treeType == 'time' else (lambda k: k.height)
+        ## include the far ends of collapsed clades, as plot_tree and plot_points do, so labels share their scale
+        allXs = list(map(heightFxn, self.Objects)) + sum([list(map(heightFxn, w.subtree)) for w in self.Objects if isinstance(w, Clade)], [])
         normaliseHeight = lambda value: (value - min(allXs)) / (max(allXs) - min(allXs))
 
         self.plot_text(ax, xCoordinateFxn=xCoordinateFxn, normaliseHeight=normaliseHeight, **localKwargs)
