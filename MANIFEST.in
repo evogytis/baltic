@@ -2,3 +2,5 @@ include *.md
 include LICENSE
 include requirements.txt
 graft tests
+global-exclude *.py[cod]
+exclude CLAUDE_LOG.md
