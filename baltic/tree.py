@@ -924,7 +924,7 @@ class Tree: ## tree class
             k.name = tipNameMap[k.name]  ## change its name
 
 
-    def midpoint_root(self, fixSingletons=True):
+    def midpoint_root(self, fixSingletons=True, nodeTraits=None):
         """
         Reroot the tree at the midpoint of the longest tip-to-tip path.
 
@@ -942,6 +942,10 @@ class Tree: ## tree class
         fixSingletons : bool, default=True
             If ``True``, collapse singleton nodes after rerooting. Passed through to
             :meth:`reroot`.
+        nodeTraits : iterable of str, optional
+            Traits that describe nodes rather than branches and so stay with their
+            node; all other traits move with their branch. Passed through to
+            :meth:`reroot`, which explains the rule.
 
         **Returns**
 
@@ -984,7 +988,7 @@ class Tree: ## tree class
 
         for tip in self.get_external():  ## iterate over tips
 
-            self.reroot(branch=tip, branchFrac=0.0, fixSingletons=fixSingletons)
+            self.reroot(branch=tip, branchFrac=0.0, fixSingletons=fixSingletons, nodeTraits=nodeTraits)
             self.traverse_tree()  ## set heights
 
             highestTip = sorted(self.get_external(), key=lambda k: k.height)[-1]
@@ -997,7 +1001,7 @@ class Tree: ## tree class
 
         # TODO: make sure that tip1 and tip2 always get assigned
         logger.debug(f"Midpoint rooting: Rooting on highest tip under current topology ({tip1.name}).")
-        self = self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons)
+        self = self.reroot(branch=tip1, branchFrac=0.0, fixSingletons=fixSingletons, nodeTraits=nodeTraits)
 
         # Depth to go from the ingroup tip toward the outgroup tip
         rootRemainder = 0.5 * maxDistance  # - (self.root.length or 0))
@@ -1016,19 +1020,29 @@ class Tree: ## tree class
                 break
         logger.debug(f"Midpoint rooting: rooting on node {outgroup_node.index} halfway from previous highest tip and current highest tip {tip2.name}.")
         self = self.reroot(
-            branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons
+            branch=outgroup_node, branchFrac=branchFrac, fixSingletons=fixSingletons, nodeTraits=nodeTraits
         )
         logger.debug("Finished midpoint rooting.")
         return self
 
 
-    def reroot(self, branch=None, branchFrac=0.5, fixSingletons=True):
+    def reroot(self, branch=None, branchFrac=0.5, fixSingletons=True, nodeTraits=None):
         """
         Reroot the tree on a branch or branch midpoint.
 
         Only divergence trees can be rerooted: moving the root would invalidate the
         calibration of a time tree, so one raises :class:`AttributeError` instead.
         Total tree length is preserved, and this is checked before returning.
+
+        A node's traits describe the branch above it (support values such as an
+        IQ-TREE ``label``, ``bootstrap`` or MrBayes ``prob``), so on the path between
+        the old and new root they move with their branch, as branch lengths do, and
+        each support value stays on the split it was computed for. Traits that
+        describe the node itself, such as inferred ancestral states or node names,
+        should be listed in *nodeTraits* to keep them on their node. When the new root
+        splits an internal branch, both halves get its traits, since they are the
+        same split. Traits on the old root, which has no branch above it, are
+        replaced (with a warning) unless listed in *nodeTraits*.
 
         The tree is modified in place. If the current root carries a non-zero branch
         length, it is silently reset to ``0.0`` (with a warning logged) since a root
@@ -1041,12 +1055,18 @@ class Tree: ## tree class
             rooting is used via :meth:`midpoint_root`. Passing the current root
             logs a warning and returns the tree unchanged.
         branchFrac : float, default=0.5
-            Where along ``branch`` to place the new root, as a fraction of its
-            length measured from the branch's parent end. ``0.0`` puts the root at
-            the top of the branch, ``1.0`` at the branch itself.
+            Where along ``branch`` to place the new root, as the fraction of its
+            length that stays between the new root and ``branch`` (i.e. measured
+            from the child end). ``0.0`` puts the root at ``branch`` itself, leaving
+            it with length 0; ``1.0`` puts the root at the top of the branch, where
+            it joins its parent.
         fixSingletons : bool, default=True
             If ``True``, run :meth:`make_single_type` afterwards to splice out the
             singleton node the old root becomes.
+        nodeTraits : iterable of str, optional
+            Names of traits that describe nodes rather than branches, e.g.
+            ``["location"]``; these stay with their node. All other traits move with
+            their branch.
 
         **Returns**
 
@@ -1101,9 +1121,10 @@ class Tree: ## tree class
             self.root.length = 0.0
 
         oldTreeLength = sum(self.get_parameter_list("length"))  ## get old tree length
+        nodeTraits = set(nodeTraits or [])
         ###############
         if branch is None:  ## midpoint rooting
-            self = self.midpoint_root(fixSingletons=fixSingletons)
+            self = self.midpoint_root(fixSingletons=fixSingletons, nodeTraits=nodeTraits)
 
             return self
 
@@ -1116,6 +1137,14 @@ class Tree: ## tree class
         branch.length = ogLen * (
             branchFrac
         )  ## this modifies unchanged path branch length
+
+        ## Branch traits (support values etc.) describe the branch above a node, so they travel with the
+        ## branch lengths along the reversed path. Traits named in nodeTraits describe the node itself:
+        ## set them aside here and put them back once the path is reversed.
+        keptTraits = {k: {key: k.traits.pop(key) for key in nodeTraits if key in k.traits} for k in path + [self.root]}
+        ## The new root splits branch's branch in two; both halves are the same split, so the other half gets a copy
+        ## of an internal branch's traits (a tip's traits describe the tip itself, so they are not copied).
+        splitTraits = copy.deepcopy(branch.traits) if branch.is_node() else {}
         ##################
 
         characters = string.ascii_letters + string.digits  # A-Z, a-z, 0-9
@@ -1140,6 +1169,7 @@ class Tree: ## tree class
             prevBranchLength, parent.length = parent.length, (
                 prevBranchLength - branch.length
             )  ## store previous branch length, assign new branch length
+            prevTraits, parent.traits = parent.traits, splitTraits  ## likewise for traits: parent's branch is now the other half of branch's
 
             newRoot.children.append(parent)  ## add branch as child of new root
 
@@ -1154,6 +1184,7 @@ class Tree: ## tree class
                 parent.length,
                 prevBranchLength,
             )  ## pass branch length to the next node
+            prevTraits, parent.traits = parent.traits, prevTraits  ## pass branch traits along with the length
             newParent.children.append(parent)  ## add former parent as child
             newParent = parent  ## move up to next node
         #################
@@ -1174,11 +1205,25 @@ class Tree: ## tree class
             branch.parent == self.root
         ):  ## if we were rooting on a branch connected to the root
             oldRoot.length = prevBranchLength * (1 - branchFrac)
+            prevTraits = splitTraits  ## old root's branch is now the other half of branch's
         else:
             oldRoot.length = prevBranchLength
 
+        if oldRoot.traits:  ## the old root had no branch, so its remaining traits described the node
+            logger.warning(f"Traits {sorted(oldRoot.traits)} on the old root suggest they describe nodes (e.g. node names or ancestral states), but they were treated as branch traits: "
+                           f"on the path between the old and new root each node's value moved one branch along, and the old root's value was replaced. "
+                           f"Pass nodeTraits={sorted(oldRoot.traits)} to keep them on their nodes.")
+        oldRoot.traits = prevTraits
+
+        if fixSingletons and len(oldRoot.children) == 1:  ## old root will be spliced out; its branch and its child's become one branch (the same split)
+            for key, value in oldRoot.traits.items():
+                oldRoot.children[0].traits.setdefault(key, value)  ## keep values the child's branch lacks, e.g. support recorded on only one side of the root
+
         newParent.children.append(oldRoot)  ## add old root as child
         oldRoot.parent = newParent  ## set parent as old root
+
+        for k, kept in keptTraits.items():  ## put node traits back on their nodes
+            k.traits.update(kept)
         ########
 
         logger.debug("Setting up root parent node (it's a baltic thing)")
@@ -1226,6 +1271,7 @@ class Tree: ## tree class
         refineItersPerTip: int = 10,
         maxRefineIters: int = 400,
         returnRefinedDates: bool = True,
+        nodeTraits=None,
     ):
         """Reroot the tree by continuous root-to-tip regression.
 
@@ -1261,6 +1307,10 @@ class Tree: ## tree class
         returnRefinedDates : bool, default=True
             If true, return ``(tree, refined_dates)``. Otherwise return the tree
             alone. Note the default is the tuple.
+        nodeTraits : iterable of str, optional
+            Traits that describe nodes rather than branches, e.g. ``["label"]`` for
+            TreeTime's ``NODE_0000001`` names, so they stay with their node when the
+            tree is rerooted. Passed to :meth:`reroot`, which explains the rule.
 
         **Returns**
 
@@ -1285,9 +1335,7 @@ class Tree: ## tree class
         **Notes**
 
         Exact dates require one closed-form solve per branch. Date ranges use
-        iterative projection. The previous implementation remains available as
-        :meth:`root_by_regression_legacy`, which differs in several respects -- see
-        its docstring before switching.
+        iterative projection.
 
         **Examples**
 
@@ -1339,6 +1387,10 @@ class Tree: ## tree class
             func_logger.warning("Tree has fewer than three tips; returning unchanged.")
             return (self, {}) if returnRefinedDates else self
 
+        if self.root.length != 0.0: ## a root branch would be added to every root-to-tip distance, shifting the intercept and TMRCA
+            logger.warning("Current root has non-zero branch length likely set up for visual purposes. This branch length will be suppressed for rerooting.")
+            self.root.length = 0.0
+
         uncertain = [
             tip for tip in tips
             if tip.absoluteTimeRange is not None and
@@ -1374,6 +1426,7 @@ class Tree: ## tree class
             n_jobs=nJobs,
             max_date_iterations=refine_iterations,
             return_result=True,
+            node_traits=nodeTraits,
         )
         refined_dates = result["assigned_uncertain_dates"]
 
@@ -1411,289 +1464,6 @@ class Tree: ## tree class
                 )
 
         return (rooted, refined_dates) if returnRefinedDates else rooted
-
-
-    def root_by_regression_legacy(
-        self,
-        stat: str = "r^2",
-        forcePositive: bool = True,
-        nJobs: int | None = None,
-        baseRefineIters: int = 20,
-        refineItersPerTip: int = 10,
-        maxRefineIters: int = 400,
-        returnRefinedDates: bool = True
-    ):
-        """
-        Reroot using the preserved legacy root-to-tip regression search.
-
-        Superseded by :meth:`root_by_regression`, which solves each branch in closed
-        form instead of searching, runs in threads, and validates its arguments more
-        consistently. Prefer that method for new code; this one is kept so earlier
-        results can be reproduced.
-
-        Every non-root branch is evaluated as a candidate root, each in a worker
-        **process**. The tree is rerooted in place and uncertain tips have their
-        ``absoluteTime`` overwritten with the best-fitting inferred value.
-
-        .. warning::
-
-           Because the work is dispatched with
-           :class:`concurrent.futures.ProcessPoolExecutor`, on platforms that spawn
-           rather than fork (macOS and Windows) the calling code must be guarded by
-           ``if __name__ == "__main__":``. Without it the pool dies with
-           ``BrokenProcessPool``, and it generally cannot be called straight from a
-           notebook or an interactive session. This applies even with ``nJobs=1``.
-           :meth:`root_by_regression` uses threads and has no such restriction.
-
-        **Parameters**
-
-        stat : {"r^2", "correlation", "sum of squares"}, default="r^2"
-            Which regression stat to optimize.
-
-        forcePositive : bool, default=True
-            Forbid date inference to allow negative branch lengths.
-
-        nJobs : int or None, optional
-            Number of parallel worker **processes** to use for the search. ``None``
-            or a non-positive value uses the available CPU count.
-
-        baseRefineIters : int, default=20
-            Minimum number of Monte Carlo iterations.
-
-        refineItersPerTip : int, default=10
-            Additional Monte Carlo iterations per tip.
-
-        maxRefineIters : int, default=400
-            Maximum number of Monte Carlo iterations.
-
-        returnRefinedDates : bool, default=True
-            True if the best-fitting inferred dates should be returned.
-
-        **Returns**
-
-        :class:`.Tree` or tuple
-            The same tree object, rerooted, and -- when *returnRefinedDates* is
-            true -- a dict mapping tip names to the best-fitting dates. A tree with
-            no candidate branches is returned bare, without the dict, regardless of
-            *returnRefinedDates*.
-
-        **Raises**
-
-        AssertionError
-            If *stat* is not one of the three supported statistics, or if no tip
-            carries an ``absoluteTimeRange`` (load the tree with
-            ``absoluteTime=True``). Note that :meth:`root_by_regression` raises
-            :class:`ValueError` for the equivalent argument error.
-
-        ValueError
-            If only some tips carry an ``absoluteTimeRange``; the range of every tip
-            is differenced, so a mix of set and unset ranges fails.
-
-        **Examples**
-
-        >>> import io
-        >>> import baltic as bt
-        >>> handle = io.StringIO("((A|2020-01-01:0.1,B|2020-06-01:0.2):0.3,C|2021-01-01:0.4);")
-        >>> ll = bt.io.load_newick(handle, treeType="divergence", absoluteTime=True, variableDate=True)
-        >>> rooted, inferred_dates = ll.root_by_regression_legacy(nJobs=1)  # doctest: +SKIP
-        >>> isinstance(inferred_dates, dict)  # doctest: +SKIP
-        True
-
-        The final two steps are skipped rather than run: the process pool requires a
-        ``__main__`` guard, which a doctest cannot provide. Run them from a script
-        shaped like this instead::
-
-            if __name__ == "__main__":
-                rooted, inferred_dates = ll.root_by_regression_legacy(nJobs=1)
-        """
-        from baltic.bt_utils import _rtt_worker, _root_to_tip, decimal_to_calendar_date
-        from concurrent.futures import ProcessPoolExecutor
-
-        validRootingMethods = ["r^2", "correlation", "sum of squares"]
-        assert stat in validRootingMethods, (
-            f"Invalid root-to-tip metric: {stat} (choose from {validRootingMethods})"
-        )
-
-        # Logging setup
-        func_logger = logging.getLogger("baltic.tree.root_by_regression_legacy")
-        func_logger.setLevel(logging.INFO)
-        func_logger.propagate = False
-        if not func_logger.handlers:
-            import sys
-            handler = logging.StreamHandler(sys.stdout)
-            handler.setFormatter(logging.Formatter("[root_by_regression_legacy] %(message)s"))
-            handler.setLevel(logging.INFO)
-            func_logger.addHandler(handler)
-
-        func_logger.info(f"Starting root-to-tip regression, metric = {stat}")
-
-        # Candidate roots
-        candidates = self.Objects[1:]       # all non-root nodes
-        if not candidates:
-            func_logger.warning("Tree has no internal nodes; returning unchanged.")
-            return self
-
-        # Tip dates
-        tips = self.get_external()
-        tipDates = {k.name: k.absoluteTime for k in tips}
-
-        assert [k.absoluteTimeRange for k in tips].count(None) != len(tips), f"Tips don't have absoluteTimeRange attribute. Check whether tree was imported with absoluteTime set to True"
-
-        # Identify uncertain date tips (date ranges > tiny threshold)
-        uncertainTips = [k for k in tips
-                         if np.diff(k.absoluteTimeRange)[0] > 1e-12]
-        uncertainRanges = {k.name: k.absoluteTimeRange for k in uncertainTips}
-
-        nUncertain = len(uncertainTips)
-
-        # Decide refinement iterations
-        if nUncertain == 0:
-            refineIters = 1
-            func_logger.info(
-                "All tip dates precise; performing a single regression per root candidate."
-            )
-        else:
-            refineIters = (
-                baseRefineIters +
-                refineItersPerTip * nUncertain
-            )
-            refineIters = min(refineIters, maxRefineIters)
-
-            func_logger.info(
-                f"{nUncertain} uncertain tip dates → "
-                f"{refineIters} refinement iterations per candidate root."
-            )
-
-        # Build worker tasks
-        tasks = []
-        for k in candidates:
-            tasks.append(
-                (
-                    self,               # picklable tree
-                    k.index,            # candidate root
-                    copy.deepcopy(tipDates),
-                    copy.deepcopy(uncertainRanges),
-                    refineIters,        # max refinement steps
-                    stat,
-                    forcePositive
-                )
-            )
-
-        # Determine number of jobs
-        if nJobs is None or nJobs <= 0:
-            from os import cpu_count
-            nJobs = cpu_count() or 1
-
-        func_logger.info(
-            f"Evaluating {len(candidates)} candidate roots using {nJobs} workers..."
-        )
-
-        # Dispatch workers
-        if len(tasks) == 1:
-            results = [_rtt_worker(tasks[0])]
-        else:
-            with ProcessPoolExecutor(max_workers=nJobs) as pool:
-                results = list(pool.map(_rtt_worker, tasks))
-
-        # Determine the best root by score
-        best_res = max(results, key=lambda r: r["score"] if r["score"] is not None else -np.inf)
-        best_root_index = best_res["root_index"]
-        refined_dates = best_res.get("assigned_uncertain_dates", {})  # still using old field name
-
-        for k in uncertainTips:
-            k.absoluteTime = refined_dates[k.name] ## assign new dates to uncertain tips
-
-        func_logger.info(f"Best root index: {best_root_index}, score = {best_res['score']}")
-
-        # Re-root the tree on the best node
-        best_node = next(obj for obj in self.Objects if obj.index == best_root_index)
-        self = self.reroot(best_node)
-
-        if len(self.root.children) == 2:
-            from baltic.bt_utils import _adjust_tip_dates_by_regression
-
-            func_logger.info("Refining root position along the bifurcating root branch...")
-            left, right = self.root.children
-
-            totalBranch = left.length + right.length
-            leftNodes = self.traverse_tree(left)
-            rightNodes = self.traverse_tree(right)
-
-            tips_current = self.get_external()
-
-            tip_is_left = {k.name: False for k in tips_current}
-            tip_is_right = {k.name: False for k in tips_current}
-
-            for k in leftNodes:
-                tip_is_left[k.name] = True
-            for k in rightNodes:
-                tip_is_right[k.name] = True
-
-            xs = []
-            for k in tips_current:
-                if k.name in refined_dates:
-                    xs.append(refined_dates[k.name])
-                else:
-                    xs.append(k.absoluteTime)
-
-            res_frac = {"frac": 0.0}
-            for f in np.linspace(0, 1, 21):
-                adjustL = -left.length + totalBranch * f
-                adjustR = -right.length + totalBranch * (1 - f)
-
-                ys_f = []
-                for k in tips_current:
-                    if tip_is_left[k.name]:
-                        ys_f.append(k.height + adjustL)
-                    elif tip_is_right[k.name]:
-                        ys_f.append(k.height + adjustR)
-                    else:
-                        ys_f.append(k.height)
-
-                res_frac = _root_to_tip(
-                    left,
-                    xs,
-                    ys_f,
-                    res_frac,
-                    stat=stat,
-                    forcePositive=forcePositive,
-                    frac=f
-                )
-
-            self = self.reroot(branch=res_frac["root"], branchFrac=res_frac["frac"])
-
-            best_res = res_frac
-
-            uncertainTips = [k for k in tips
-                         if np.diff(k.absoluteTimeRange)[0] > 1e-12]
-            uncertainRanges = {k.name: k.absoluteTimeRange for k in uncertainTips}
-            _adjust_tip_dates_by_regression(uncertainTips, best_res['slope'], best_res['intercept'])
-
-        slope = best_res.get("slope", None)
-        intercept = best_res.get("intercept", None)
-        r2 = best_res.get("r^2", None)
-        corr = best_res.get("correlation", None)
-        sse = best_res.get("sum of squares", None)
-
-        if corr is not None:
-            func_logger.info(f"Correlation: {corr:.4g}")
-        if sse is not None:
-            func_logger.info(f"Sum of squares: {sse:.4g}")
-        if r2 is not None:
-            func_logger.info(f"r^2: {r2:.4g}")
-        if slope is not None:
-            func_logger.info(f"Slope (rate): {slope:.4e}")
-        if slope and intercept:
-            tmrca = -intercept / slope
-            func_logger.info(
-                f"Intercept: {intercept:.4g} TMRCA = {tmrca:.3f} "
-                f"({decimal_to_calendar_date(tmrca, fmt='%Y-%b-%d')})"
-            )
-
-        if returnRefinedDates:
-            return self, refined_dates
-        else:
-            return self
 
 
     def sort_branches(self, descending=True, sortFxn=None, operationFxn=None):

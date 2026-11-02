@@ -21,7 +21,6 @@ import math
 import importlib
 import numpy as np
 from itertools import permutations
-from scipy.stats import linregress
 import matplotlib as mpl
 from matplotlib.collections import LineCollection
 
@@ -2052,274 +2051,6 @@ def unnest(nodeList, towardsRoot = True):
 
     return nodeList ## when done return list of remaining nodes
 
-def _root_to_tip(rootCandidate, tipDates, tipHeights, res, stat='r^2', forcePositive=True, frac=None):
-    """
-    Evaluate a root-to-tip regression for a candidate root position.
-
-    **Parameters**
-
-    rootCandidate : :class:`baltic.branchLike.BranchLike`
-        Candidate root branch or node.
-
-    tipDates : sequence[float]
-        Sampling dates of the tips.
-
-    tipHeights : sequence[float]
-        Root-to-tip distances corresponding to *tipDates*.
-
-    res : dict
-        Mutable result dictionary storing the current best regression summary.
-
-    stat : {'r^2', 'correlation', 'sum of squares'}, optional
-        Optimisation criterion used to compare candidate roots.
-
-    forcePositive : bool, optional
-        If ``True``, invalidate regressions with negative slopes.
-
-    frac : float, optional
-        Optional position along a branch associated with *rootCandidate*.
-
-    **Returns**
-
-    dict
-        Updated regression summary. ``res`` is modified in place and returned; it is
-        only updated when the candidate beats the statistic already stored in it.
-
-    **Examples**
-
-    >>> from baltic import bt_utils
-    >>> res = {}
-    >>> res = bt_utils._root_to_tip(None, [2000.0, 2001.0, 2002.0, 2003.0], [0.1, 0.21, 0.29, 0.42], res)
-    >>> sorted(res)
-    ['correlation', 'intercept', 'r^2', 'root', 'slope', 'sum of squares']
-    >>> round(float(res["slope"]), 3), round(float(res["r^2"]), 3)
-    (0.104, 0.992)
-    """
-    slope, intercept, rval, _, _ = linregress(tipDates, tipHeights) ## run linear regression
-    corr = np.corrcoef((tipDates, tipHeights))[0,1] ## correlation coefficient
-    ssq = sum([(y - (slope * x + intercept))**2 for x, y in zip(tipDates, tipHeights)]) ## sum of squares
-
-    if stat=='correlation': ## set stat to optimise
-        localStat = corr
-    elif stat=='sum of squares':
-        localStat = ssq
-    elif stat=='r^2':
-        localStat = math.pow(rval, 2)
-    else:
-        raise ValueError(f'Unknown stat {stat} to optimise')
-
-    optStat = res[stat] if stat in res else (np.inf if stat in ['sum of squares'] else -np.inf)
-
-    invalidateRegression = True if forcePositive and slope < 0 else False
-
-    if (localStat < optStat if stat in ['sum of squares'] else localStat > optStat): ## minimise sum of squares or maximise correlation/r^2
-        optStat = localStat ## better root found
-        res['correlation'] = -np.inf if invalidateRegression else corr
-        res['sum of squares'] = np.inf if invalidateRegression else ssq
-        res['slope'] = slope
-        res['intercept'] = intercept
-        res['r^2'] = -np.inf if invalidateRegression else math.pow(rval, 2)
-        res['root'] = rootCandidate
-        if frac is not None: res['frac'] = frac
-
-    return res
-
-def _rtt_worker(args):
-    """
-    Evaluate one candidate root in a Monte Carlo root-to-tip analysis.
-
-    This helper is used internally by :meth:`baltic.tree.Tree.root_by_regression_legacy`.
-
-    **Parameters**
-
-    args : tuple
-        Tuple containing:
-
-        - ``tree``: a tree object to copy and reroot.
-        - ``root_index``: object index for the candidate root.
-        - ``tipDates``: mapping of tip name to fixed sampling date.
-        - ``uncertainDateRanges``: mapping of tip name to ``(min, max)`` date
-          interval for uncertain tips.
-        - ``n_mc``: number of Monte Carlo iterations.
-        - ``stat``: optimization statistic, one of ``'r^2'``,
-          ``'correlation'``, or ``'sum of squares'``.
-        - ``forcePositive``: whether negative regression slopes should be
-          rejected.
-
-    **Returns**
-
-    dict
-        Best regression result found for the candidate root, with the root
-        stored by index rather than by object reference. Also carries
-        ``root_index``, ``score`` and ``assigned_uncertain_dates``.
-
-    **Examples**
-
-    The tree must already have heights (call :meth:`baltic.tree.Tree.traverse_tree`),
-    and any tip listed in ``uncertainDateRanges`` must carry an ``absoluteTimeRange``
-    (see :meth:`baltic.tree.Tree._assign_date_uncertainty`). Here no dates are
-    uncertain, so a single regression is run for the candidate root.
-
-    >>> import baltic as bt
-    >>> from baltic import bt_utils
-    >>> ll = bt.make_tree("((A:1.0,B:1.0):1.0,C:1.5);", treeType="divergence")
-    >>> _ = ll.traverse_tree()
-    >>> candidate = ll.get_leaf("C")
-    >>> res = bt_utils._rtt_worker((ll, candidate.index, {"A": 2003.0, "B": 2003.0, "C": 2002.5}, {}, 1, "r^2", True))
-    >>> res["root"] == candidate.index, round(float(res["r^2"]), 3), round(float(res["slope"]), 3)
-    (True, 1.0, 4.0)
-    >>> res["assigned_uncertain_dates"]
-    {}
-    """
-
-    (tree,
-     root_index,
-     tipDates,
-     uncertainDateRanges,
-     max_iters,
-     stat,
-     forcePositive) = args
-
-    # deep-copy tree and reroot on candidate
-    tree_copy = copy.deepcopy(tree)
-    candidate = next(obj for obj in tree_copy.Objects if obj.index == root_index)
-    cll = tree_copy.reroot(candidate)
-
-    tips = cll.get_external()
-    uncertainTips = [k for k in tips if k.name in uncertainDateRanges]
-
-    # root-to-tip distances are fixed for a given root
-    rootDistances = {k.name: k.height for k in tips}
-
-    # start from a local copy of tipDates
-    # (each worker gets its own copy due to pickling, but we clone anyway to be explicit)
-    currentDates = dict(tipDates)
-
-    # storage for the best result across iterations
-    best_res = None
-    best_score = None
-    best_dates = None
-
-    # tolerance for date convergence
-    tol = 1e-6
-
-    # main refinement loop
-    for _ in range(max(1, int(max_iters))):
-
-        # build regression inputs with current dates
-        xs = [currentDates[k.name] for k in tips]               # dates
-        ys = [rootDistances[k.name] for k in tips]               # heights
-
-        res_local = {}
-        res_local = _root_to_tip(
-            candidate, xs, ys, res_local,
-            stat=stat, forcePositive=forcePositive
-        )
-
-        # if regression is invalid (e.g., negative slope with forcePositive=True), bail out
-        if not res_local:
-            break
-
-        # compute scalar score (same logic as before)
-        if stat == "sum of squares":
-            score = -res_local["sum of squares"]  # smaller SSE is better
-        else:
-            score = res_local[stat]               # larger r^2 / correlation is better
-
-
-        # track best iteration so far
-        if best_score is None or score > best_score:
-            best_score = score
-            best_res = res_local
-            # store only the uncertain ones (like before with monte_carlo_dates)
-            best_dates = {name: currentDates[name] for name in uncertainDateRanges}
-
-        # if there are no uncertain dates, we are done after one regression
-        if not uncertainDateRanges:
-            break
-
-        # update uncertain dates by projecting onto the regression line
-        slope = res_local["slope"]
-        intercept = res_local["intercept"]
-
-        # if slope is zero, projection is undefined – nothing to refine
-        if abs(slope) < 1e-12:
-            break
-
-        newDates = _adjust_tip_dates_by_regression(uncertainTips, slope, intercept)
-        delta = 0.0
-        for tipName in newDates:
-            delta += abs(currentDates[tipName] - newDates[tipName])
-            currentDates[tipName] = newDates[tipName]
-
-        # stop if updates are tiny (converged)
-        if delta < tol:
-            break
-
-
-    # if we never got a valid regression, return an empty-ish record
-    if best_res is None:
-        best_res = {}
-        best_score = None
-        best_dates = None
-
-    # attach metadata expected by root_by_regression_legacy
-    best_res["root_index"] = root_index
-    best_res["score"] = best_score
-    best_res["assigned_uncertain_dates"] = best_dates
-
-    # IMPORTANT: replace 'root' node reference with index so we don't leak deep-copied nodes
-    best_res["root"] = root_index
-
-    return best_res
-
-def _adjust_tip_dates_by_regression(
-    uncertainTips,
-    slope: float,
-    intercept: float):
-    """
-    Receives a list of tips with uncertain dates and regression parameters, adjusts .absoluteTime (within uncertainty range .absoluteTimeRange) to be as close to regression line as possible.
-
-    This helper supports :meth:`baltic.tree.Tree.root_by_regression_legacy` after
-    :func:`_root_to_tip` has estimated a line.
-
-    **Parameters**
-
-    uncertainTips : sequence[:class:`baltic.leaf.Leaf`]
-        Tips whose ``absoluteTime`` values should be adjusted within their
-        allowed ``absoluteTimeRange``.
-    slope : float
-        Regression slope estimated from the root-to-tip fit.
-    intercept : float
-        Regression intercept estimated from the root-to-tip fit.
-
-    **Returns**
-
-    dict[str, float]
-        Mapping from tip name to its adjusted date. Tips are not modified.
-
-    **Examples**
-
-    Tip ``A`` lands inside its range; tip ``B`` would fall beyond it and is clamped
-    to the upper bound.
-
-    >>> from baltic.leaf import Leaf
-    >>> from baltic import bt_utils
-    >>> a = Leaf("A"); a.height = 0.25; a.absoluteTimeRange = (2001.0, 2002.0)
-    >>> b = Leaf("B"); b.height = 0.9; b.absoluteTimeRange = (2001.0, 2002.0)
-    >>> bt_utils._adjust_tip_dates_by_regression([a, b], slope=0.1, intercept=-199.9)
-    {'A': 2001.5, 'B': 2002.0}
-    """
-    adjustedDates = {}
-
-    for k in uncertainTips:
-        regressionDate = (k.height - intercept) / slope ## interpolate date of tip based on subs/site height
-        minD, maxD = k.absoluteTimeRange ## get clamp
-
-        adjustedDates[k.name] = min(max(regressionDate, minD), maxD) ## clamp tip date
-
-    return adjustedDates
-
 
 def project_to_polar(x, y, yRange, circleStart=0.0, circleFraction=1.0):
     """
@@ -3251,8 +2982,11 @@ def _find_root_by_regression_closed_form(tree, criterion="r^2", force_positive=T
 def _root_by_regression_closed_form(tree, criterion="r^2", force_positive=True,
                                    tip_dates=None, n_jobs=1,
                                    max_date_iterations=100, tolerance=1e-10,
-                                   return_result=False):
-    """Find the continuous optimum, assign inferred dates, and reroot ``tree``."""
+                                   return_result=False, node_traits=None):
+    """Find the continuous optimum, assign inferred dates, and reroot ``tree``.
+
+    *node_traits* is passed to :meth:`baltic.tree.Tree.reroot` as ``nodeTraits``.
+    """
     result = _find_root_by_regression_closed_form(
         tree, criterion, force_positive, tip_dates, n_jobs,
         max_date_iterations, tolerance,
@@ -3262,5 +2996,5 @@ def _root_by_regression_closed_form(tree, criterion="r^2", force_positive=True,
             tip.absoluteTime = result["assigned_uncertain_dates"][tip.name]
     branch = result["root"]
     if not (branch.parent is tree.root and result["lambda"] <= 1e-12):
-        tree.reroot(branch=branch, branchFrac=result["branch_fraction"])
+        tree.reroot(branch=branch, branchFrac=result["branch_fraction"], nodeTraits=node_traits)
     return (tree, result) if return_result else tree
